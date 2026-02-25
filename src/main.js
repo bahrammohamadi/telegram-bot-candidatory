@@ -40,9 +40,7 @@ function getEnv() {
 }
 
 function extractUpdate(req, log) {
-  if (req.method === "GET") {
-    return null;
-  }
+  if (req.method === "GET") return null;
 
   try {
     if (req.bodyJson && typeof req.bodyJson === "object" && Object.keys(req.bodyJson).length > 0) {
@@ -90,29 +88,54 @@ export default async function (context) {
 
   const env = getEnv();
 
+  // GET = health check
   if (context.req.method === "GET") {
-    log("✅ Health check OK");
+    log("✅ Health check");
     return context.res.json({ ok: true, status: "running" }, 200);
   }
 
   log("📩 POST received");
-  log("body type: " + typeof context.req.body);
-  log("body length: " + (context.req.body ? context.req.body.length : 0));
-  log("bodyRaw length: " + (context.req.bodyRaw ? context.req.bodyRaw.length : 0));
-  log("bodyBinary length: " + (context.req.bodyBinary ? context.req.bodyBinary.length : 0));
 
   if (!env.BOT_TOKEN) {
     error("❌ no BOT_TOKEN");
     return context.res.json({ ok: true }, 200);
   }
 
-  try { initDB(env); } catch (e) {
+  // استخراج update
+  const update = extractUpdate(context.req, log);
+
+  if (!update) {
+    log("⚠️ no update");
+    return context.res.json({ ok: true }, 200);
+  }
+
+  if (!update.message && !update.callback_query && !update.edited_message) {
+    log("⚠️ empty update");
+    return context.res.json({ ok: true }, 200);
+  }
+
+  log("✅ update found: " + (update.message ? "message" : "callback"));
+
+  // ---- Appwrite ----
+  try {
+    initDB(env);
+  } catch (e) {
     error("❌ DB: " + e.message);
     return context.res.json({ ok: true }, 200);
   }
 
+  // ---- بات با bot.init() ----
   const bot = new Bot(env.BOT_TOKEN);
 
+  try {
+    await bot.init();
+    log("✅ bot initialized");
+  } catch (e) {
+    error("❌ bot.init failed: " + e.message);
+    return context.res.json({ ok: true }, 200);
+  }
+
+  // === /start ===
   bot.command("start", async (ctx) => {
     try {
       await getOrCreateUser(ctx.from);
@@ -129,6 +152,7 @@ export default async function (context) {
     } catch (e) { error("/menu: " + e.message); }
   });
 
+  // === Callbacks ===
   bot.on("callback_query:data", async (ctx) => {
     const d = ctx.callbackQuery.data;
     try {
@@ -169,6 +193,7 @@ export default async function (context) {
     }
   });
 
+  // === پیام متنی ===
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) return;
     try {
@@ -179,24 +204,12 @@ export default async function (context) {
     }
   });
 
+  // ---- پردازش ----
   try {
-    const update = extractUpdate(context.req, log);
-
-    if (!update) {
-      log("⚠️ no update");
-      return context.res.json({ ok: true }, 200);
-    }
-
-    if (!update.message && !update.callback_query && !update.edited_message) {
-      log("⚠️ empty update");
-      return context.res.json({ ok: true }, 200);
-    }
-
-    log("✅ processing: " + (update.message ? "msg" : "cb"));
     await bot.handleUpdate(update);
     log("✅ done");
   } catch (e) {
-    error("❌ " + e.message);
+    error("❌ handleUpdate: " + e.message);
   }
 
   return context.res.json({ ok: true }, 200);
