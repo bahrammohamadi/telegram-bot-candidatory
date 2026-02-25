@@ -54,66 +54,44 @@ function getEnv() {
 }
 
 // ============================================================
-// 🔄 تابع کمکی — استخراج update از request
+// 🔄 استخراج update از request
 // ============================================================
 
-/**
- * آپدیت تلگرام رو از هر جای ممکن در request استخراج می‌کنه
- * پشتیبانی از: body آبجکت، body رشته‌ای، bodyRaw، bodyText
- */
 function extractUpdate(req, log) {
-  // ---- ۱. اگه body آبجکت آماده باشه ----
+  // ۱. bodyJson — کلید اصلی در Appwrite Functions
+  if (req.bodyJson && typeof req.bodyJson === "object" && Object.keys(req.bodyJson).length > 0) {
+    log("📦 source: bodyJson ✅");
+    return req.bodyJson;
+  }
+
+  // ۲. body آبجکت
   if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
-    log("📦 body: object");
+    log("📦 source: body object");
     return req.body;
   }
 
-  // ---- ۲. اگه body رشته باشه ----
+  // ۳. body رشته
   if (typeof req.body === "string" && req.body.length > 2) {
     try {
-      const parsed = JSON.parse(req.body);
-      log("📦 body: parsed string");
-      return parsed;
-    } catch {
-      log("⚠️ body string parse failed");
-    }
+      log("📦 source: body string");
+      return JSON.parse(req.body);
+    } catch {}
   }
 
-  // ---- ۳. bodyRaw ----
-  if (req.bodyRaw) {
-    const raw = typeof req.bodyRaw === "string" ? req.bodyRaw : String(req.bodyRaw);
-    if (raw.length > 2) {
-      try {
-        const parsed = JSON.parse(raw);
-        log("📦 bodyRaw: parsed");
-        return parsed;
-      } catch {
-        log("⚠️ bodyRaw parse failed");
-      }
-    }
+  // ۴. bodyRaw
+  if (req.bodyRaw && typeof req.bodyRaw === "string" && req.bodyRaw.length > 2) {
+    try {
+      log("📦 source: bodyRaw");
+      return JSON.parse(req.bodyRaw);
+    } catch {}
   }
 
-  // ---- ۴. bodyText ----
+  // ۵. bodyText
   if (req.bodyText && typeof req.bodyText === "string" && req.bodyText.length > 2) {
     try {
-      const parsed = JSON.parse(req.bodyText);
-      log("📦 bodyText: parsed");
-      return parsed;
-    } catch {
-      log("⚠️ bodyText parse failed");
-    }
-  }
-
-  // ---- ۵. bodyBinary (Buffer) ----
-  if (req.bodyBinary) {
-    try {
-      const str = Buffer.from(req.bodyBinary).toString("utf-8");
-      const parsed = JSON.parse(str);
-      log("📦 bodyBinary: parsed");
-      return parsed;
-    } catch {
-      log("⚠️ bodyBinary parse failed");
-    }
+      log("📦 source: bodyText");
+      return JSON.parse(req.bodyText);
+    } catch {}
   }
 
   return null;
@@ -127,32 +105,32 @@ export default async function (context) {
   const log = context.log;
   const error = context.error;
 
-  // ---- ۱. خواندن env ----
+  // ---- ۱. env ----
   const env = getEnv();
 
   if (!env.BOT_TOKEN) {
     error("❌ BOT_TOKEN پیدا نشد!");
-    return context.res.json({ ok: true, error: "missing BOT_TOKEN" }, 200);
+    return context.res.json({ ok: true, error: "no token" }, 200);
   }
 
   if (!env.APPWRITE_PROJECT_ID || !env.APPWRITE_API_KEY) {
-    error("❌ APPWRITE credentials پیدا نشد!");
-    return context.res.json({ ok: true, error: "missing credentials" }, 200);
+    error("❌ Appwrite credentials پیدا نشد!");
+    return context.res.json({ ok: true, error: "no credentials" }, 200);
   }
 
-  // ---- ۲. مقداردهی Appwrite ----
+  // ---- ۲. Appwrite ----
   try {
     initDB(env);
   } catch (e) {
-    error("❌ DB init error: " + e.message);
-    return context.res.json({ ok: true, error: "db init failed" }, 200);
+    error("❌ DB init: " + e.message);
+    return context.res.json({ ok: true, error: "db fail" }, 200);
   }
 
-  // ---- ۳. ساخت بات ----
+  // ---- ۳. بات ----
   const bot = new Bot(env.BOT_TOKEN);
 
   // ============================================================
-  // 📩 دستور /start
+  // 📩 /start
   // ============================================================
   bot.command("start", async (ctx) => {
     try {
@@ -162,8 +140,8 @@ export default async function (context) {
         reply_markup: mainMenuKB(),
       });
     } catch (e) {
-      error("/start error: " + e.message);
-      await ctx.reply("⚠️ خطایی رخ داد. لطفاً دوباره /start بزنید.");
+      error("/start: " + e.message);
+      await ctx.reply("⚠️ خطایی رخ داد. دوباره /start بزنید.");
     }
   });
 
@@ -174,12 +152,12 @@ export default async function (context) {
         reply_markup: mainMenuKB(),
       });
     } catch (e) {
-      error("/menu error: " + e.message);
+      error("/menu: " + e.message);
     }
   });
 
   // ============================================================
-  // 🔘 هندلر Callback Query
+  // 🔘 Callback Query
   // ============================================================
   bot.on("callback_query:data", async (ctx) => {
     const d = ctx.callbackQuery.data;
@@ -202,13 +180,13 @@ export default async function (context) {
 
       if (d === "cancel_consult") {
         await handleCancelConsultation(ctx, mainMenuKB, MENU_TEXT);
-        await ctx.answerCallbackQuery("❌ مشاوره لغو شد");
+        await ctx.answerCallbackQuery("❌ لغو شد");
         return;
       }
 
       if (d.startsWith("ans_")) {
-        const parts = d.split("_");
-        await handleAnswer(ctx, parseInt(parts[1]), parseInt(parts[2]));
+        const p = d.split("_");
+        await handleAnswer(ctx, parseInt(p[1]), parseInt(p[2]));
         return;
       }
 
@@ -252,52 +230,47 @@ export default async function (context) {
         return;
       }
 
-      await ctx.answerCallbackQuery("⚠️ دستور ناشناخته");
+      await ctx.answerCallbackQuery("⚠️ ناشناخته");
     } catch (e) {
-      error("callback error: " + e.message);
+      error("cb: " + e.message);
       try { await ctx.answerCallbackQuery("⚠️ خطا"); } catch {}
     }
   });
 
   // ============================================================
-  // 💬 هندلر پیام‌های متنی
+  // 💬 پیام متنی
   // ============================================================
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) return;
-
     try {
       await handleTextInput(ctx, mainMenuKB, MENU_TEXT);
     } catch (e) {
-      error("text error: " + e.message);
-      await ctx.reply("⚠️ خطایی رخ داد. /start بزنید.");
+      error("txt: " + e.message);
+      await ctx.reply("⚠️ خطا. /start بزنید.");
     }
   });
 
   // ============================================================
-  // 🔄 پردازش آپدیت تلگرام
+  // 🔄 پردازش آپدیت
   // ============================================================
   try {
-    // استخراج update از request
     const update = extractUpdate(context.req, log);
 
     if (!update) {
-      log("⚠️ هیچ آپدیتی پیدا نشد");
-      log("📋 req keys: " + JSON.stringify(Object.keys(context.req || {})));
-      log("📋 body type: " + typeof context.req.body);
-      log("📋 body value: " + JSON.stringify(context.req.body).substring(0, 300));
+      log("⚠️ آپدیت خالی");
       return context.res.json({ ok: true }, 200);
     }
 
     if (!update.message && !update.callback_query && !update.edited_message) {
-      log("⚠️ آپدیت بدون محتوا: " + JSON.stringify(Object.keys(update)));
+      log("⚠️ بدون محتوا");
       return context.res.json({ ok: true }, 200);
     }
 
-    log("📩 آپدیت: " + (update.message ? "message" : "callback"));
+    log("📩 " + (update.message ? "msg" : "cb") + " from: " + (update.message?.from?.id || update.callback_query?.from?.id));
     await bot.handleUpdate(update);
-    log("✅ پردازش شد");
+    log("✅ done");
   } catch (e) {
-    error("❌ خطای کلی: " + e.message);
+    error("❌ " + e.message);
   }
 
   return context.res.json({ ok: true }, 200);
