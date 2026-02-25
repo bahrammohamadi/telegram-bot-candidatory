@@ -37,7 +37,7 @@ const MENU_TEXT = `
 `;
 
 // ============================================================
-// 🔧 خواندن env — از process.env (چون context.env کار نمی‌کنه)
+// 🔧 خواندن env از process.env
 // ============================================================
 
 function getEnv() {
@@ -54,6 +54,72 @@ function getEnv() {
 }
 
 // ============================================================
+// 🔄 تابع کمکی — استخراج update از request
+// ============================================================
+
+/**
+ * آپدیت تلگرام رو از هر جای ممکن در request استخراج می‌کنه
+ * پشتیبانی از: body آبجکت، body رشته‌ای، bodyRaw، bodyText
+ */
+function extractUpdate(req, log) {
+  // ---- ۱. اگه body آبجکت آماده باشه ----
+  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
+    log("📦 body: object");
+    return req.body;
+  }
+
+  // ---- ۲. اگه body رشته باشه ----
+  if (typeof req.body === "string" && req.body.length > 2) {
+    try {
+      const parsed = JSON.parse(req.body);
+      log("📦 body: parsed string");
+      return parsed;
+    } catch {
+      log("⚠️ body string parse failed");
+    }
+  }
+
+  // ---- ۳. bodyRaw ----
+  if (req.bodyRaw) {
+    const raw = typeof req.bodyRaw === "string" ? req.bodyRaw : String(req.bodyRaw);
+    if (raw.length > 2) {
+      try {
+        const parsed = JSON.parse(raw);
+        log("📦 bodyRaw: parsed");
+        return parsed;
+      } catch {
+        log("⚠️ bodyRaw parse failed");
+      }
+    }
+  }
+
+  // ---- ۴. bodyText ----
+  if (req.bodyText && typeof req.bodyText === "string" && req.bodyText.length > 2) {
+    try {
+      const parsed = JSON.parse(req.bodyText);
+      log("📦 bodyText: parsed");
+      return parsed;
+    } catch {
+      log("⚠️ bodyText parse failed");
+    }
+  }
+
+  // ---- ۵. bodyBinary (Buffer) ----
+  if (req.bodyBinary) {
+    try {
+      const str = Buffer.from(req.bodyBinary).toString("utf-8");
+      const parsed = JSON.parse(str);
+      log("📦 bodyBinary: parsed");
+      return parsed;
+    } catch {
+      log("⚠️ bodyBinary parse failed");
+    }
+  }
+
+  return null;
+}
+
+// ============================================================
 // 🚀 نقطه ورود Appwrite Function
 // ============================================================
 
@@ -63,9 +129,6 @@ export default async function (context) {
 
   // ---- ۱. خواندن env ----
   const env = getEnv();
-
-  log("🔍 BOT_TOKEN exists: " + !!env.BOT_TOKEN);
-  log("🔍 PROJECT_ID exists: " + !!env.APPWRITE_PROJECT_ID);
 
   if (!env.BOT_TOKEN) {
     error("❌ BOT_TOKEN پیدا نشد!");
@@ -80,7 +143,6 @@ export default async function (context) {
   // ---- ۲. مقداردهی Appwrite ----
   try {
     initDB(env);
-    log("✅ Appwrite initialized");
   } catch (e) {
     error("❌ DB init error: " + e.message);
     return context.res.json({ ok: true, error: "db init failed" }, 200);
@@ -105,7 +167,6 @@ export default async function (context) {
     }
   });
 
-  // دستور /menu
   bot.command("menu", async (ctx) => {
     try {
       await ctx.reply(MENU_TEXT, {
@@ -147,15 +208,12 @@ export default async function (context) {
 
       if (d.startsWith("ans_")) {
         const parts = d.split("_");
-        const stepIdx = parseInt(parts[1]);
-        const optIdx = parseInt(parts[2]);
-        await handleAnswer(ctx, stepIdx, optIdx);
+        await handleAnswer(ctx, parseInt(parts[1]), parseInt(parts[2]));
         return;
       }
 
       if (d.startsWith("edit_")) {
-        const idx = parseInt(d.replace("edit_", ""));
-        await handleEdit(ctx, idx);
+        await handleEdit(ctx, parseInt(d.replace("edit_", "")));
         return;
       }
 
@@ -175,8 +233,7 @@ export default async function (context) {
       }
 
       if (d.startsWith("plan_")) {
-        const planType = d.replace("plan_", "");
-        await handleSelectPlan(ctx, planType);
+        await handleSelectPlan(ctx, d.replace("plan_", ""));
         return;
       }
 
@@ -198,9 +255,7 @@ export default async function (context) {
       await ctx.answerCallbackQuery("⚠️ دستور ناشناخته");
     } catch (e) {
       error("callback error: " + e.message);
-      try {
-        await ctx.answerCallbackQuery("⚠️ خطایی رخ داد");
-      } catch {}
+      try { await ctx.answerCallbackQuery("⚠️ خطا"); } catch {}
     }
   });
 
@@ -222,15 +277,19 @@ export default async function (context) {
   // 🔄 پردازش آپدیت تلگرام
   // ============================================================
   try {
-    const update = context.req.body;
+    // استخراج update از request
+    const update = extractUpdate(context.req, log);
 
-    if (!update || typeof update !== "object") {
-      log("⚠️ آپدیت خالی");
+    if (!update) {
+      log("⚠️ هیچ آپدیتی پیدا نشد");
+      log("📋 req keys: " + JSON.stringify(Object.keys(context.req || {})));
+      log("📋 body type: " + typeof context.req.body);
+      log("📋 body value: " + JSON.stringify(context.req.body).substring(0, 300));
       return context.res.json({ ok: true }, 200);
     }
 
     if (!update.message && !update.callback_query && !update.edited_message) {
-      log("⚠️ آپدیت بدون محتوا");
+      log("⚠️ آپدیت بدون محتوا: " + JSON.stringify(Object.keys(update)));
       return context.res.json({ ok: true }, 200);
     }
 
