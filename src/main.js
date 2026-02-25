@@ -1,13 +1,8 @@
 // ============================================================
 // 🗳️ کاندیداتوری هوشمند — @candidatoryiran_bot
 // ============================================================
-// فایل اصلی Appwrite Function — نسخه مقاوم در برابر مشکلات body
-// Runtime: Node.js 20 | grammY | Appwrite Cloud
-// ============================================================
 
 import { Bot } from "grammy";
-
-// وابستگی‌های داخلی
 import { initDB, getOrCreateUser } from "./utils/db.js";
 import { mainMenuKB } from "./utils/keyboard.js";
 import {
@@ -39,110 +34,117 @@ const MENU_TEXT = `
 `;
 
 // ============================================================
-// 🔧 خواندن env
+// 🔧 خواندن env — فقط از process.env
 // ============================================================
-function getEnv(env) {
+function getEnv() {
   return {
-    BOT_TOKEN: env.BOT_TOKEN,
-    APPWRITE_PROJECT_ID: env.APPWRITE_PROJECT_ID,
-    APPWRITE_API_KEY: env.APPWRITE_API_KEY,
-    APPWRITE_ENDPOINT: env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1",
-    DATABASE_ID: env.DATABASE_ID || "kandidatory_db",
-    COLLECTION_USERS: env.COLLECTION_USERS || "users",
-    COLLECTION_CONSULT: env.COLLECTION_CONSULT || "consultations",
-    COLLECTION_LEADS: env.COLLECTION_LEADS || "leads_status",
+    BOT_TOKEN: process.env.BOT_TOKEN,
+    APPWRITE_PROJECT_ID: process.env.APPWRITE_PROJECT_ID,
+    APPWRITE_API_KEY: process.env.APPWRITE_API_KEY,
+    APPWRITE_ENDPOINT: process.env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1",
+    DATABASE_ID: process.env.DATABASE_ID || "kandidatory_db",
+    COLLECTION_USERS: process.env.COLLECTION_USERS || "users",
+    COLLECTION_CONSULT: process.env.COLLECTION_CONSULT || "consultations",
+    COLLECTION_LEADS: process.env.COLLECTION_LEADS || "leads_status",
   };
 }
 
 // ============================================================
-// 🔄 استخراج update — نسخه بسیار مقاوم
+// 🔄 استخراج update از request — تمام روش‌های ممکن
 // ============================================================
-function extractUpdate(req, log = console.log) {
-  log("[REQUEST] شروع استخراج update");
-
-  // لاگ کلیدهای req برای دیباگ
-  log("کلیدهای req موجود: " + (req ? Object.keys(req).join(", ") : "req خالی است"));
-
-  // ۱. bodyJson — منبع اصلی در Appwrite جدید
+function extractUpdate(req, log) {
+  // ۱. bodyJson
   if (req.bodyJson && typeof req.bodyJson === "object" && Object.keys(req.bodyJson).length > 0) {
-    log("✅ bodyJson معتبر پیدا شد");
+    log("📦 source: bodyJson");
     return req.bodyJson;
   }
 
-  // ۲. body اگر آبجکت باشد
+  // ۲. body آبجکت
   if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
-    log("✅ body (object) معتبر پیدا شد");
+    log("📦 source: body object");
     return req.body;
   }
 
-  // ۳. payload (بعضی deploymentها این رو دارن)
-  if (req.payload && typeof req.payload === "object" && Object.keys(req.payload).length > 0) {
-    log("✅ payload معتبر پیدا شد");
-    return req.payload;
-  }
-
-  // ۴. رشته‌های مختلف — با چک طول و trim
-  const candidates = [
+  // ۳. رشته‌ها
+  const strings = [
     { name: "body", val: req.body },
     { name: "bodyRaw", val: req.bodyRaw },
     { name: "bodyText", val: req.bodyText },
   ];
 
-  for (const cand of candidates) {
-    if (typeof cand.val === "string" && cand.val.trim().length >= 10) {
+  for (const s of strings) {
+    if (typeof s.val === "string" && s.val.trim().length > 5) {
       try {
-        const trimmed = cand.val.trim();
-        log(`تلاش parse از ${cand.name} — طول: ${trimmed.length}`);
-        const parsed = JSON.parse(trimmed);
+        const parsed = JSON.parse(s.val.trim());
         if (parsed && typeof parsed === "object") {
-          log(`✅ ${cand.name} با موفقیت parse شد`);
+          log("📦 source: " + s.name + " (parsed)");
           return parsed;
         }
-      } catch (e) {
-        log(`❌ parse شکست در ${cand.name}: ${e.message} (طول: ${cand.val?.length || 0})`);
-      }
-    } else if (typeof cand.val === "string") {
-      log(`❌ ${cand.name} خیلی کوتاه است (طول: ${cand.val.length})`);
+      } catch {}
     }
   }
 
-  // اگر هیچی نبود
-  log("⚠️ هیچ منبع معتبری برای update پیدا نشد — body احتمالاً خالی است");
+  // ۴. bodyBinary — Uint8Array یا Buffer
+  if (req.bodyBinary && req.bodyBinary.length > 5) {
+    try {
+      let text;
+      if (typeof TextDecoder !== "undefined") {
+        text = new TextDecoder("utf-8").decode(req.bodyBinary);
+      } else {
+        text = Buffer.from(req.bodyBinary).toString("utf-8");
+      }
+      if (text && text.trim().length > 5) {
+        const parsed = JSON.parse(text.trim());
+        if (parsed && typeof parsed === "object") {
+          log("📦 source: bodyBinary (decoded)");
+          return parsed;
+        }
+      }
+    } catch (e) {
+      log("❌ bodyBinary decode failed: " + e.message);
+    }
+  }
+
   return null;
 }
 
 // ============================================================
-// 🚀 نقطه ورود اصلی Appwrite Function
+// 🚀 نقطه ورود Appwrite Function
 // ============================================================
 export default async function (context) {
-  const log = context.log || console.log;
-  const error = context.error || console.error;
+  const log = context.log;
+  const error = context.error;
 
-  log("[START] اجرای function شروع شد");
+  // ---- ۱. env از process.env ----
+  const env = getEnv();
 
-  // ---- ۱. خواندن محیط ----
-  const env = getEnv(context.env || {});
-  
+  log("🔍 BOT_TOKEN: " + (env.BOT_TOKEN ? "✅" : "❌"));
+  log("🔍 PROJECT_ID: " + (env.APPWRITE_PROJECT_ID ? "✅" : "❌"));
+  log("🔍 API_KEY: " + (env.APPWRITE_API_KEY ? "✅" : "❌"));
+
   if (!env.BOT_TOKEN) {
-    error("❌ BOT_TOKEN تنظیم نشده");
-    return context.res.json({ ok: true, error: "missing BOT_TOKEN" }, 200);
+    error("❌ BOT_TOKEN پیدا نشد در process.env!");
+    return context.res.json({ ok: true, error: "no token" }, 200);
   }
 
-  // ---- ۲. اتصال به Appwrite ----
+  if (!env.APPWRITE_PROJECT_ID || !env.APPWRITE_API_KEY) {
+    error("❌ Appwrite credentials پیدا نشد!");
+    return context.res.json({ ok: true, error: "no creds" }, 200);
+  }
+
+  // ---- ۲. Appwrite ----
   try {
     initDB(env);
-    log("✅ Appwrite با موفقیت مقداردهی شد");
+    log("✅ DB ready");
   } catch (e) {
-    error("❌ خطا در initDB: " + e.message);
-    return context.res.json({ ok: true, error: "db init failed" }, 200);
+    error("❌ DB init: " + e.message);
+    return context.res.json({ ok: true, error: "db fail" }, 200);
   }
 
-  // ---- ۳. ساخت بات ----
+  // ---- ۳. بات ----
   const bot = new Bot(env.BOT_TOKEN);
 
-  // ============================================================
-  // هندلر دستورات
-  // ============================================================
+  // === /start ===
   bot.command("start", async (ctx) => {
     try {
       await getOrCreateUser(ctx.from);
@@ -150,13 +152,13 @@ export default async function (context) {
         parse_mode: "Markdown",
         reply_markup: mainMenuKB(),
       });
-      log("/start موفق");
     } catch (e) {
-      error("/start error: " + e.message);
-      await ctx.reply("⚠️ خطایی رخ داد. دوباره /start بزنید.");
+      error("/start: " + e.message);
+      await ctx.reply("⚠️ خطا رخ داد. دوباره /start بزنید.");
     }
   });
 
+  // === /menu ===
   bot.command("menu", async (ctx) => {
     try {
       await ctx.reply(MENU_TEXT, {
@@ -164,94 +166,106 @@ export default async function (context) {
         reply_markup: mainMenuKB(),
       });
     } catch (e) {
-      error("/menu error: " + e.message);
+      error("/menu: " + e.message);
     }
   });
 
-  // ============================================================
-  // هندلر callback_query
-  // ============================================================
+  // === Callback Query ===
   bot.on("callback_query:data", async (ctx) => {
-    const data = ctx.callbackQuery.data;
-    log(`Callback دریافت شد: ${data}`);
-
+    const d = ctx.callbackQuery.data;
     try {
-      if (data === "main_menu") {
-        await ctx.editMessageText(MENU_TEXT, {
-          parse_mode: "Markdown",
-          reply_markup: mainMenuKB(),
-        });
-      } else if (data === "start_consult") {
+      if (d === "main_menu") {
+        await ctx.editMessageText(MENU_TEXT, { parse_mode: "Markdown", reply_markup: mainMenuKB() });
+        await ctx.answerCallbackQuery();
+      } else if (d === "start_consult") {
         await handleStartConsultation(ctx);
-      } else if (data === "cancel_consult") {
+        await ctx.answerCallbackQuery();
+      } else if (d === "cancel_consult") {
         await handleCancelConsultation(ctx, mainMenuKB, MENU_TEXT);
-        await ctx.answerCallbackQuery("❌ مشاوره لغو شد");
-      } else if (data.startsWith("ans_")) {
-        const parts = data.split("_");
-        await handleAnswer(ctx, parseInt(parts[1]), parseInt(parts[2]));
-      } else if (data.startsWith("edit_")) {
-        await handleEdit(ctx, parseInt(data.replace("edit_", "")));
-      } else if (data === "back_summary") {
+        await ctx.answerCallbackQuery("❌ لغو شد");
+      } else if (d.startsWith("ans_")) {
+        const p = d.split("_");
+        await handleAnswer(ctx, parseInt(p[1]), parseInt(p[2]));
+      } else if (d.startsWith("edit_")) {
+        await handleEdit(ctx, parseInt(d.replace("edit_", "")));
+      } else if (d === "back_summary") {
         await handleBackToSummary(ctx);
-      } else if (data === "confirm") {
+      } else if (d === "confirm") {
         await handleConfirm(ctx);
-      } else if (data === "show_plans") {
+      } else if (d === "show_plans") {
         await handleShowPlans(ctx);
-      } else if (data.startsWith("plan_")) {
-        await handleSelectPlan(ctx, data.replace("plan_", ""));
-      } else if (data === "contact") {
+      } else if (d.startsWith("plan_")) {
+        await handleSelectPlan(ctx, d.replace("plan_", ""));
+      } else if (d === "contact") {
         await handleContact(ctx);
-      } else if (data === "about") {
+      } else if (d === "about") {
         await handleAbout(ctx);
-      } else if (data === "samples") {
+      } else if (d === "samples") {
         await handleSamples(ctx);
       } else {
-        await ctx.answerCallbackQuery("⚠️ دستور ناشناخته");
+        await ctx.answerCallbackQuery("⚠️ ناشناخته");
       }
     } catch (e) {
-      error(`خطا در callback ${data}: ${e.message}`);
-      try { await ctx.answerCallbackQuery("⚠️ خطایی رخ داد"); } catch {}
+      error("cb: " + e.message);
+      try { await ctx.answerCallbackQuery("⚠️ خطا"); } catch {}
     }
   });
 
-  // ============================================================
-  // هندلر پیام متنی (غیر دستوری)
-  // ============================================================
+  // === پیام متنی ===
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) return;
     try {
       await handleTextInput(ctx, mainMenuKB, MENU_TEXT);
     } catch (e) {
-      error("text handler error: " + e.message);
-      await ctx.reply("⚠️ خطایی رخ داد. لطفاً /start بزنید.");
+      error("txt: " + e.message);
+      await ctx.reply("⚠️ خطا. /start بزنید.");
     }
   });
 
   // ============================================================
-  // پردازش آپدیت تلگرام
+  // 🔄 پردازش آپدیت — لاگ کامل برای دیباگ
   // ============================================================
   try {
-    log("تلاش برای استخراج update...");
+    log("--- شروع استخراج آپدیت ---");
+    log("req keys: " + Object.keys(context.req).join(", "));
+    log("body type: " + typeof context.req.body + " | length: " + (context.req.body ? context.req.body.length : 0));
+    log("bodyJson type: " + typeof context.req.bodyJson + " | value: " + JSON.stringify(context.req.bodyJson));
+    log("bodyText type: " + typeof context.req.bodyText + " | length: " + (context.req.bodyText ? context.req.bodyText.length : 0));
+    log("bodyRaw type: " + typeof context.req.bodyRaw + " | length: " + (context.req.bodyRaw ? context.req.bodyRaw.length : 0));
+    log("bodyBinary type: " + typeof context.req.bodyBinary + " | length: " + (context.req.bodyBinary ? context.req.bodyBinary.length : 0));
+
+    // سعی کن bodyBinary رو بخون
+    if (context.req.bodyBinary && context.req.bodyBinary.length > 5) {
+      try {
+        const decoded = new TextDecoder("utf-8").decode(context.req.bodyBinary);
+        log("bodyBinary decoded (first 500): " + decoded.substring(0, 500));
+      } catch (e) {
+        log("bodyBinary decode err: " + e.message);
+      }
+    }
+
+    log("method: " + context.req.method);
+    log("content-type: " + (context.req.headers["content-type"] || "none"));
+    log("--- پایان لاگ‌های دیباگ ---");
+
     const update = extractUpdate(context.req, log);
 
     if (!update) {
-      log("⚠️ update استخراج نشد — درخواست احتمالاً بدون body معتبر است");
+      log("⚠️ آپدیت پیدا نشد");
       return context.res.json({ ok: true }, 200);
     }
-
-    log(`update استخراج شد — نوع: ${update.message ? "message" : update.callback_query ? "callback" : "دیگر"}`);
 
     if (!update.message && !update.callback_query && !update.edited_message) {
-      log("⚠️ آپدیت بدون محتوای قابل پردازش");
+      log("⚠️ آپدیت بدون محتوا");
       return context.res.json({ ok: true }, 200);
     }
 
+    log("📩 " + (update.message ? "message" : "callback"));
     await bot.handleUpdate(update);
-    log("✅ آپدیت با موفقیت پردازش شد");
+    log("✅ done");
   } catch (e) {
-    error("❌ خطای کلی در پردازش آپدیت: " + e.message);
+    error("❌ " + e.message);
   }
 
-  // همیشه 200 برگردان
   return context.res.json({ ok: true }, 200);
 }
