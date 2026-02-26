@@ -1,17 +1,24 @@
 import { Bot } from "grammy";
-import { initDB, getOrCreateUser } from "./utils/db.js";
+import { initDB, getOrCreateUser, isAdmin, updateUser } from "./utils/db.js";
 import { mainMenuKB } from "./utils/keyboard.js";
 import {
   handleStartConsultation,
   handleCancelConsultation,
   handleAnswer,
-  handleEdit,
+  handleEditSection,
   handleBackToSummary,
   handleConfirm,
   handleTextInput,
 } from "./flows/consultation.js";
 import { handleShowPlans, handleSelectPlan } from "./flows/plans.js";
 import { handleContact, handleAbout, handleSamples } from "./flows/contact.js";
+import {
+  handleAdminList,
+  handleAdminView,
+  handleAdminStatus,
+  handleAdminNoteStart,
+  handleAdminNoteText,
+} from "./flows/admin.js";
 
 const MENU_TEXT = `
 🗳️ *به کاندیداتوری هوشمند خوش آمدید!*
@@ -26,13 +33,15 @@ const MENU_TEXT = `
 یکی از گزینه‌های زیر را انتخاب کنید:
 `;
 
+const ADMIN_PIN = "1403";
+
 function getEnv() {
   return {
     BOT_TOKEN: process.env.BOT_TOKEN,
     APPWRITE_PROJECT_ID: process.env.APPWRITE_PROJECT_ID,
     APPWRITE_API_KEY: process.env.APPWRITE_API_KEY,
     APPWRITE_ENDPOINT: process.env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1",
-    DATABASE_ID: process.env.DATABASE_ID || "kandidatory_db",
+    DATABASE_ID: process.env.DATABASE_ID,
     COLLECTION_USERS: process.env.COLLECTION_USERS || "users",
     COLLECTION_CONSULT: process.env.COLLECTION_CONSULT || "consultations",
     COLLECTION_LEADS: process.env.COLLECTION_LEADS || "leads_status",
@@ -43,39 +52,24 @@ function extractUpdate(req, log) {
   if (req.method === "GET") return null;
 
   try {
-    if (req.bodyJson && typeof req.bodyJson === "object" && Object.keys(req.bodyJson).length > 0) {
-      log("📦 bodyJson");
-      return req.bodyJson;
-    }
+    if (req.bodyJson && typeof req.bodyJson === "object" && Object.keys(req.bodyJson).length > 0) return req.bodyJson;
   } catch {}
 
-  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
-    log("📦 body obj");
-    return req.body;
-  }
+  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) return req.body;
 
   const sources = [
-    { n: "body", v: req.body },
-    { n: "bodyRaw", v: req.bodyRaw },
-    { n: "bodyText", v: req.bodyText },
+    { v: req.body }, { v: req.bodyRaw }, { v: req.bodyText },
   ];
   for (const s of sources) {
     if (typeof s.v === "string" && s.v.trim().length > 5) {
-      try {
-        const p = JSON.parse(s.v.trim());
-        if (p && typeof p === "object") { log("📦 " + s.n); return p; }
-      } catch {}
+      try { const p = JSON.parse(s.v.trim()); if (p) return p; } catch {}
     }
   }
 
   if (req.bodyBinary && req.bodyBinary.length > 5) {
     try {
       const t = new TextDecoder("utf-8").decode(req.bodyBinary);
-      if (t.trim().length > 5) {
-        const p = JSON.parse(t.trim());
-        log("📦 binary");
-        return p;
-      }
+      if (t.trim().length > 5) return JSON.parse(t.trim());
     } catch {}
   }
 
@@ -85,53 +79,31 @@ function extractUpdate(req, log) {
 export default async function (context) {
   const log = context.log;
   const error = context.error;
-
   const env = getEnv();
 
-  // GET = health check
   if (context.req.method === "GET") {
-    log("✅ Health check");
     return context.res.json({ ok: true, status: "running" }, 200);
   }
-
-  log("📩 POST received");
 
   if (!env.BOT_TOKEN) {
     error("❌ no BOT_TOKEN");
     return context.res.json({ ok: true }, 200);
   }
 
-  // استخراج update
   const update = extractUpdate(context.req, log);
-
-  if (!update) {
-    log("⚠️ no update");
-    return context.res.json({ ok: true }, 200);
-  }
-
+  if (!update) return context.res.json({ ok: true }, 200);
   if (!update.message && !update.callback_query && !update.edited_message) {
-    log("⚠️ empty update");
     return context.res.json({ ok: true }, 200);
   }
 
-  log("✅ update found: " + (update.message ? "message" : "callback"));
-
-  // ---- Appwrite ----
-  try {
-    initDB(env);
-  } catch (e) {
+  try { initDB(env); } catch (e) {
     error("❌ DB: " + e.message);
     return context.res.json({ ok: true }, 200);
   }
 
-  // ---- بات با bot.init() ----
   const bot = new Bot(env.BOT_TOKEN);
-
-  try {
-    await bot.init();
-    log("✅ bot initialized");
-  } catch (e) {
-    error("❌ bot.init failed: " + e.message);
+  try { await bot.init(); } catch (e) {
+    error("❌ bot.init: " + e.message);
     return context.res.json({ ok: true }, 200);
   }
 
@@ -147,9 +119,24 @@ export default async function (context) {
   });
 
   bot.command("menu", async (ctx) => {
+    try { await ctx.reply(MENU_TEXT, { parse_mode: "Markdown", reply_markup: mainMenuKB() }); }
+    catch (e) { error("/menu: " + e.message); }
+  });
+
+  // === /admin ===
+  bot.command("admin", async (ctx) => {
     try {
-      await ctx.reply(MENU_TEXT, { parse_mode: "Markdown", reply_markup: mainMenuKB() });
-    } catch (e) { error("/menu: " + e.message); }
+      const admin = await isAdmin(ctx.from.id);
+      if (!admin) {
+        await ctx.reply("⛔ دسترسی ندارید.");
+        return;
+      }
+
+      await updateUser(ctx.from.id, { currentStep: 5000 });
+      await ctx.reply("🔐 *کد امنیتی ۴ رقمی را وارد کنید:*", { parse_mode: "Markdown" });
+    } catch (e) {
+      error("/admin: " + e.message);
+    }
   });
 
   // === Callbacks ===
@@ -168,8 +155,9 @@ export default async function (context) {
       } else if (d.startsWith("ans_")) {
         const p = d.split("_");
         await handleAnswer(ctx, parseInt(p[1]), parseInt(p[2]));
-      } else if (d.startsWith("edit_")) {
-        await handleEdit(ctx, parseInt(d.replace("edit_", "")));
+      } else if (d.startsWith("edit_section_")) {
+        const sec = d.replace("edit_section_", "");
+        await handleEditSection(ctx, sec);
       } else if (d === "back_summary") {
         await handleBackToSummary(ctx);
       } else if (d === "confirm") {
@@ -184,6 +172,26 @@ export default async function (context) {
         await handleAbout(ctx);
       } else if (d === "samples") {
         await handleSamples(ctx);
+
+      // === ادمین callbacks ===
+      } else if (d === "admin_list") {
+        if (await isAdmin(ctx.from.id)) await handleAdminList(ctx, 0);
+        await ctx.answerCallbackQuery();
+      } else if (d.startsWith("admin_page_")) {
+        const page = parseInt(d.replace("admin_page_", ""));
+        if (await isAdmin(ctx.from.id)) await handleAdminList(ctx, page);
+        await ctx.answerCallbackQuery();
+      } else if (d.startsWith("admin_view_")) {
+        const docId = d.replace("admin_view_", "");
+        if (await isAdmin(ctx.from.id)) await handleAdminView(ctx, docId);
+      } else if (d.startsWith("admin_status_")) {
+        const parts = d.replace("admin_status_", "").split("_");
+        const docId = parts[0];
+        const status = parts.slice(1).join("_");
+        if (await isAdmin(ctx.from.id)) await handleAdminStatus(ctx, docId, status);
+      } else if (d.startsWith("admin_note_")) {
+        const docId = d.replace("admin_note_", "");
+        if (await isAdmin(ctx.from.id)) await handleAdminNoteStart(ctx, docId, updateUser);
       } else {
         await ctx.answerCallbackQuery("⚠️ ناشناخته");
       }
@@ -196,7 +204,31 @@ export default async function (context) {
   // === پیام متنی ===
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) return;
+
     try {
+      const user = await getOrCreateUser(ctx.from);
+      const cs = user.currentStep ?? 0;
+
+      // ادمین: PIN
+      if (cs === 5000) {
+        if (ctx.message.text.trim() === ADMIN_PIN) {
+          await updateUser(ctx.from.id, { currentStep: 0 });
+          await ctx.reply("✅ *ورود موفق!*", { parse_mode: "Markdown" });
+          await handleAdminList(ctx, 0);
+        } else {
+          await ctx.reply("❌ کد اشتباه. دوباره /admin بزنید.");
+          await updateUser(ctx.from.id, { currentStep: 0 });
+        }
+        return;
+      }
+
+      // ادمین: یادداشت
+      if (cs === 6000) {
+        await handleAdminNoteText(ctx);
+        return;
+      }
+
+      // مشاوره عادی
       await handleTextInput(ctx, mainMenuKB, MENU_TEXT);
     } catch (e) {
       error("txt: " + e.message);
@@ -204,12 +236,12 @@ export default async function (context) {
     }
   });
 
-  // ---- پردازش ----
+  // پردازش
   try {
     await bot.handleUpdate(update);
     log("✅ done");
   } catch (e) {
-    error("❌ handleUpdate: " + e.message);
+    error("❌ " + e.message);
   }
 
   return context.res.json({ ok: true }, 200);
