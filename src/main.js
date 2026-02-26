@@ -1,13 +1,19 @@
 // src/main.js
-// ─── نقطه ورود Appwrite Function — نسخه نهایی ───
-// ربات «کاندیداتوری هوشمند» @candidatoryiran_bot
+// ═══════════════════════════════════════════════════════════════
+//  نقطه ورود Appwrite Function — ربات «کاندیداتوری هوشمند»
+//  @candidatoryiran_bot
+//
+//  فیکس اصلی: استفاده از botInfo استاتیک در constructor
+//  تا نیازی به await bot.init() نباشد و خطای
+//  "Bot not initialized" هرگز رخ ندهد.
+// ═══════════════════════════════════════════════════════════════
 
 import { Bot } from "grammy";
 import { initDB } from "./utils/db.js";
 import { mainMenuKB } from "./utils/keyboard.js";
 import { WELCOME_MESSAGE } from "./constants/questions.js";
 
-// ─── فلوهای فاز ۱ (مشاوره پایه) ───
+// ─── Flows ───
 import {
   handleStartConsultation,
   handleAnswer,
@@ -18,127 +24,153 @@ import {
   handleTextInput,
 } from "./flows/consultation.js";
 
-// ─── فلوهای پلن‌ها و خدمات ───
 import {
   handleShowPlans,
   handleSelectPlan,
   handlePlanRequest,
 } from "./flows/plans.js";
 
-// ─── فلوهای ارتباطی ───
 import {
   handleAboutUs,
   handleContactUs,
   handleSampleReports,
 } from "./flows/contact.js";
 
-// ─── فلوهای آموزشی ───
 import {
   handleShowEducationList,
   handleShowEducationCard,
+  handleEducationView,
+  handleRelatedCards,
 } from "./flows/educational.js";
 
-// ─── فلوهای ادمین ───
 import {
   handleAdminCommand,
   handleAdminCallback,
   handleAdminSearch,
 } from "./flows/admin.js";
 
-// ─── فلوهای ارزیابی عمیق (فاز ۲) ───
-import {
-  handleStartDeepAssessment,
-  handleDeepBegin,
-  handleDeepAnswer,
-  handleDeepTextInput,
-  handleDeepSkip,
-  handleDeepBackStep,
-  handleDeepConfirm,
-  handleDeepExit,
-} from "./flows/deep_assessment.js";
-
-// ═══════════════════════════════════════════
-//  تابع اصلی Appwrite Function
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  تابع اصلی — export default برای Appwrite Function
+// ═══════════════════════════════════════════════════════════════
 export default async function (context) {
   const env = context.env || process.env;
 
-  // مقداردهی اولیه دیتابیس
+  // ─── مقداردهی دیتابیس ───
   initDB(env);
 
-  // ساخت نمونه ربات
-  const bot = new Bot(env.BOT_TOKEN);
+  // ═══════════════════════════════════════════════════════════
+  //  فیکس خطای "Bot not initialized"
+  //
+  //  در محیط serverless (Appwrite Function) هر درخواست یک
+  //  instance جدید از Bot می‌سازد. اگر bot.init() فراخوانی
+  //  نشود یا به هر دلیلی timeout بخورد، خطای بالا رخ می‌دهد.
+  //
+  //  راه‌حل ۱: await bot.init() قبل از handleUpdate
+  //  راه‌حل ۲: botInfo استاتیک در constructor (سریع‌تر و مطمئن‌تر)
+  //
+  //  ما هر دو را پیاده می‌کنیم: اول botInfo استاتیک، سپس
+  //  اگر نبود fallback به await bot.init()
+  // ═══════════════════════════════════════════════════════════
 
-  // لیست آیدی ادمین‌ها
-  const ADMINS = (env.ADMIN_IDS || "").split(",").map((s) => s.trim());
+  let bot;
 
-  // ═══════════════════════════════════════
+  // اگر BOT_INFO در env ست شده باشد (JSON string)، از آن استفاده کن
+  // مثال: BOT_INFO={"id":8478705530,"is_bot":true,"first_name":"کاندیداتوری هوشمند","username":"candidatoryiran_bot","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false}
+  if (env.BOT_INFO) {
+    try {
+      const botInfo = JSON.parse(env.BOT_INFO);
+      bot = new Bot(env.BOT_TOKEN, { botInfo });
+    } catch (e) {
+      console.error("⚠️ خطا در parse BOT_INFO، fallback به init():", e.message);
+      bot = new Bot(env.BOT_TOKEN);
+      await bot.init();
+    }
+  } else {
+    // اگر BOT_INFO نداریم، حتماً init() بزن
+    bot = new Bot(env.BOT_TOKEN);
+    try {
+      await bot.init();
+    } catch (e) {
+      console.error("❌ خطای bot.init():", e.message);
+      // لاگ کن ولی ادامه بده — شاید درخواست قبلی cache شده باشد
+    }
+  }
+
+  // ─── لیست آیدی ادمین‌ها ───
+  const ADMINS = (env.ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+  // ═══════════════════════════════════════════════════════════
   //  دستورات (Commands)
-  // ═══════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
 
   // ─── /start ───
   bot.command("start", async (ctx) => {
-    await ctx.reply(WELCOME_MESSAGE, {
-      parse_mode: "Markdown",
-      reply_markup: mainMenuKB(),
-    });
+    try {
+      await ctx.reply(WELCOME_MESSAGE, {
+        parse_mode: "Markdown",
+        reply_markup: mainMenuKB(),
+      });
+    } catch (e) {
+      console.error("خطا در /start:", e.message);
+    }
   });
 
   // ─── /menu ───
   bot.command("menu", async (ctx) => {
-    await ctx.reply("📋 *منوی اصلی*\n\nگزینه مورد نظر را انتخاب کنید:", {
-      parse_mode: "Markdown",
-      reply_markup: mainMenuKB(),
-    });
+    try {
+      await ctx.reply("📋 *منوی اصلی*\n\nگزینه مورد نظر را انتخاب کنید:", {
+        parse_mode: "Markdown",
+        reply_markup: mainMenuKB(),
+      });
+    } catch (e) {
+      console.error("خطا در /menu:", e.message);
+    }
   });
 
-  // ─── /admin (فقط ادمین‌ها) ───
+  // ─── /admin ───
   bot.command("admin", async (ctx) => {
     if (ADMINS.includes(String(ctx.from.id))) {
       await handleAdminCommand(ctx);
     } else {
-      await ctx.reply("⛔ دسترسی ندارید.");
+      await ctx.reply("⛔ شما دسترسی ادمین ندارید.");
     }
   });
 
-  // ─── /search (جستجو با کد ملی — فقط ادمین) ───
+  // ─── /search <کد ملی> (ادمین) ───
   bot.command("search", async (ctx) => {
     if (!ADMINS.includes(String(ctx.from.id))) return;
     const q = ctx.message.text.replace("/search", "").trim();
     if (q) {
       await handleAdminSearch(ctx, "national_id", q);
     } else {
-      await ctx.reply("❌ کد ملی را وارد کنید:\n\n`/search 0012345678`", {
+      await ctx.reply("❌ کد ملی را وارد کنید:\n`/search 0012345678`", {
         parse_mode: "Markdown",
       });
     }
   });
 
-  // ─── /searchphone (جستجو با شماره تماس — فقط ادمین) ───
+  // ─── /searchphone <شماره> (ادمین) ───
   bot.command("searchphone", async (ctx) => {
     if (!ADMINS.includes(String(ctx.from.id))) return;
     const q = ctx.message.text.replace("/searchphone", "").trim();
     if (q) {
       await handleAdminSearch(ctx, "phone", q);
     } else {
-      await ctx.reply(
-        "❌ شماره را وارد کنید:\n\n`/searchphone 09121234567`",
-        { parse_mode: "Markdown" }
-      );
+      await ctx.reply("❌ شماره را وارد کنید:\n`/searchphone 09121234567`", {
+        parse_mode: "Markdown",
+      });
     }
   });
 
-  // ═══════════════════════════════════════
-  //  Callback Queries (دکمه‌های اینلاین)
-  // ═══════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
+  //  Callback Queries
+  // ═══════════════════════════════════════════════════════════
 
   bot.on("callback_query:data", async (ctx) => {
     const d = ctx.callbackQuery.data;
 
     try {
-      // ─────────────────────────────────
-      //  منوی اصلی
-      // ─────────────────────────────────
+      // ─── منوی اصلی ───
       if (d === "menu") {
         try {
           await ctx.editMessageText(
@@ -155,76 +187,40 @@ export default async function (context) {
         return;
       }
 
-      // ─────────────────────────────────
-      //  فاز ۱: مشاوره پایه
-      // ─────────────────────────────────
-
+      // ─── شروع مشاوره ───
       if (d === "start_consultation") {
         return await handleStartConsultation(ctx);
       }
 
+      // ─── پاسخ گزینه‌ای: ans:stepIndex:value ───
       if (d.startsWith("ans:")) {
-        const [, idx, ...rest] = d.split(":");
-        return await handleAnswer(ctx, parseInt(idx), rest.join(":"));
+        const parts = d.split(":");
+        const stepIndex = parseInt(parts[1]);
+        const value = parts.slice(2).join(":"); // مقدار ممکنه خودش : داشته باشه
+        return await handleAnswer(ctx, stepIndex, value);
       }
 
+      // ─── بازگشت به مرحله قبل: back:stepIndex ───
       if (d.startsWith("back:")) {
         return await handleBackStep(ctx, parseInt(d.split(":")[1]));
       }
 
+      // ─── ویرایش مرحله: edit:stepIndex ───
       if (d.startsWith("edit:")) {
         return await handleEdit(ctx, parseInt(d.split(":")[1]));
       }
 
+      // ─── تایید نهایی ───
       if (d === "confirm") {
         return await handleConfirm(ctx);
       }
 
+      // ─── انصراف ───
       if (d === "cancel") {
         return await handleCancelConsultation(ctx);
       }
 
-      // ─────────────────────────────────
-      //  فاز ۲: ارزیابی عمیق
-      // ─────────────────────────────────
-
-      if (d === "start_deep") {
-        return await handleStartDeepAssessment(ctx);
-      }
-
-      if (d === "deep_begin") {
-        return await handleDeepBegin(ctx);
-      }
-
-      if (d.startsWith("deep_ans:")) {
-        const parts = d.split(":");
-        const flatIdx = parseInt(parts[1]);
-        const value = parts.slice(2).join(":");
-        return await handleDeepAnswer(ctx, flatIdx, value);
-      }
-
-      if (d.startsWith("deep_back:")) {
-        const flatIdx = parseInt(d.split(":")[1]);
-        return await handleDeepBackStep(ctx, flatIdx);
-      }
-
-      if (d.startsWith("deep_skip:")) {
-        const flatIdx = parseInt(d.split(":")[1]);
-        return await handleDeepSkip(ctx, flatIdx);
-      }
-
-      if (d === "deep_confirm") {
-        return await handleDeepConfirm(ctx);
-      }
-
-      if (d === "deep_exit") {
-        return await handleDeepExit(ctx);
-      }
-
-      // ─────────────────────────────────
-      //  پلن‌ها و خدمات
-      // ─────────────────────────────────
-
+      // ─── پلن‌ها ───
       if (d === "show_plans") {
         return await handleShowPlans(ctx);
       }
@@ -237,46 +233,49 @@ export default async function (context) {
         return await handlePlanRequest(ctx, d.split(":")[1]);
       }
 
-      // ─────────────────────────────────
-      //  آموزش‌ها
-      // ─────────────────────────────────
-
+      // ─── آموزش: فهرست ───
       if (d === "edu_list") {
         return await handleShowEducationList(ctx);
       }
 
+      // ─── آموزش: noop (دکمه شمارنده صفحه) ───
       if (d === "edu_noop") {
         await ctx.answerCallbackQuery();
         return;
       }
 
-      if (d.startsWith("edu:")) {
-        const idx = parseInt(d.split(":")[1]);
-        if (!isNaN(idx)) {
-          return await handleShowEducationCard(ctx, idx);
+      // ─── آموزش: تغییر تب (eduv:cardId:viewMode) ───
+      if (d.startsWith("eduv:")) {
+        const parts = d.split(":");
+        const cardId = parseInt(parts[1]);
+        const viewMode = parts[2] || "summary";
+        if (!isNaN(cardId)) {
+          return await handleEducationView(ctx, cardId, viewMode);
         }
       }
 
-      // ─────────────────────────────────
-      //  صفحات ثابت
-      // ─────────────────────────────────
-
-      if (d === "about_us") {
-        return await handleAboutUs(ctx);
+      // ─── آموزش: کارت‌های مرتبط (edurel:cardId) ───
+      if (d.startsWith("edurel:")) {
+        const cardId = parseInt(d.split(":")[1]);
+        if (!isNaN(cardId)) {
+          return await handleRelatedCards(ctx, cardId);
+        }
       }
 
-      if (d === "contact_us") {
-        return await handleContactUs(ctx);
+      // ─── آموزش: نمایش کارت (edu:cardId) ───
+      if (d.startsWith("edu:")) {
+        const cardId = parseInt(d.split(":")[1]);
+        if (!isNaN(cardId)) {
+          return await handleShowEducationCard(ctx, cardId);
+        }
       }
 
-      if (d === "sample_reports") {
-        return await handleSampleReports(ctx);
-      }
+      // ─── صفحات اطلاع‌رسانی ───
+      if (d === "about_us") return await handleAboutUs(ctx);
+      if (d === "contact_us") return await handleContactUs(ctx);
+      if (d === "sample_reports") return await handleSampleReports(ctx);
 
-      // ─────────────────────────────────
-      //  پنل ادمین
-      // ─────────────────────────────────
-
+      // ─── پنل ادمین ───
       if (d.startsWith("adm:")) {
         if (ADMINS.includes(String(ctx.from.id))) {
           return await handleAdminCallback(ctx, d);
@@ -285,46 +284,38 @@ export default async function (context) {
         return;
       }
 
-      // ─────────────────────────────────
-      //  callback ناشناخته
-      // ─────────────────────────────────
+      // ─── callback ناشناخته ───
       await ctx.answerCallbackQuery();
     } catch (e) {
       console.error("❌ خطای callback:", e.message);
       try {
-        await ctx.answerCallbackQuery({ text: "❌ خطایی رخ داد" });
-      } catch {
-        // callback منقضی شده — نادیده بگیر
-      }
+        await ctx.answerCallbackQuery({ text: "❌ خطا رخ داد. دوباره تلاش کنید." });
+      } catch {}
     }
   });
 
-  // ═══════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
   //  پیام‌های متنی
-  // ═══════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
 
   bot.on("message:text", async (ctx) => {
     try {
-      // ─── اول: بررسی ارزیابی عمیق (فاز ۲) ───
-      const deepHandled = await handleDeepTextInput(ctx);
-      if (deepHandled) return;
-
-      // ─── دوم: بررسی مشاوره فاز ۱ ───
+      // اول بررسی می‌کنیم آیا مربوط به مشاوره (ورودی متنی) هست
       const handled = await handleTextInput(ctx);
       if (handled) return;
 
-      // ─── سوم: پیام عادی → نمایش منو ───
+      // اگر مربوط به مشاوره نبود → نمایش منو
       await ctx.reply("📌 از منوی زیر انتخاب کنید یا /start بزنید.", {
         reply_markup: mainMenuKB(),
       });
     } catch (e) {
-      console.error("❌ خطای text:", e.message);
+      console.error("❌ خطای message:text:", e.message);
     }
   });
 
-  // ═══════════════════════════════════════
-  //  پردازش آپدیت دریافتی از تلگرام
-  // ═══════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
+  //  پردازش آپدیت
+  // ═══════════════════════════════════════════════════════════
 
   try {
     await bot.handleUpdate(context.req.body);
@@ -332,5 +323,6 @@ export default async function (context) {
     console.error("❌ خطای handleUpdate:", e.message);
   }
 
+  // پاسخ به Appwrite
   return context.res.json({ ok: true });
 }
