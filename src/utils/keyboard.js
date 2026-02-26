@@ -1,71 +1,74 @@
 // src/utils/keyboard.js
-// ─── تمام InlineKeyboard های پروژه ───
-// سازگار با ساختار جدید ۱۰ مرحله‌ای
+// ─── تمام InlineKeyboard های پروژه (بروزرسانی‌شده) ───
 
 import { InlineKeyboard } from "grammy";
 import { STEPS, TOTAL_STEPS, STEP_EMOJIS } from "../constants/questions.js";
 
-// ═══════════════════════════════════════
-//  منوی اصلی
-// ═══════════════════════════════════════
-
+/**
+ * منوی اصلی
+ */
 export function mainMenuKB() {
   return new InlineKeyboard()
     .text("🚀 شروع تحلیل آمادگی", "start_consultation")
     .row()
-    .text("📚 آموزش‌های تخصصی", "edu:list")
+    .text("📚 آموزش‌های تخصصی", "edu_list")
     .row()
-    .text("💼 بسته‌های خدماتی", "show_plans")
+    .text("💼 خدمات و بسته‌ها", "show_plans")
     .row()
     .text("📞 ارتباط با ما", "contact_us")
     .row()
+    .text("📄 نمونه تحلیل‌ها", "sample_reports")
+    .row()
     .text("ℹ️ درباره ما", "about_us")
-    .text("📄 نمونه تحلیل‌ها", "show_samples")
     .row();
 }
 
-// ═══════════════════════════════════════
-//  کیبورد مراحل
-// ═══════════════════════════════════════
-
-/** گزینه‌های مرحله choice */
+/**
+ * کیبورد گزینه‌ای (choice) برای یک مرحله
+ */
 export function stepChoiceKB(stepIndex) {
   const step = STEPS[stepIndex];
   if (!step || step.type !== "choice") return new InlineKeyboard();
 
   const kb = new InlineKeyboard();
 
-  for (const opt of step.options) {
-    kb.text(opt.label, `answer:${stepIndex}:${opt.value}`).row();
+  // گزینه‌ها — اگر isDefault باشد اول نمایش داده شود (قبلاً sort شده)
+  const sortedOptions = [...step.options].sort((a, b) => {
+    if (a.isDefault) return -1;
+    if (b.isDefault) return 1;
+    return 0;
+  });
+
+  for (const opt of sortedOptions) {
+    kb.text(opt.label, `ans:${stepIndex}:${opt.value}`).row();
   }
 
+  // دکمه‌های ناوبری
   if (stepIndex > 0) {
-    kb.text("⬅️ مرحله قبل", `back_step:${stepIndex - 1}`).row();
+    kb.text("⬅️ مرحله قبل", `back:${stepIndex - 1}`).row();
   }
-
-  kb.text("❌ انصراف", "cancel_consultation").row();
+  kb.text("❌ انصراف", "cancel").row();
 
   return kb;
 }
 
-/** کیبورد مرحله متنی */
+/**
+ * کیبورد مرحله متنی (text)
+ */
 export function stepTextKB(stepIndex) {
   const kb = new InlineKeyboard();
 
   if (stepIndex > 0) {
-    kb.text("⬅️ مرحله قبل", `back_step:${stepIndex - 1}`).row();
+    kb.text("⬅️ مرحله قبل", `back:${stepIndex - 1}`).row();
   }
-
-  kb.text("❌ انصراف", "cancel_consultation").row();
+  kb.text("❌ انصراف", "cancel").row();
 
   return kb;
 }
 
-// ═══════════════════════════════════════
-//  کیبورد خلاصه
-// ═══════════════════════════════════════
-
-/** خلاصه پاسخ‌ها + دکمه ویرایش */
+/**
+ * کیبورد خلاصه (قبل از تایید)
+ */
 export function summaryKB(answers) {
   const kb = new InlineKeyboard();
 
@@ -74,77 +77,63 @@ export function summaryKB(answers) {
     const emoji = STEP_EMOJIS[i] || "📝";
     const filled = answers[step.id] !== undefined && answers[step.id] !== "";
     const icon = filled ? "✏️" : "⚠️";
-    kb.text(`${emoji} ${icon} ${step.title}`, `edit_step:${i}`).row();
+
+    kb.text(`${emoji} ${icon} ${step.title}`, `edit:${i}`).row();
   }
 
-  kb.text("✅ تایید نهایی و دریافت گزارش", "confirm_final").row();
-  kb.text("❌ انصراف", "cancel_consultation").row();
+  kb.text("✅ تایید نهایی و دریافت گزارش", "confirm").row();
+  kb.text("❌ انصراف", "cancel").row();
 
   return kb;
 }
 
-// ═══════════════════════════════════════
-//  کیبورد بعد از گزارش
-// ═══════════════════════════════════════
-
+/**
+ * کیبورد بعد از گزارش
+ */
 export function afterReportKB() {
   return new InlineKeyboard()
-    .text("📚 آموزش‌های تخصصی کاندیداتوری", "edu:list")
+    .text("📚 آموزش‌های تخصصی کاندیداتوری", "edu_list")
     .row()
     .text("💼 مشاهده بسته‌ها و خدمات", "show_plans")
     .row()
-    .text("🔄 تحلیل مجدد", "start_consultation")
+    .text("🔄 شروع مجدد تحلیل", "start_consultation")
     .row()
     .text("🔙 منوی اصلی", "menu")
     .row();
 }
 
-// ═══════════════════════════════════════
-//  کیبوردهای صفحات ثابت
-// ═══════════════════════════════════════
-
+/**
+ * کیبورد درباره ما
+ */
 export function aboutUsKB() {
   return new InlineKeyboard()
     .text("📞 ارتباط با ما", "contact_us")
     .row()
-    .text("💼 بسته‌ها", "show_plans")
-    .row()
-    .text("🔙 منو", "menu")
+    .text("🔙 بازگشت", "menu")
     .row();
 }
 
+/**
+ * کیبورد ارتباط با ما
+ */
 export function contactUsKB() {
   return new InlineKeyboard()
     .text("💼 مشاهده بسته‌ها", "show_plans")
     .row()
-    .text("🔙 منو", "menu")
+    .text("🔙 بازگشت", "menu")
     .row();
 }
-
-export function samplesKB() {
-  return new InlineKeyboard()
-    .text("🚀 شروع تحلیل آمادگی", "start_consultation")
-    .row()
-    .text("🔙 منو", "menu")
-    .row();
-}
-
-// ═══════════════════════════════════════
-//  نوار پیشرفت متنی
-// ═══════════════════════════════════════
 
 /**
- * تولید نوار پیشرفت دایره‌ای
- * @param {number} current - ایندکس فعلی (0-based)
- * @returns {string}
+ * متن نوار پیشرفت
  */
-export function progressText(current) {
-  let t = "📊 ";
+export function progressText(currentStep) {
+  let t = "📊 پیشرفت: ";
   for (let i = 0; i < TOTAL_STEPS; i++) {
-    if (i < current) t += "🟢";
-    else if (i === current) t += "🔵";
+    if (i < currentStep) t += "🟢";
+    else if (i === currentStep) t += "🔵";
     else t += "⚪";
   }
-  t += ` (${current + 1}/${TOTAL_STEPS})`;
+  t += ` (${currentStep + 1}/${TOTAL_STEPS})`;
   return t;
 }
