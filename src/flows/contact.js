@@ -1,137 +1,103 @@
-// ============================================================
-// 📞 ارتباط + درباره ما + نمونه تحلیل
-// ============================================================
+// src/flows/contact.js
+// ─── درباره ما / ارتباط با ما / نمونه تحلیل‌ها ───
 
-import { InlineKeyboard } from "grammy";
-import { backKB } from "../utils/keyboard.js";
+import { aboutUsKB, contactUsKB, samplesKB } from "../utils/keyboard.js";
 
-// ============================================================
-// 📞 ارتباط با ما
-// ============================================================
+// ═══════════════════════════════════════
+//  درباره ما
+// ═══════════════════════════════════════
 
-export const CONTACT_TEXT =
-  "📞 ارتباط با تیم کاندیداتوری هوشمند\n" +
-  "━━━━━━━━━━━━━━━━━━━━━\n\n" +
-  "📱 تلفن: ۰۲۱-XXXXXXXX\n" +
-  "📲 واتساپ: ۰۹۱۲XXXXXXX\n" +
-  "📧 ایمیل: info@candidatory.ir\n\n" +
-  "⏰ ساعات پاسخگویی:\n" +
-  "شنبه تا پنجشنبه | ۹ صبح تا ۶ عصر\n\n" +
-  "━━━━━━━━━━━━━━━━━━━━━\n\n" +
-  "💡 میتوانید پیام خود را همینجا ارسال کنید\n" +
-  "تا کارشناسان ما در اولین فرصت پاسخ دهند.";
+export async function handleAboutUs(ctx) {
+  let t = "";
+  t += "ℹ️ *درباره کاندیداتوری هوشمند*\n";
+  t += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+  t += "🏛️ *کاندیداتوری هوشمند* اولین سامانه هوشمند تحلیل آمادگی ";
+  t += "کاندیداتوری در ایران است.\n\n";
+  t += "*ما چه می‌کنیم:*\n\n";
+  t += "📊 تحلیل علمی آمادگی کاندیداتوری (۵ بُعد کلیدی)\n";
+  t += "📋 مشاوره تخصصی انتخاباتی\n";
+  t += "🎯 طراحی استراتژی و مدیریت کمپین\n";
+  t += "📢 تبلیغات و تولید محتوای انتخاباتی\n";
+  t += "🎓 آموزش‌های تخصصی کاندیداها\n\n";
+  t += "*تیم ما:*\n\n";
+  t += "متخصصان علوم سیاسی، مدیریت کمپین، ارتباطات و بازاریابی سیاسی ";
+  t += "با سال‌ها تجربه در انتخابات محلی و ملی.\n\n";
+  t += "🤖 @candidatoryiran\\_bot";
 
-// ============================================================
-// ℹ️ درباره ما — نسخه جذاب
-// ============================================================
+  const kb = aboutUsKB();
 
-export const ABOUT_TEXT =
-  "ℹ️ درباره کاندیداتوری هوشمند\n" +
-  "━━━━━━━━━━━━━━━━━━━━━\n\n" +
-  "🗳️ سامانه هوشمند مشاوره انتخاباتی\n" +
-  "با الگوریتم‌های تحلیلی پیشرفته\n\n" +
-  "🎯 ماموریت ما:\n" +
-  "کمک به کاندیداها برای تصمیم‌گیری\n" +
-  "آگاهانه و حرفه‌ای\n\n" +
-  "📊 خدمات:\n" +
-  "• تحلیل شانس کاندیداتوری\n" +
-  "• مشاوره استراتژی انتخاباتی\n" +
-  "• مدیریت کمپین تبلیغاتی\n" +
-  "• تحلیل رقبا و حوزه انتخابیه\n\n" +
-  "👨‍💼 تیم ما:\n" +
-  "متخصصین با تجربه در مشاوره\n" +
-  "کمپین‌های انتخاباتی موفق\n\n" +
-  "━━━━━━━━━━━━━━━━━━━━━\n\n" +
-  "🌐 وب سایت:\n" +
-  "candidatory.ir\n\n" +
-  "📧 ایمیل:\n" +
-  "info@candidatory.ir\n\n" +
-  "🤖 ربات تلگرام:\n" +
-  "https://t.me/candidatoryiran_bot\n\n" +
-  "📢 کانال خبری تلگرام:\n" +
-  "https://t.me/candidatoryiran\n\n" +
-  "📢 کانال خبری بله:\n" +
-  "https://ble.ir/candidatoryiran\n\n" +
-  "━━━━━━━━━━━━━━━━━━━━━";
-
-// ============================================================
-// هندلرها
-// ============================================================
-
-export async function handleContact(ctx) {
-  await ctx.editMessageText(CONTACT_TEXT, {
-    reply_markup: backKB(),
-  });
-  await ctx.answerCallbackQuery();
-}
-
-export async function handleAbout(ctx) {
-  await ctx.editMessageText(ABOUT_TEXT, {
-    reply_markup: new InlineKeyboard()
-      .text("🧠 شروع مشاوره", "start_consult")
-      .row()
-      .text("🏠 منوی اصلی", "main_menu"),
-  });
-  await ctx.answerCallbackQuery();
-}
-
-// نمونه تحلیل از دیتابیس واقعی
-export async function handleSamples(ctx) {
-  try {
-    const { listConsultations } = await import("../utils/db.js");
-    const result = await listConsultations(0, 3);
-    const docs = result.documents;
-
-    let txt = "📊 نمونه تحلیل‌های اخیر\n";
-    txt += "━━━━━━━━━━━━━━━━━━━━━\n\n";
-
-    if (docs.length === 0) {
-      txt += "هنوز تحلیلی ثبت نشده.\n";
-      txt += "اولین نفری باشید که تحلیل میگیرد!\n";
-    } else {
-      docs.forEach((doc, i) => {
-        let answers = {};
-        try {
-          answers = JSON.parse(doc.answers || "{}");
-        } catch {}
-
-        const name = doc.fullName || answers.fullName || "کاربر";
-        const region = doc.region || answers.region || "---";
-        const score = doc.score || 0;
-        const risk = doc.riskLevel || "---";
-
-        // فقط اسم کوچک (حفظ حریم خصوصی)
-        const firstName = name.split(" ")[0] || "کاربر";
-
-        const riskIcon =
-          risk === "high" ? "🔴" :
-          risk === "medium" ? "🟡" :
-          risk === "low" ? "🟢" : "⚪";
-
-        txt += "📌 نمونه " + (i + 1) + "\n";
-        txt += "نام: " + firstName + "\n";
-        txt += "حوزه: " + region + "\n";
-        txt += "امتیاز: " + score + "\n";
-        txt += "ریسک: " + riskIcon + " " + risk + "\n";
-        txt += "━━━━━━━━━━━━━━━━━━━━━\n\n";
-      });
-    }
-
-    txt += "🧠 برای دریافت تحلیل اختصاصی\n";
-    txt += "مشاوره هوشمند را بزنید.";
-
-    await ctx.editMessageText(txt, {
-      reply_markup: new InlineKeyboard()
-        .text("🧠 شروع مشاوره اختصاصی", "start_consult")
-        .row()
-        .text("🏠 منوی اصلی", "main_menu"),
-    });
-  } catch (e) {
-    console.error("samples error:", e.message);
-    await ctx.editMessageText(
-      "خطا در دریافت نمونه ها. لطفا بعدا تلاش کنید.",
-      { reply_markup: backKB() }
-    );
+  if (ctx.callbackQuery) {
+    try { await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb }); }
+    catch { await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb }); }
+    await ctx.answerCallbackQuery();
+  } else {
+    await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
   }
-  await ctx.answerCallbackQuery();
+}
+
+// ═══════════════════════════════════════
+//  ارتباط با ما
+// ═══════════════════════════════════════
+
+export async function handleContactUs(ctx) {
+  let t = "";
+  t += "📞 *ارتباط با ما*\n";
+  t += "━━━━━━━━━━━━━━━━━━━\n\n";
+  t += "📱 تماس / واتساپ: *۰۹۱۲-XXX-XXXX*\n";
+  t += "📧 ایمیل: *info@candidatory.ir*\n";
+  t += "💬 تلگرام: @candidatory\\_support\n";
+  t += "🌐 وب‌سایت: *candidatory.ir*\n\n";
+  t += "⏰ ساعات پاسخگویی: شنبه تا پنجشنبه ۹ صبح تا ۶ عصر\n\n";
+  t += "💡 _برای مشاوره فوری پیام بگذارید — حداکثر ۲ ساعته پاسخ می‌دهیم._";
+
+  const kb = contactUsKB();
+
+  if (ctx.callbackQuery) {
+    try { await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb }); }
+    catch { await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb }); }
+    await ctx.answerCallbackQuery();
+  } else {
+    await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+  }
+}
+
+// ═══════════════════════════════════════
+//  نمونه تحلیل‌ها
+// ═══════════════════════════════════════
+
+export async function handleShowSamples(ctx) {
+  let t = "";
+  t += "📄 *نمونه تحلیل‌های انجام‌شده*\n";
+  t += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+
+  t += "🟢 *نمونه ۱ — آمادگی عالی (امتیاز ۱۰۸/۱۲۵)*\n";
+  t += "├ عضو سابق شورا + سابقه ۱۲ ساله\n";
+  t += "├ تیم حرفه‌ای ۲۰ نفره + بودجه کافی\n";
+  t += "├ شعار: «شفافیت در عمل»\n";
+  t += "└ توصیه: تمرکز بر حفظ انسجام تیم\n\n";
+
+  t += "🟡 *نمونه ۲ — آمادگی متوسط (امتیاز ۵۵/۱۲۵)*\n";
+  t += "├ بومی + شناخته‌شده ولی بدون تیم\n";
+  t += "├ ارتباطات محلی متوسط\n";
+  t += "├ بدون شعار مشخص\n";
+  t += "└ توصیه: ساخت تیم فوری + تدوین پیام\n\n";
+
+  t += "🔴 *نمونه ۳ — آمادگی ضعیف (امتیاز ۲۲/۱۲۵)*\n";
+  t += "├ تازه‌وارد حوزه + شبکه ارتباطی ضعیف\n";
+  t += "├ تنها و بدون بودجه\n";
+  t += "├ آسیب‌پذیر در برابر فشار\n";
+  t += "└ توصیه: حداقل ۶ ماه آماده‌سازی\n\n";
+
+  t += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  t += "🚀 آیا می‌خواهید وضعیت خود را تحلیل کنید؟";
+
+  const kb = samplesKB();
+
+  if (ctx.callbackQuery) {
+    try { await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb }); }
+    catch { await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb }); }
+    await ctx.answerCallbackQuery();
+  } else {
+    await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+  }
 }
