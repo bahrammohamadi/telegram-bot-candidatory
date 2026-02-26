@@ -1,13 +1,12 @@
 // ============================================================
-// 📊 توابع محاسبه امتیاز و تولید گزارش
+// 📊 محاسبه امتیاز + تولید گزارش رایگان + تعیین وضعیت
 // ============================================================
 
-import { STEPS, OPTION_LABELS } from "../constants/questions.js";
+import { STEPS, OPTION_LABELS, SECTION_LABELS } from "../constants/questions.js";
 
 /**
- * محاسبه امتیاز نهایی از جواب‌ها
- * فقط مراحل inline امتیاز دارند (مرحله ۲ متنی = بدون امتیاز)
- * حداکثر: ۰+۰+۲۰+۲۵+۱۵+۲۵ = ۸۵
+ * محاسبه امتیاز کل از جواب‌ها
+ * فقط سوالات inline با scoreWeight > 0 حساب میشن
  * @param {object} answers
  * @returns {number}
  */
@@ -15,162 +14,198 @@ export function calcScore(answers) {
   let total = 0;
 
   STEPS.forEach((step) => {
-    if (step.type === "text") return; // متنی امتیاز ندارد
+    if (step.type === "text") return;
+    if (!step.scoreWeight) return;
 
     const userVal = answers[step.key];
     if (!userVal) return;
 
     const opt = step.options.find((o) => o.data === userVal);
-    if (opt) total += opt.score;
+    if (opt) {
+      total += opt.score * step.scoreWeight;
+    }
   });
 
   return total;
 }
 
 /**
- * تعیین سطح ریسک
- * @param {number} score
- * @returns {string}
+ * حداکثر امتیاز ممکن
+ */
+export function maxScore() {
+  let max = 0;
+  STEPS.forEach((step) => {
+    if (step.type === "text") return;
+    if (!step.scoreWeight) return;
+    const highest = Math.max(...step.options.map((o) => o.score));
+    max += highest * step.scoreWeight;
+  });
+  return max;
+}
+
+/**
+ * سطح آمادگی بر اساس درصد امتیاز
+ */
+export function getReadinessLevel(score) {
+  const max = maxScore();
+  const percent = (score / max) * 100;
+
+  if (percent < 30) return { level: "critical", label: "بحرانی 🔴", percent };
+  if (percent < 50) return { level: "weak", label: "ضعیف 🟠", percent };
+  if (percent < 70) return { level: "moderate", label: "متوسط 🟡", percent };
+  if (percent < 85) return { level: "good", label: "خوب 🟢", percent };
+  return { level: "excellent", label: "عالی 🏆", percent };
+}
+
+/**
+ * سطح ریسک
  */
 export function getRiskLevel(score) {
-  if (score < 45) return "high";
-  if (score <= 70) return "medium";
+  const { percent } = getReadinessLevel(score);
+  if (percent < 40) return "high";
+  if (percent <= 65) return "medium";
   return "low";
 }
 
 /**
- * برچسب فارسی ریسک
- */
-export function riskLabel(level) {
-  const map = {
-    high: "بالا 🔴",
-    medium: "متوسط 🟡",
-    low: "پایین 🟢",
-  };
-  return map[level] || level;
-}
-
-/**
- * تعیین دمای لید
- * @param {number} score
- * @returns {"hot"|"warm"|"cold"}
+ * دمای لید برای CRM
  */
 export function getLeadTemp(score) {
-  if (score >= 70) return "hot";
-  if (score >= 45) return "warm";
+  const { percent } = getReadinessLevel(score);
+  if (percent >= 60) return "hot";
+  if (percent >= 35) return "warm";
   return "cold";
 }
 
 /**
- * برچسب فارسی یک جواب (برای خلاصه)
+ * برچسب فارسی یک جواب
  */
 export function answerLabel(val) {
   return OPTION_LABELS[val] || val || "—";
 }
 
 /**
- * تولید گزارش رایگان محدود
- * ۳ نسخه بر اساس بازه امتیاز: <۴۵ / ۴۵-۷۰ / >۷۰
- * @param {number} score
- * @param {object} answers
- * @returns {string}
+ * تولید گزارش رایگان
+ * ۴ سطح: بحرانی / ضعیف / متوسط / خوب-عالی
  */
 export function generateReport(score, answers) {
-  const risk = riskLabel(getRiskLevel(score));
-  const el = answerLabel(answers.electionType);
+  const max = maxScore();
+  const readiness = getReadinessLevel(score);
+  const fullName = answers.fullName || "کاربر گرامی";
   const region = answers.region || "—";
 
-  // ===== هدر مشترک =====
   let r = `
-📊 *گزارش تحلیل کاندیداتوری شما*
+📊 *گزارش تحلیل آمادگی کاندیداتوری*
 ━━━━━━━━━━━━━━━━━━━━━
 
-👤 سطح انتخابات: *${el}*
+👤 نام: *${fullName}*
 📍 حوزه: *${region}*
-📈 امتیاز: *${score} از ۸۵*
-⚠️ ریسک: *${risk}*
+📈 امتیاز: *${score} از ${max}* (${Math.round(readiness.percent)}٪)
+🎯 سطح آمادگی: *${readiness.label}*
 
 ━━━━━━━━━━━━━━━━━━━━━
 `;
 
-  // ===== بدنه بر اساس امتیاز =====
+  // === امتیاز هر بخش ===
+  r += "\n📋 *امتیاز به تفکیک بخش:*\n\n";
 
-  if (score < 45) {
-    // ---------- امتیاز پایین ----------
+  const sections = ["A", "B", "C", "D", "E", "F"];
+  for (const sec of sections) {
+    const secSteps = STEPS.filter((s) => s.section === sec && s.scoreWeight > 0);
+    let secScore = 0;
+    let secMax = 0;
+
+    secSteps.forEach((step) => {
+      const userVal = answers[step.key];
+      const opt = step.options.find((o) => o.data === userVal);
+      if (opt) secScore += opt.score * step.scoreWeight;
+      secMax += Math.max(...step.options.map((o) => o.score)) * step.scoreWeight;
+    });
+
+    if (secMax > 0) {
+      const pct = Math.round((secScore / secMax) * 100);
+      const bar = pct >= 70 ? "🟢" : pct >= 40 ? "🟡" : "🔴";
+      r += `${bar} ${SECTION_LABELS[sec]}: ${secScore}/${secMax} (${pct}٪)\n`;
+    }
+  }
+
+  r += "\n━━━━━━━━━━━━━━━━━━━━━\n";
+
+  // === تحلیل بر اساس سطح ===
+  if (readiness.percent < 30) {
     r += `
 🔴 *وضعیت: نیازمند آمادگی جدی*
 
-بر اساس تحلیل اولیه، شما هنوز در ابتدای مسیر قرار دارید.
-*اما نگران نباشید* — بسیاری از کاندیداهای موفق دقیقاً از همین نقطه شروع کرده‌اند.
+تحلیل اولیه نشان می‌دهد فاصله قابل‌توجهی تا آستانه رقابتی وجود دارد.
 
-📋 *نقاط قابل بهبود فوری:*
-• تقویت شناخته‌شدگی در حوزه انتخابیه
-• تشکیل تیم حداقلی و منسجم
-• تدوین برنامه بودجه‌بندی واقع‌بینانه
+📋 *اقدامات فوری پیشنهادی:*
+• تقویت شبکه ارتباطی و شناخته‌شدگی
+• تشکیل تیم حداقلی
+• تعیین پیام محوری کمپین
+• واقع‌بینانه کردن انتظارات
 
-⚡ *چرا الان بهترین زمان اقدام است؟*
-فاصله شما تا آستانه رقابتی قابل جبران است، به شرط اینکه *مسیر درست* را انتخاب کنید.
-
-🔒 *آنچه در گزارش کامل (پلن حرفه‌ای) دریافت می‌کنید:*
-✦ تحلیل دقیق رقبای فعلی حوزه‌تان
-✦ نقشه راه ۹۰ روزه با اقدامات مشخص
-✦ استراتژی افزایش شناخته‌شدگی صفر تا صد
-✦ برنامه تخصیص بهینه بودجه محدود
-
-💡 _آمار ما: کاندیداهایی که مشاوره تخصصی گرفته‌اند، *۴۰٪ شانس بیشتری* کسب کرده‌اند._
+🔒 *در تحلیل حرفه‌ای (پلن Pro) دریافت می‌کنید:*
+✦ تحلیل SWOT شخصی‌سازی‌شده
+✦ نقشه راه ۶۰ روزه
+✦ استراتژی شناخته‌شدگی از صفر
+✦ تحلیل رقبای حوزه شما
 `;
-  } else if (score <= 70) {
-    // ---------- امتیاز متوسط ----------
+  } else if (readiness.percent < 50) {
     r += `
-🟡 *وضعیت: پتانسیل خوب — با بهینه‌سازی برنده شوید*
+🟠 *وضعیت: پتانسیل اولیه — نیاز به تقویت*
 
-تبریک! شما زیرساخت‌های اولیه مناسبی دارید.
-با *برنامه‌ریزی هدفمند و اصلاحات کلیدی*، شانس پیروزی شما به‌طور قابل‌توجهی افزایش می‌یابد.
+شما پایه‌هایی دارید اما برای رقابت جدی نیاز به اقدامات اصلاحی مهمی هست.
 
-📋 *نقاط قوت شناسایی‌شده:*
-• پایه اولیه رقابتی مناسب
-• ظرفیت رشد بالا با اقدامات اصلاحی
+📋 *نقاط قابل بهبود:*
+• تقویت پایگاه رأی
+• حرفه‌ای‌تر کردن تیم
+• شفاف‌سازی پیام رقابتی
 
-📋 *فرصت‌های حیاتی:*
+🔒 *در تحلیل حرفه‌ای (پلن Pro):*
+✦ شناسایی دقیق نقاط ضعف
+✦ برنامه تقویت پایگاه اجتماعی
+✦ استراتژی رقابتی شخصی‌سازی‌شده
+`;
+  } else if (readiness.percent < 70) {
+    r += `
+🟡 *وضعیت: آمادگی متوسط — با بهینه‌سازی برنده شوید*
+
+تبریک! زیرساخت‌های مناسبی دارید. با اقدامات هدفمند می‌توانید شانس پیروزی را افزایش دهید.
+
+📋 *فرصت‌های کلیدی:*
 • بهینه‌سازی استراتژی تبلیغاتی
-• تقویت نقاط ضعف مشخص‌شده
-• تمایز از رقبا با پیام درست
+• تمایز از رقبا
+• مدیریت ریسک‌های شناسایی‌شده
 
-🔒 *آنچه در گزارش کامل (پلن حرفه‌ای) دریافت می‌کنید:*
-✦ تحلیل SWOT اختصاصی حوزه شما
-✦ استراتژی رقابتی متناسب با بودجه
+🔒 *در تحلیل حرفه‌ای (پلن Pro):*
+✦ تحلیل SWOT پیشرفته
 ✦ زمان‌بندی دقیق کمپین
-✦ پیشنهاد ترکیب بهینه تیم
-
-💡 _آمار ما: ۷۸٪ کاندیداهای این بازه با مشاوره حرفه‌ای *به مرحله بعد صعود* کرده‌اند._
+✦ سناریوهای مدیریت بحران
 `;
   } else {
-    // ---------- امتیاز بالا ----------
     r += `
 🟢 *وضعیت: آمادگی بالا — کاندیدای جدی!*
 
-🏆 *تبریک ویژه!*
-تحلیل نشان می‌دهد شما از آمادگی قابل‌توجهی برخوردارید. ترکیب سابقه، شناخته‌شدگی، تیم و بودجه شما در وضعیت مطلوب است.
+🏆 تبریک ویژه! شما از آمادگی قابل‌توجهی برخوردارید.
 
-📋 *نقاط قوت کلیدی:*
-• جایگاه قوی در حوزه انتخابیه
-• زیرساخت‌های آماده برای کمپین
-• پتانسیل بالای پیروزی
+📋 *نقاط قوت:*
+• پایگاه اجتماعی قوی
+• زیرساخت‌های آماده
+• ظرفیت بالای رقابت
 
-⚡ *نکته حیاتی:*
-در این سطح، تفاوت *برنده و نفر دوم* در جزئیات استراتژیک است.
-یک اشتباه کوچک در مدیریت بحران می‌تواند همه چیز را تغییر دهد.
-
-🔒 *آنچه در پلن VIP دریافت می‌کنید:*
-✦ تحلیل پیشرفته رقبا با داده‌های واقعی
-✦ استراتژی پیروزی شخصی‌سازی‌شده
-✦ مدیریت بحران و سناریوهای احتمالی
-✦ تیم مشاوره اختصاصی ۲۴/۷
-✦ رصد لحظه‌ای فضای رقابتی
-
-💡 _آمار ما: کاندیداهای سطح بالا با پلن VIP، *نرخ موفقیت ۸۵٪* داشته‌اند._
+🔒 *در پلن Pro/VIP:*
+✦ استراتژی پیروزی اختصاصی
+✦ مدیریت بحران حرفه‌ای
+✦ رصد لحظه‌ای رقبا
+✦ تیم مشاوره ۲۴/۷
 `;
   }
+
+  r += `
+━━━━━━━━━━━━━━━━━━━━━
+⚠️ _این گزارش خلاصه و محدود است._
+_تحلیل کامل و شخصی‌سازی‌شده در پلن حرفه‌ای ارائه می‌شود._
+`;
 
   return r;
 }
