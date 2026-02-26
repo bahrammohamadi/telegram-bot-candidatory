@@ -1,393 +1,328 @@
+// src/constants/questions.js
+// ─── سؤالات ۹ مرحله‌ای حرفه‌ای تحلیل آمادگی کاندیداتوری ───
+// سازگار با ساختار دیتابیس فعلی (userId, tempAnswers, currentStep)
+
+/**
+ * ساختار هر مرحله:
+ * - id          : شناسه یکتا (کلید در tempAnswers)
+ * - title       : عنوان فارسی
+ * - question    : متن سؤال
+ * - type        : "choice" | "text"
+ * - options     : فقط برای choice → [{ label, value, score }]
+ * - required    : اجباری بودن
+ * - placeholder : راهنما (برای text)
+ * - validation  : نوع اعتبارسنجی (برای text)
+ * - scored      : آیا در محاسبه امتیاز لحاظ شود
+ */
+
 export const STEPS = [
-  // ═══════════════════════════════════════
-  // بخش A — پروفایل فردی (۱ تا ۱۰)
-  // ═══════════════════════════════════════
+  // ─── مرحله ۰: نام و نام‌خانوادگی ───
   {
-    key: "fullName",
-    section: "A",
-    question: "👤 بخش A — پروفایل فردی (۱/۱۰)\n\nنام و نام خانوادگی کامل خود را وارد کنید:",
+    id: "fullName",
+    title: "👤 نام و نام‌خانوادگی",
+    question:
+      "لطفاً نام و نام‌خانوادگی کامل خود را وارد کنید:\n\n" +
+      "📌 این اطلاعات برای ثبت پروفایل شما استفاده می‌شود.",
     type: "text",
-    options: [],
-    scoreWeight: 0,
+    required: true,
+    placeholder: "مثال: علی احمدی",
+    validation: "min_3",
+    scored: false,
   },
+
+  // ─── مرحله ۱: کد ملی ───
   {
-    key: "nationalId",
-    section: "A",
-    question: "🆔 بخش A — پروفایل فردی (۲/۱۰)\n\nکد ملی ۱۰ رقمی خود را وارد کنید:",
+    id: "nationalId",
+    title: "🪪 کد ملی",
+    question:
+      "لطفاً کد ملی ۱۰ رقمی خود را وارد کنید:\n\n" +
+      "🔒 اطلاعات شما کاملاً محرمانه است و فقط جهت شناسایی استفاده می‌شود.",
     type: "text",
-    options: [],
-    scoreWeight: 0,
-    validation: "nationalId",
+    required: true,
+    placeholder: "مثال: 0012345678",
+    validation: "national_id",
+    scored: false,
   },
+
+  // ─── مرحله ۲: شماره تماس ───
   {
-    key: "phone",
-    section: "A",
-    question: "📱 بخش A — پروفایل فردی (۳/۱۰)\n\nشماره تماس خود را وارد کنید:\n(مثال: ۰۹۱۲۱۲۳۴۵۶۷)",
+    id: "phone",
+    title: "📱 شماره تماس",
+    question:
+      "لطفاً شماره موبایل خود را وارد کنید:\n\n" +
+      "📌 برای هماهنگی‌های بعدی و ارسال گزارش تکمیلی استفاده خواهد شد.",
     type: "text",
-    options: [],
-    scoreWeight: 0,
+    required: true,
+    placeholder: "مثال: 09121234567",
     validation: "phone",
-  },
-  {
-    key: "age",
-    section: "A",
-    question: "🎂 بخش A — پروفایل فردی (۴/۱۰)\n\nسن شما چند سال است؟",
-    type: "inline",
-    options: [
-      { text: "۲۵ تا ۳۵ سال", data: "25-35", score: 5 },
-      { text: "۳۶ تا ۴۵ سال", data: "36-45", score: 10 },
-      { text: "۴۶ تا ۵۵ سال", data: "46-55", score: 15 },
-      { text: "۵۶ تا ۶۵ سال", data: "56-65", score: 10 },
-      { text: "بالای ۶۵ سال", data: "65+", score: 5 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "region",
-    section: "A",
-    question: "📍 بخش A — پروفایل فردی (۵/۱۰)\n\nحوزه انتخابیه خود را بنویسید:\n(استان + شهر)\n\nمثال: فارس، شیراز",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "residencyYears",
-    section: "A",
-    question: "🏠 بخش A — پروفایل فردی (۶/۱۰)\n\nچند سال در حوزه انتخابیه خود سکونت دارید؟",
-    type: "inline",
-    options: [
-      { text: "کمتر از ۵ سال", data: "under5", score: 3 },
-      { text: "۵ تا ۱۰ سال", data: "5-10", score: 7 },
-      { text: "۱۰ تا ۲۰ سال", data: "10-20", score: 12 },
-      { text: "بیش از ۲۰ سال (بومی)", data: "20+", score: 18 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "education",
-    section: "A",
-    question: "🎓 بخش A — پروفایل فردی (۷/۱۰)\n\nتحصیلات خود را بنویسید:\n(مدرک + رشته + دانشگاه)\n\nمثال: کارشناسی ارشد مدیریت، دانشگاه تهران",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "currentJob",
-    section: "A",
-    question: "💼 بخش A — پروفایل فردی (۸/۱۰)\n\nشغل فعلی خود را بنویسید:",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "pastPositions",
-    section: "A",
-    question: "📜 بخش A — پروفایل فردی (۹/۱۰)\n\nسه شغل یا مسئولیت مهم گذشته خود را بنویسید:\n(هر کدام در یک خط)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "politicalAffiliation",
-    section: "A",
-    question: "🏛️ بخش A — پروفایل فردی (۱۰/۱۰)\n\nآیا وابستگی سیاسی رسمی دارید؟",
-    type: "inline",
-    options: [
-      { text: "خیر، مستقل هستم", data: "independent", score: 10 },
-      { text: "بله، عضو حزب/جریان", data: "affiliated", score: 8 },
-      { text: "سابقا بله، الان خیر", data: "former", score: 6 },
-    ],
-    scoreWeight: 1,
+    scored: false,
   },
 
-  // ═══════════════════════════════════════
-  // بخش B — سرمایه اجتماعی (۱۱ تا ۱۵)
-  // ═══════════════════════════════════════
+  // ─── مرحله ۳: نوع انتخابات ───
   {
-    key: "recognition",
-    section: "B",
-    question: "👁️ بخش B — سرمایه اجتماعی (۱/۵)\n\nمیزان شناخته شده بودن شما در حوزه انتخابیه؟",
-    type: "inline",
+    id: "electionType",
+    title: "🗳️ نوع انتخابات",
+    question:
+      "در کدام انتخابات قصد نامزدی دارید؟\n\n" +
+      "📌 گزینه مناسب را انتخاب کنید:",
+    type: "choice",
+    required: true,
+    scored: false,
     options: [
-      { text: "🔴 تقریبا ناشناخته", data: "unknown", score: 2 },
-      { text: "🟠 شناخته شده محدود", data: "limited", score: 8 },
-      { text: "🟡 تا حدی شناخته شده", data: "moderate", score: 15 },
-      { text: "🟢 بسیار شناخته شده", data: "well_known", score: 25 },
+      {
+        label: "🏘️ شورای اسلامی شهر / روستا",
+        value: "council",
+        score: 0,
+      },
+      {
+        label: "🏛️ مجلس شورای اسلامی",
+        value: "parliament",
+        score: 0,
+      },
+      {
+        label: "📜 مجلس خبرگان رهبری",
+        value: "experts",
+        score: 0,
+      },
+      {
+        label: "🏅 ریاست جمهوری",
+        value: "presidency",
+        score: 0,
+      },
+      {
+        label: "📋 سایر",
+        value: "other",
+        score: 0,
+      },
     ],
-    scoreWeight: 2,
-  },
-  {
-    key: "firstWeekSupporters",
-    section: "B",
-    question: "🤝 بخش B — سرمایه اجتماعی (۲/۵)\n\nدر صورت اعلام کاندیداتوری، چند نفر در ۷ روز اول علنا حمایت میکنند؟",
-    type: "inline",
-    options: [
-      { text: "کمتر از ۵۰ نفر", data: "under50", score: 3 },
-      { text: "۵۰ تا ۲۰۰ نفر", data: "50-200", score: 8 },
-      { text: "۲۰۰ تا ۱۰۰۰ نفر", data: "200-1000", score: 15 },
-      { text: "بیش از ۱۰۰۰ نفر", data: "1000+", score: 22 },
-    ],
-    scoreWeight: 2,
-  },
-  {
-    key: "traditionalBase",
-    section: "B",
-    question: "🏘️ بخش B — سرمایه اجتماعی (۳/۵)\n\nآیا پایگاه رای سنتی دارید؟\n(قوم، صنف، مسجد، شبکه اقتصادی...)",
-    type: "inline",
-    options: [
-      { text: "خیر، ندارم", data: "none", score: 0 },
-      { text: "بله، محدود و کوچک", data: "small", score: 8 },
-      { text: "بله، قوی و گسترده", data: "strong", score: 18 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "volunteers",
-    section: "B",
-    question: "👥 بخش B — سرمایه اجتماعی (۴/۵)\n\nچند نفر نیروی داوطلب فعال دارید؟",
-    type: "inline",
-    options: [
-      { text: "هیچ نیرویی ندارم", data: "none", score: 0 },
-      { text: "۱ تا ۱۰ نفر", data: "1-10", score: 5 },
-      { text: "۱۰ تا ۵۰ نفر", data: "10-50", score: 12 },
-      { text: "بیش از ۵۰ نفر", data: "50+", score: 20 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "electionExperience",
-    section: "B",
-    question: "🗳️ بخش B — سرمایه اجتماعی (۵/۵)\n\nآیا قبلا در انتخابات شرکت کرده اید؟",
-    type: "inline",
-    options: [
-      { text: "هرگز", data: "never", score: 0 },
-      { text: "بله، اما رای نیاوردم", data: "lost", score: 8 },
-      { text: "بله، و رای آوردم", data: "won", score: 20 },
-    ],
-    scoreWeight: 1,
   },
 
-  // ═══════════════════════════════════════
-  // بخش C — منابع و زیرساخت (۱۶ تا ۲۰)
-  // ═══════════════════════════════════════
+  // ─── مرحله ۴: حوزه انتخابیه ───
   {
-    key: "budget",
-    section: "C",
-    question: "💰 بخش C — منابع و زیرساخت (۱/۵)\n\nبودجه تقریبی کمپین انتخاباتی شما؟",
-    type: "inline",
-    options: [
-      { text: "کمتر از ۵۰۰ میلیون", data: "under500m", score: 3 },
-      { text: "۵۰۰ میلیون تا ۱ میلیارد", data: "500m-1b", score: 8 },
-      { text: "۱ تا ۵ میلیارد", data: "1-5b", score: 18 },
-      { text: "بیش از ۵ میلیارد", data: "5b+", score: 25 },
-    ],
-    scoreWeight: 2,
-  },
-  {
-    key: "mediaTeam",
-    section: "C",
-    question: "📱 بخش C — منابع و زیرساخت (۲/۵)\n\nآیا تیم رسانه ای دارید؟",
-    type: "inline",
-    options: [
-      { text: "ندارم", data: "none", score: 0 },
-      { text: "محدود و غیرحرفه ای", data: "basic", score: 5 },
-      { text: "حرفه ای و فعال", data: "professional", score: 15 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "campaignManager",
-    section: "C",
-    question: "👔 بخش C — منابع و زیرساخت (۳/۵)\n\nآیا مدیر کمپین مشخص دارید؟",
-    type: "inline",
-    options: [
-      { text: "خیر", data: "no", score: 0 },
-      { text: "در حال بررسی", data: "considering", score: 5 },
-      { text: "بله، مشخص شده", data: "yes", score: 12 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "headquarters",
-    section: "C",
-    question: "🏢 بخش C — منابع و زیرساخت (۴/۵)\n\nآیا ستاد مرکزی مشخص کرده اید؟",
-    type: "inline",
-    options: [
-      { text: "خیر", data: "no", score: 0 },
-      { text: "در حال آماده سازی", data: "preparing", score: 5 },
-      { text: "بله، فعال است", data: "yes", score: 10 },
-    ],
-    scoreWeight: 1,
-  },
-  {
-    key: "fieldPresence",
-    section: "C",
-    question: "🚶 بخش C — منابع و زیرساخت (۵/۵)\n\nتوانایی حضور مستمر میدانی روزانه دارید؟",
-    type: "inline",
-    options: [
-      { text: "خیر، محدود", data: "limited", score: 3 },
-      { text: "چند روز در هفته", data: "partial", score: 8 },
-      { text: "بله، تمام وقت", data: "fulltime", score: 15 },
-    ],
-    scoreWeight: 1,
+    id: "region",
+    title: "📍 حوزه انتخابیه",
+    question:
+      "نام دقیق حوزه انتخابیه خود را بنویسید:\n\n" +
+      "📌 مثال: «اصفهان - منطقه ۳» یا «شهرستان لنجان - بخش مرکزی»\n\n" +
+      "💡 هرچه دقیق‌تر بنویسید، تحلیل دقیق‌تری دریافت خواهید کرد.",
+    type: "text",
+    required: true,
+    placeholder: "نام شهر / شهرستان / بخش / روستا",
+    validation: "min_3",
+    scored: false,
   },
 
-  // ═══════════════════════════════════════
-  // بخش D — شخصیت و رهبری (۲۱ تا ۲۴)
-  // ═══════════════════════════════════════
+  // ─── مرحله ۵: سابقه محلی و شناخته‌شدگی ───
   {
-    key: "criticismReaction",
-    section: "D",
-    question: "🎭 بخش D — شخصیت و رهبری (۱/۴)\n\nدر مواجهه با انتقاد شدید چه واکنشی نشان میدهید؟",
-    type: "inline",
+    id: "localBackground",
+    title: "🏠 سابقه محلی و شناخته‌شدگی",
+    question:
+      "سابقه حضور و فعالیت شما در حوزه انتخابیه چگونه است؟\n\n" +
+      "📌 شناخته‌شدگی محلی یکی از مهم‌ترین عوامل پیروزی در انتخابات شوراست.\n" +
+      "گزینه‌ای که بیشترین تطابق را با وضعیت شما دارد انتخاب کنید:",
+    type: "choice",
+    required: true,
+    scored: true,
     options: [
-      { text: "سریع پاسخ میدهم", data: "quick_response", score: 5 },
-      { text: "سکوت میکنم", data: "silence", score: 3 },
-      { text: "مشورت میکنم و بعد پاسخ", data: "consult", score: 12 },
-      { text: "عصبی میشوم", data: "angry", score: 0 },
+      {
+        label: "🌟 بومی + سابقه خدمت عمومی (شورا/دهیاری/خیریه/هیئت‌امنا)",
+        value: "native_public_service",
+        score: 25,
+      },
+      {
+        label: "🏡 بومی + شناخته‌شده در سطح محله/منطقه",
+        value: "native_known",
+        score: 20,
+      },
+      {
+        label: "🏠 بومی هستم ولی فعالیت عمومی مشخصی نداشته‌ام",
+        value: "native_passive",
+        score: 12,
+      },
+      {
+        label: "🚗 بومی نیستم ولی سال‌ها ساکنم و ارتباطاتی دارم",
+        value: "long_resident",
+        score: 8,
+      },
+      {
+        label: "🆕 تازه وارد حوزه شده‌ام / شناختی از من وجود ندارد",
+        value: "newcomer",
+        score: 3,
+      },
     ],
-    scoreWeight: 1,
-  },
-  {
-    key: "biggestWeakness",
-    section: "D",
-    question: "🪞 بخش D — شخصیت و رهبری (۲/۴)\n\nبزرگترین ضعف شخصیتی خود را صادقانه بنویسید:\n(این اطلاعات محرمانه باقی میماند)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "failureExperience",
-    section: "D",
-    question: "📉 بخش D — شخصیت و رهبری (۳/۴)\n\nتا به حال شکست بزرگی داشته اید؟ چگونه مدیریت کردید؟\n(مختصر بنویسید)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "decisionStyle",
-    section: "D",
-    question: "🧠 بخش D — شخصیت و رهبری (۴/۴)\n\nتصمیم گیری شما بیشتر مبتنی بر چیست؟",
-    type: "inline",
-    options: [
-      { text: "داده و تحلیل", data: "data", score: 12 },
-      { text: "احساس و شهود", data: "emotion", score: 5 },
-      { text: "فشار اطرافیان", data: "pressure", score: 2 },
-      { text: "تحلیل سیاسی", data: "political", score: 10 },
-    ],
-    scoreWeight: 1,
   },
 
-  // ═══════════════════════════════════════
-  // بخش E — پیام و رقابت (۲۵ تا ۲۹)
-  // ═══════════════════════════════════════
+  // ─── مرحله ۶: سرمایه اجتماعی و شبکه ارتباطی ───
   {
-    key: "slogan",
-    section: "E",
-    question: "📢 بخش E — پیام و رقابت (۱/۵)\n\nشعار احتمالی کمپین شما چیست؟\n(یک جمله کوتاه بنویسید)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "topProblems",
-    section: "E",
-    question: "🔍 بخش E — پیام و رقابت (۲/۵)\n\nسه مشکل اصلی حوزه انتخابیه از نگاه شما چیست؟\n(هر مشکل در یک خط)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "whyVoteForYou",
-    section: "E",
-    question: "🏆 بخش E — پیام و رقابت (۳/۵)\n\nچرا مردم باید به شما رای بدهند نه رقیب؟\n(مختصر و قانع کننده بنویسید)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "biggestCompetitor",
-    section: "E",
-    question: "⚔️ بخش E — پیام و رقابت (۴/۵)\n\nبزرگترین رقیب شما کیست؟\n(نام یا توصیف)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "competitorWeakness",
-    section: "E",
-    question: "🎯 بخش E — پیام و رقابت (۵/۵)\n\nنقطه ضعف اصلی رقیب شما چیست؟",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
+    id: "socialCapital",
+    title: "👥 سرمایه اجتماعی",
+    question:
+      "قدرت شبکه ارتباطی و سرمایه اجتماعی شما در حوزه انتخابیه چقدر است؟\n\n" +
+      "📌 منظور: ارتباط با معتمدین، ریش‌سفیدان، روحانیون، اصناف، جوانان، بانوان، فرهنگیان و...\n" +
+      "این بُعد تعیین‌کننده‌ترین عامل در انتخابات محلی است:",
+    type: "choice",
+    required: true,
+    scored: true,
+    options: [
+      {
+        label: "💎 بسیار قوی (حمایت فعال معتمدین + اصناف + نهادها)",
+        value: "very_strong",
+        score: 25,
+      },
+      {
+        label: "💪 قوی (ارتباط خوب با ۲–۳ گروه کلیدی جامعه)",
+        value: "strong",
+        score: 19,
+      },
+      {
+        label: "👌 متوسط (شناخت عمومی دارم ولی حمایت سازمان‌یافته ندارم)",
+        value: "moderate",
+        score: 12,
+      },
+      {
+        label: "🤏 ضعیف (ارتباطاتم محدود به دوستان و خویشاوندان است)",
+        value: "weak",
+        score: 5,
+      },
+    ],
   },
 
-  // ═══════════════════════════════════════
-  // بخش F — ریسک ها (۳۰ تا ۳۲)
-  // ═══════════════════════════════════════
+  // ─── مرحله ۷: تیم انتخاباتی و بودجه ───
   {
-    key: "vulnerabilities",
-    section: "F",
-    question: "⚠️ بخش F — ریسک ها (۱/۳)\n\nآیا پرونده، حاشیه یا نقطه آسیب پذیر دارید؟",
-    type: "inline",
+    id: "teamResources",
+    title: "⚙️ تیم و منابع",
+    question:
+      "وضعیت تیم انتخاباتی و بودجه تبلیغاتی شما چگونه است؟\n\n" +
+      "📌 بدون تیم مستحکم و بودجه مناسب، حتی بهترین کاندیداها هم شانس کمی دارند.\n" +
+      "صادقانه‌ترین گزینه را انتخاب کنید:",
+    type: "choice",
+    required: true,
+    scored: true,
     options: [
-      { text: "خیر، کاملا پاک", data: "clean", score: 15 },
-      { text: "موارد جزئی", data: "minor", score: 7 },
-      { text: "بله، موارد جدی", data: "serious", score: 0 },
+      {
+        label: "🏆 تیم حرفه‌ای + ستاد سازمان‌یافته + بودجه کافی",
+        value: "professional_team",
+        score: 25,
+      },
+      {
+        label: "✅ تیم نیمه‌حرفه‌ای + بودجه متوسط",
+        value: "semi_pro",
+        score: 18,
+      },
+      {
+        label: "🔧 چند نفر داوطلب + بودجه محدود",
+        value: "basic_team",
+        score: 10,
+      },
+      {
+        label: "🙋 تنها و بدون تیم / بودجه مشخص",
+        value: "solo",
+        score: 3,
+      },
     ],
-    scoreWeight: 2,
   },
+
+  // ─── مرحله ۸: تاب‌آوری و آمادگی روانی ───
   {
-    key: "mediaAttackAngle",
-    section: "F",
-    question: "📰 بخش F — ریسک ها (۲/۳)\n\nاگر علیه شما موج رسانه ای ساخته شود، از کدام زاویه خواهد بود؟\n(مختصر بنویسید)",
-    type: "text",
-    options: [],
-    scoreWeight: 0,
-  },
-  {
-    key: "stressTolerance",
-    section: "F",
-    question: "💪 بخش F — ریسک ها (۳/۳)\n\nمیزان تحمل فشار روانی شما چقدر است؟",
-    type: "inline",
+    id: "resilience",
+    title: "🧠 تاب‌آوری روانی",
+    question:
+      "در مواجهه با فشار، شایعه، انتقاد و حملات رقبا چه واکنشی نشان می‌دهید؟\n\n" +
+      "📌 انتخابات محلی اغلب با شایعه‌پراکنی، تخریب شخصیت و فشارهای خانوادگی همراه است.\n" +
+      "گزینه واقعی‌ترین را انتخاب کنید:",
+    type: "choice",
+    required: true,
+    scored: true,
     options: [
-      { text: "۱-۳ (پایین)", data: "low", score: 3 },
-      { text: "۴-۶ (متوسط)", data: "medium", score: 8 },
-      { text: "۷-۸ (بالا)", data: "high", score: 13 },
-      { text: "۹-۱۰ (فوق العاده)", data: "extreme", score: 18 },
+      {
+        label: "🛡️ تجربه عملی مدیریت بحران دارم، خونسرد و راهبردی عمل می‌کنم",
+        value: "crisis_experienced",
+        score: 25,
+      },
+      {
+        label: "💪 تحمل فشار بالایی دارم ولی تجربه عملی در انتخابات ندارم",
+        value: "high_tolerance",
+        score: 18,
+      },
+      {
+        label: "😐 نسبتاً آرامم ولی شایعات و حملات اذیتم می‌کند",
+        value: "moderate_tolerance",
+        score: 10,
+      },
+      {
+        label: "😰 در برابر انتقاد و فشار خیلی آسیب‌پذیرم",
+        value: "vulnerable",
+        score: 3,
+      },
     ],
-    scoreWeight: 1,
+  },
+
+  // ─── مرحله ۹: پیام و مزیت رقابتی ───
+  {
+    id: "competitiveEdge",
+    title: "🎯 مزیت رقابتی",
+    question:
+      "آیا پیام (شعار) انتخاباتی شفاف و مزیت رقابتی مشخص نسبت به رقبا دارید؟\n\n" +
+      "📌 پیام انتخاباتی = پاسخ به سؤال: «چرا مردم باید به من رأی بدهند؟»\n" +
+      "این بُعد در تمایز شما از سایر کاندیداها نقش حیاتی دارد:",
+    type: "choice",
+    required: true,
+    scored: true,
+    options: [
+      {
+        label: "🎯 پیام شفاف + مزیت منحصربه‌فرد + برنامه عملیاتی مدون",
+        value: "clear_unique_plan",
+        score: 25,
+      },
+      {
+        label: "📝 پیام نسبتاً مشخص دارم ولی تمایز واضحی با رقبا ندارم",
+        value: "has_message",
+        score: 16,
+      },
+      {
+        label: "🤔 ایده‌هایی دارم ولی هنوز شعار و برنامه‌ای تدوین نکردم",
+        value: "ideas_only",
+        score: 8,
+      },
+      {
+        label: "❓ هنوز فکری نکرده‌ام / نمی‌دانم پیامم چیست",
+        value: "no_message",
+        score: 2,
+      },
+    ],
   },
 ];
 
-export const SECTION_LABELS = {
-  A: "👤 پروفایل فردی",
-  B: "🤝 سرمایه اجتماعی",
-  C: "💰 منابع و زیرساخت",
-  D: "🎭 شخصیت و رهبری",
-  E: "📢 پیام و رقابت",
-  F: "⚠️ ریسک ها",
-};
+// ─── ثابت‌ها ───
 
-export const OPTION_LABELS = {
-  "25-35": "۲۵ تا ۳۵", "36-45": "۳۶ تا ۴۵", "46-55": "۴۶ تا ۵۵",
-  "56-65": "۵۶ تا ۶۵", "65+": "بالای ۶۵",
-  "under5": "کمتر از ۵ سال", "5-10": "۵ تا ۱۰ سال", "10-20": "۱۰ تا ۲۰ سال", "20+": "بیش از ۲۰ سال",
-  "independent": "مستقل", "affiliated": "عضو حزب", "former": "سابقا وابسته",
-  "unknown": "ناشناخته", "limited": "محدود", "moderate": "تا حدی", "well_known": "شناخته شده",
-  "under50": "کمتر از ۵۰", "50-200": "۵۰ تا ۲۰۰", "200-1000": "۲۰۰ تا ۱۰۰۰", "1000+": "بیش از ۱۰۰۰",
-  "none": "ندارم", "small": "محدود", "strong": "قوی",
-  "1-10": "۱ تا ۱۰", "10-50": "۱۰ تا ۵۰", "50+": "بیش از ۵۰",
-  "never": "هرگز", "lost": "رای نیاورده", "won": "رای آورده",
-  "under500m": "کمتر از ۵۰۰م", "500m-1b": "۵۰۰م تا ۱ میلیارد", "1-5b": "۱ تا ۵ میلیارد", "5b+": "بیش از ۵ میلیارد",
-  "basic": "محدود", "professional": "حرفه ای",
-  "no": "خیر", "considering": "در حال بررسی", "yes": "بله",
-  "preparing": "در حال آماده سازی",
-  "partial": "چند روز در هفته", "fulltime": "تمام وقت",
-  "quick_response": "پاسخ سریع", "silence": "سکوت", "consult": "مشورت", "angry": "عصبی",
-  "data": "داده و تحلیل", "emotion": "احساس", "pressure": "فشار اطرافیان", "political": "تحلیل سیاسی",
-  "clean": "پاک", "minor": "موارد جزئی", "serious": "موارد جدی",
-  "low": "پایین", "medium": "متوسط", "high": "بالا", "extreme": "فوق العاده",
-};
+/** شناسه مراحلی که امتیازدهی می‌شوند */
+export const SCORED_STEP_IDS = STEPS
+  .filter((s) => s.scored === true)
+  .map((s) => s.id);
+// → ["localBackground","socialCapital","teamResources","resilience","competitiveEdge"]
 
-export const TOTAL_STEPS = STEPS.length;
+/** حداکثر امتیاز کل (۵ بُعد × ۲۵) */
+export const MAX_SCORE = SCORED_STEP_IDS.length * 25; // 125
+
+/** تعداد کل مراحل */
+export const TOTAL_STEPS = STEPS.length; // 10
+
+/** اموجی هر مرحله */
+export const STEP_EMOJIS = STEPS.map((s) => {
+  const m = s.title.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)/u);
+  return m ? m[0] : "📝";
+});
+
+/** پیام خوش‌آمدگویی اصلی */
+export const WELCOME_MESSAGE =
+  "🏛️ *به ربات کاندیداتوری هوشمند خوش آمدید!*\n" +
+  "━━━━━━━━━━━━━━━━━━━━━\n\n" +
+  "این ربات با *۱۰ سؤال تخصصی*، میزان آمادگی شما را برای شرکت " +
+  "در انتخابات تحلیل می‌کند و یک *گزارش جامع* ارائه می‌دهد.\n\n" +
+  "📊 *امکانات ربات:*\n" +
+  "├ تحلیل علمی آمادگی کاندیداتوری\n" +
+  "├ گزارش تخصصی با امتیازدهی ۵ بُعدی\n" +
+  "├ آموزش‌های تخصصی انتخاباتی\n" +
+  "├ بسته‌های مشاوره حرفه‌ای\n" +
+  "└ نمونه تحلیل‌های انجام‌شده\n\n" +
+  "👇 از منوی زیر شروع کنید:";
