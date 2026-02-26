@@ -1,5 +1,5 @@
 // src/flows/deep_assessment.js
-// ─── هندلرهای ارزیابی عمیق (فاز ۲) ───
+// ─── هندلرهای ارزیابی عمیق (فاز ۲) — نسخه نهایی ───
 // این فلو بعد از دریافت گزارش رایگان (فاز ۱) فعال می‌شود
 
 import { InlineKeyboard } from "grammy";
@@ -8,20 +8,17 @@ import { calcDeepTotalScore, generateDeepReport } from "../utils/deep_score.js";
 import { getOrCreateUser, updateUser, saveConsultation, upsertLead } from "../utils/db.js";
 import { mainMenuKB } from "../utils/keyboard.js";
 
-// ─── وضعیت‌ها ───
-// currentStep: 1000 + flatStepIndex  → در حال ارزیابی عمیق
-// currentStep: 1900                  → خلاصه ارزیابی عمیق
-// currentStep: 1901                  → ویرایش ارزیابی عمیق
-// currentStep: 2000                  → تکمیل‌شده
-
+// ─── ثابت‌های وضعیت ───
+// currentStep: 1000 + flatStepIndex → در حال ارزیابی عمیق
+// currentStep: 1900               → خلاصه ارزیابی عمیق
+// currentStep: 2000               → تکمیل‌شده
 const DEEP_BASE = 1000;
 const DEEP_SUMMARY = 1900;
-const DEEP_EDITING = 1901; // + stepIndex stored in tempDeepEdit
 const DEEP_DONE = 2000;
 
-/**
- * ساخت لیست تخت (flat) از همه مراحل عمیق
- */
+// ═══════════════════════════════════════════
+//  ساخت لیست تخت (flat) از همه مراحل عمیق
+// ═══════════════════════════════════════════
 function getFlatSteps() {
   const flat = [];
   for (const mod of DEEP_MODULES) {
@@ -39,39 +36,74 @@ function getFlatSteps() {
 
 const FLAT_STEPS = getFlatSteps();
 
-/**
- * ساخت کیبورد برای مرحله عمیق
- */
+// ═══════════════════════════════════════════
+//  نوار پیشرفت ارزیابی عمیق
+// ═══════════════════════════════════════════
+function deepProgress(flatIdx) {
+  const total = FLAT_STEPS.length;
+  const pct = Math.round(((flatIdx + 1) / total) * 100);
+  const filled = Math.round(pct / 10);
+  const barStr = "🟢".repeat(filled) + "⚪".repeat(10 - filled);
+  return `📊 پیشرفت ارزیابی عمیق: ${barStr} ${flatIdx + 1}/${total} (${pct}%)`;
+}
+
+// ═══════════════════════════════════════════
+//  ساخت کیبورد برای مرحله عمیق
+// ═══════════════════════════════════════════
 function deepStepKB(flatIdx) {
   const step = FLAT_STEPS[flatIdx];
   if (!step) return new InlineKeyboard();
 
   const kb = new InlineKeyboard();
 
-  if (step.type === "choice") {
+  // اگر گزینه‌ای باشد → دکمه‌های گزینه
+  if (step.type === "choice" && step.options) {
     for (const opt of step.options) {
       kb.text(opt.label, `deep_ans:${flatIdx}:${opt.value}`).row();
     }
   }
 
+  // دکمه‌های ناوبری
   if (flatIdx > 0) {
-    kb.text("⬅️ قبلی", `deep_back:${flatIdx - 1}`).row();
+    kb.text("⬅️ قبلی", `deep_back:${flatIdx - 1}`);
   }
-  kb.text("⏭️ رد شدن", `deep_skip:${flatIdx}`).row();
+  kb.text("⏭️ رد شدن", `deep_skip:${flatIdx}`);
+  kb.row();
   kb.text("❌ خروج و ذخیره", "deep_exit").row();
 
   return kb;
 }
 
-/**
- * نوار پیشرفت ارزیابی عمیق
- */
-function deepProgress(flatIdx) {
-  const total = FLAT_STEPS.length;
-  const pct = Math.round(((flatIdx + 1) / total) * 100);
-  const filled = Math.round(pct / 10);
-  const bar = "🟢".repeat(filled) + "⚪".repeat(10 - filled);
-  return `📊 پیشرفت: ${bar} ${flatIdx + 1}/${total} (${pct}%)`;
+// ═══════════════════════════════════════════
+//  نمایش یک مرحله عمیق (تابع داخلی)
+// ═══════════════════════════════════════════
+async function showDeepStep(ctx, userId, flatIdx) {
+  if (flatIdx < 0 || flatIdx >= FLAT_STEPS.length) return;
+
+  const step = FLAT_STEPS[flatIdx];
+
+  // بروزرسانی currentStep
+  await updateUser(userId, { currentStep: DEEP_BASE + flatIdx });
+
+  // ساخت متن سؤال
+  let t = `${deepProgress(flatIdx)}\n\n`;
+  t += `${step.moduleEmoji} _${step.moduleTitle}_\n\n`;
+  t += `*${step.title}*\n`;
+  t += `━━━━━━━━━━━━━━━━━━━\n\n`;
+  t += step.question;
+
+  const kb = deepStepKB(flatIdx);
+
+  // ارسال پیام
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb });
+    } catch {
+      await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+    }
+  } else {
+    await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -142,6 +174,7 @@ export async function handleDeepBegin(ctx) {
       startIdx = i;
       break;
     }
+    // اگر همه پاسخ داده شده → آخرین مرحله
     if (i === FLAT_STEPS.length - 1) startIdx = i;
   }
 
@@ -149,6 +182,7 @@ export async function handleDeepBegin(ctx) {
 
   if (ctx.callbackQuery) await ctx.answerCallbackQuery();
 
+  // پیام ادامه
   if (startIdx > 0) {
     await ctx.reply(
       `✅ ${startIdx} سؤال قبلاً پاسخ داده شده.\nاز سؤال ${startIdx + 1} ادامه می‌دهیم...`,
@@ -160,44 +194,22 @@ export async function handleDeepBegin(ctx) {
 }
 
 // ═══════════════════════════════════════════
-//  نمایش یک مرحله عمیق
-// ═══════════════════════════════════════════
-async function showDeepStep(ctx, userId, flatIdx) {
-  if (flatIdx < 0 || flatIdx >= FLAT_STEPS.length) return;
-
-  const step = FLAT_STEPS[flatIdx];
-  await updateUser(userId, { currentStep: DEEP_BASE + flatIdx });
-
-  let t = `${deepProgress(flatIdx)}\n\n`;
-  t += `${step.moduleEmoji} _${step.moduleTitle}_\n\n`;
-  t += `*${step.title}*\n`;
-  t += `━━━━━━━━━━━━━━━━━━━\n\n`;
-  t += step.question;
-
-  const kb = deepStepKB(flatIdx);
-
-  if (ctx.callbackQuery) {
-    try {
-      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb });
-    } catch {
-      await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
-    }
-  } else {
-    await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
-  }
-}
-
-// ═══════════════════════════════════════════
-//  پاسخ گزینه‌ای عمیق
+//  پاسخ گزینه‌ای ارزیابی عمیق (deep_ans:flatIdx:value)
 // ═══════════════════════════════════════════
 export async function handleDeepAnswer(ctx, flatIdx, value) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
+  // بازیابی پاسخ‌ها
   let temp = {};
-  try { temp = JSON.parse(user.tempAnswers || "{}"); } catch {}
+  try {
+    temp = JSON.parse(user.tempAnswers || "{}");
+  } catch {
+    temp = {};
+  }
   if (!temp._deep) temp._deep = {};
 
+  // ذخیره پاسخ
   const step = FLAT_STEPS[flatIdx];
   if (step) temp._deep[step.id] = value;
 
@@ -206,8 +218,9 @@ export async function handleDeepAnswer(ctx, flatIdx, value) {
     lastInteraction: new Date().toISOString(),
   });
 
-  await ctx.answerCallbackQuery({ text: `✅ ثبت شد` });
+  await ctx.answerCallbackQuery({ text: "✅ ثبت شد" });
 
+  // مرحله بعد
   const next = flatIdx + 1;
   if (next < FLAT_STEPS.length) {
     await showDeepStep(ctx, userId, next);
@@ -217,58 +230,79 @@ export async function handleDeepAnswer(ctx, flatIdx, value) {
 }
 
 // ═══════════════════════════════════════════
-//  ورودی متنی عمیق
+//  ورودی متنی ارزیابی عمیق
 // ═══════════════════════════════════════════
 export async function handleDeepTextInput(ctx) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
+  // بررسی: آیا در فاز عمیق هستیم؟
   if (
     user.currentStep === undefined ||
     user.currentStep === null ||
     user.currentStep < DEEP_BASE ||
     user.currentStep >= DEEP_DONE
   ) {
-    return false;
+    return false; // نیست → به هندلر بعدی ارجاع بده
   }
 
+  // محاسبه شماره مرحله
   const flatIdx = user.currentStep - DEEP_BASE;
   if (flatIdx < 0 || flatIdx >= FLAT_STEPS.length) return false;
 
+  // فقط سؤالات متنی
   const step = FLAT_STEPS[flatIdx];
   if (step.type !== "text") return false;
 
   const input = ctx.message.text.trim();
 
-  // اعتبارسنجی ساده
+  // ─── اعتبارسنجی ───
   if (step.validation === "min_20" && input.length < 20) {
-    await ctx.reply("❌ لطفاً حداقل ۲۰ کاراکتر بنویسید. پاسخ مفصل‌تر = تحلیل دقیق‌تر.", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ لطفاً حداقل *۲۰ کاراکتر* بنویسید.\nپاسخ مفصل‌تر = تحلیل دقیق‌تر.",
+      { parse_mode: "Markdown" }
+    );
     return true;
   }
   if (step.validation === "min_15" && input.length < 15) {
-    await ctx.reply("❌ لطفاً حداقل ۱۵ کاراکتر بنویسید.", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ لطفاً حداقل *۱۵ کاراکتر* بنویسید.\nتصور کنید جلوی دوربین هستید.",
+      { parse_mode: "Markdown" }
+    );
     return true;
   }
   if (step.validation === "min_10" && input.length < 10) {
-    await ctx.reply("❌ لطفاً حداقل ۱۰ کاراکتر بنویسید.", { parse_mode: "Markdown" });
+    await ctx.reply("❌ لطفاً حداقل *۱۰ کاراکتر* بنویسید.", {
+      parse_mode: "Markdown",
+    });
     return true;
   }
   if (step.validation === "min_5" && input.length < 5) {
-    await ctx.reply("❌ لطفاً حداقل ۵ کاراکتر بنویسید.", { parse_mode: "Markdown" });
+    await ctx.reply("❌ لطفاً حداقل *۵ کاراکتر* بنویسید.", {
+      parse_mode: "Markdown",
+    });
     return true;
   }
   if (step.validation === "min_3" && input.length < 3) {
-    await ctx.reply("❌ لطفاً حداقل ۳ کاراکتر بنویسید.", { parse_mode: "Markdown" });
+    await ctx.reply("❌ لطفاً حداقل *۳ کاراکتر* بنویسید.", {
+      parse_mode: "Markdown",
+    });
     return true;
   }
   if (step.validation === "min_2" && input.length < 2) {
-    await ctx.reply("❌ لطفاً مقداری وارد کنید.", { parse_mode: "Markdown" });
+    await ctx.reply("❌ لطفاً مقداری وارد کنید.", {
+      parse_mode: "Markdown",
+    });
     return true;
   }
 
-  // ذخیره
+  // ─── ذخیره پاسخ ───
   let temp = {};
-  try { temp = JSON.parse(user.tempAnswers || "{}"); } catch {}
+  try {
+    temp = JSON.parse(user.tempAnswers || "{}");
+  } catch {
+    temp = {};
+  }
   if (!temp._deep) temp._deep = {};
   temp._deep[step.id] = input;
 
@@ -277,8 +311,10 @@ export async function handleDeepTextInput(ctx) {
     lastInteraction: new Date().toISOString(),
   });
 
+  // تایید
   await ctx.reply(`✅ *${step.title}* ثبت شد.`, { parse_mode: "Markdown" });
 
+  // مرحله بعد
   const next = flatIdx + 1;
   if (next < FLAT_STEPS.length) {
     await showDeepStep(ctx, userId, next);
@@ -286,7 +322,21 @@ export async function handleDeepTextInput(ctx) {
     await showDeepSummary(ctx, userId, temp._deep);
   }
 
-  return true;
+  return true; // هندل شد
+}
+
+// ═══════════════════════════════════════════
+//  بازگشت به مرحله قبل ارزیابی عمیق (deep_back:flatIdx)
+// ═══════════════════════════════════════════
+export async function handleDeepBackStep(ctx, flatIdx) {
+  const userId = String(ctx.from.id);
+
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery();
+
+  // اگر flatIdx منفی شد → برو مرحله صفر
+  const targetIdx = Math.max(0, Math.min(flatIdx, FLAT_STEPS.length - 1));
+
+  await showDeepStep(ctx, userId, targetIdx);
 }
 
 // ═══════════════════════════════════════════
@@ -294,21 +344,27 @@ export async function handleDeepTextInput(ctx) {
 // ═══════════════════════════════════════════
 export async function handleDeepSkip(ctx, flatIdx) {
   const userId = String(ctx.from.id);
+
   await ctx.answerCallbackQuery({ text: "⏭️ رد شد" });
 
   const next = flatIdx + 1;
   if (next < FLAT_STEPS.length) {
     await showDeepStep(ctx, userId, next);
   } else {
+    // آخرین مرحله → خلاصه
     const user = await getOrCreateUser(userId, ctx.from);
     let temp = {};
-    try { temp = JSON.parse(user.tempAnswers || "{}"); } catch {}
+    try {
+      temp = JSON.parse(user.tempAnswers || "{}");
+    } catch {
+      temp = {};
+    }
     await showDeepSummary(ctx, userId, temp._deep || {});
   }
 }
 
 // ═══════════════════════════════════════════
-//  خلاصه ارزیابی عمیق
+//  نمایش خلاصه ارزیابی عمیق
 // ═══════════════════════════════════════════
 async function showDeepSummary(ctx, userId, deepAnswers) {
   await updateUser(userId, { currentStep: DEEP_SUMMARY });
@@ -330,7 +386,9 @@ async function showDeepSummary(ctx, userId, deepAnswers) {
           const opt = step.options?.find((o) => o.value === ans);
           display = opt ? opt.label : ans;
         } else {
-          display = String(ans).substring(0, 40) + (String(ans).length > 40 ? "..." : "");
+          // متنی → نمایش خلاصه
+          const str = String(ans);
+          display = str.substring(0, 40) + (str.length > 40 ? "..." : "");
         }
       }
       t += `  ${icon} ${display}\n`;
@@ -338,8 +396,9 @@ async function showDeepSummary(ctx, userId, deepAnswers) {
     t += "\n";
   }
 
-  t += `📊 پاسخ داده شده: ${answered} از ${FLAT_STEPS.length}\n\n`;
-  t += "✅ برای دریافت گزارش *تایید نهایی* را بزنید.";
+  t += `📊 پاسخ داده شده: *${answered}* از *${FLAT_STEPS.length}*\n\n`;
+  t += "✅ برای دریافت گزارش *تایید نهایی* را بزنید.\n";
+  t += "🔄 یا اگر سؤال بی‌پاسخی مانده، *ادامه پاسخ‌دهی* را بزنید.";
 
   const kb = new InlineKeyboard()
     .text("✅ تایید و دریافت گزارش عمیق", "deep_confirm")
@@ -361,32 +420,42 @@ async function showDeepSummary(ctx, userId, deepAnswers) {
 }
 
 // ═══════════════════════════════════════════
-//  تایید و تولید گزارش عمیق
+//  تایید نهایی و تولید گزارش عمیق
 // ═══════════════════════════════════════════
 export async function handleDeepConfirm(ctx) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
+  // بازیابی پاسخ‌ها
   let temp = {};
-  try { temp = JSON.parse(user.tempAnswers || "{}"); } catch {}
+  try {
+    temp = JSON.parse(user.tempAnswers || "{}");
+  } catch {
+    temp = {};
+  }
   const deepAnswers = temp._deep || {};
 
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery({ text: "⏳ در حال تولید گزارش عمیق..." });
   }
 
-  // تولید گزارش
+  // ─── تولید گزارش ───
   const report = generateDeepReport(deepAnswers);
   const totalResult = calcDeepTotalScore(deepAnswers);
 
-  // ذخیره در consultations
+  // ─── ذخیره در consultations ───
   try {
     await saveConsultation(userId, {
       electionType: temp.election_type || "",
       region: temp.constituency || "",
       answers: JSON.stringify({ basic: temp, deep: deepAnswers }),
       score: totalResult.totalScore,
-      riskLevel: totalResult.percent >= 60 ? "low" : totalResult.percent >= 40 ? "medium" : "high",
+      riskLevel:
+        totalResult.percent >= 60
+          ? "low"
+          : totalResult.percent >= 40
+          ? "medium"
+          : "high",
       finalReport: report,
       fullName: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
       status: "deep_complete",
@@ -395,7 +464,7 @@ export async function handleDeepConfirm(ctx) {
     console.error("خطا در ذخیره گزارش عمیق:", e.message);
   }
 
-  // بروزرسانی لید
+  // ─── بروزرسانی لید ───
   try {
     await upsertLead(userId, {
       leadTemperature: "hot",
@@ -405,13 +474,13 @@ export async function handleDeepConfirm(ctx) {
     console.error("خطا در بروزرسانی لید:", e.message);
   }
 
-  // بروزرسانی وضعیت
+  // ─── بروزرسانی وضعیت کاربر ───
   await updateUser(userId, {
     currentStep: DEEP_DONE,
     lastInteraction: new Date().toISOString(),
   });
 
-  // ارسال گزارش (ممکنه بلند باشه — تقسیم به چند پیام)
+  // ─── ارسال گزارش ───
   const kb = new InlineKeyboard()
     .text("💼 بسته‌های خدماتی (مشاوره تخصصی)", "show_plans")
     .row()
@@ -422,7 +491,7 @@ export async function handleDeepConfirm(ctx) {
     .text("🔙 منو", "menu")
     .row();
 
-  // تقسیم پیام اگه بیشتر از 4096 کاراکتر باشه
+  // تقسیم پیام اگه بیشتر از 4000 کاراکتر باشه
   if (report.length > 4000) {
     const mid = report.lastIndexOf("\n", 3900);
     const part1 = report.substring(0, mid);
@@ -436,7 +505,10 @@ export async function handleDeepConfirm(ctx) {
     await ctx.reply(part2, { parse_mode: "Markdown", reply_markup: kb });
   } else {
     try {
-      await ctx.editMessageText(report, { parse_mode: "Markdown", reply_markup: kb });
+      await ctx.editMessageText(report, {
+        parse_mode: "Markdown",
+        reply_markup: kb,
+      });
     } catch {
       await ctx.reply(report, { parse_mode: "Markdown", reply_markup: kb });
     }
@@ -444,27 +516,32 @@ export async function handleDeepConfirm(ctx) {
 }
 
 // ═══════════════════════════════════════════
-//  خروج و ذخیره
+//  خروج و ذخیره (بدون حذف پاسخ‌ها)
 // ═══════════════════════════════════════════
 export async function handleDeepExit(ctx) {
   const userId = String(ctx.from.id);
-  // نگه‌داشتن پاسخ‌ها (ذخیره‌شده در tempAnswers._deep)
+
+  // فقط currentStep را null می‌کنیم — پاسخ‌ها در tempAnswers._deep حفظ می‌شوند
   await updateUser(userId, { currentStep: null });
 
   if (ctx.callbackQuery) await ctx.answerCallbackQuery({ text: "✅ ذخیره شد" });
 
   const kb = mainMenuKB();
+
+  const msg =
+    "✅ *پاسخ‌های شما ذخیره شد.*\n\n" +
+    "هر زمان خواستید از *منوی اصلی* → «ارزیابی عمیق» ادامه دهید.\n\n" +
+    "📌 پاسخ‌های قبلی حفظ می‌شوند و نیازی به پاسخ مجدد نیست.";
+
   try {
-    await ctx.editMessageText(
-      "✅ *پاسخ‌های شما ذخیره شد.*\n\n" +
-      "هر زمان خواستید از *منوی اصلی* → «ارزیابی عمیق» ادامه دهید.\n\n" +
-      "📌 پاسخ‌های قبلی حفظ می‌شوند.",
-      { parse_mode: "Markdown", reply_markup: kb }
-    );
+    await ctx.editMessageText(msg, {
+      parse_mode: "Markdown",
+      reply_markup: kb,
+    });
   } catch {
-    await ctx.reply(
-      "✅ *پاسخ‌های شما ذخیره شد.*\nهر زمان خواستید ادامه دهید.",
-      { parse_mode: "Markdown", reply_markup: kb }
-    );
+    await ctx.reply(msg, {
+      parse_mode: "Markdown",
+      reply_markup: kb,
+    });
   }
 }
