@@ -1,9 +1,8 @@
 // ============================================================
-// 🧠 فلو مشاوره ۶ مرحله‌ای
-// تمام هندلرهای مربوط به فرآیند مشاوره
+// 🧠 فلو مشاوره ۳۰ مرحله‌ای
 // ============================================================
 
-import { STEPS } from "../constants/questions.js";
+import { STEPS, TOTAL_STEPS } from "../constants/questions.js";
 import {
   getOrCreateUser,
   updateUser,
@@ -13,7 +12,6 @@ import {
 import {
   calcScore,
   getRiskLevel,
-  riskLabel,
   getLeadTemp,
   generateReport,
 } from "../utils/score.js";
@@ -26,40 +24,38 @@ import {
   buildSummaryText,
 } from "../utils/keyboard.js";
 
-/**
- * پارس امن JSON
- */
+// پارس امن JSON
 function safeParse(str) {
-  try {
-    return JSON.parse(str || "{}");
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(str || "{}"); } catch { return {}; }
 }
 
 // ============================================================
-// شروع مشاوره
+// 🟢 شروع مشاوره
 // ============================================================
 export async function handleStartConsultation(ctx) {
-  const from = ctx.from;
-  const user = await getOrCreateUser(from);
+  await getOrCreateUser(ctx.from);
 
-  // ریست state
-  await updateUser(from.id, {
+  await updateUser(ctx.from.id, {
     currentStep: 0,
     tempAnswers: JSON.stringify({}),
   });
 
-  // نمایش سوال اول
   const step = STEPS[0];
-  await ctx.editMessageText(step.question, {
-    parse_mode: "Markdown",
-    reply_markup: stepKB(0),
-  });
+  if (step.type === "text") {
+    await ctx.editMessageText(step.question, {
+      parse_mode: "Markdown",
+      reply_markup: textStepKB(),
+    });
+  } else {
+    await ctx.editMessageText(step.question, {
+      parse_mode: "Markdown",
+      reply_markup: stepKB(0),
+    });
+  }
 }
 
 // ============================================================
-// انصراف مشاوره
+// ❌ انصراف
 // ============================================================
 export async function handleCancelConsultation(ctx, mainMenuKB, MENU_TEXT) {
   await updateUser(ctx.from.id, {
@@ -74,11 +70,12 @@ export async function handleCancelConsultation(ctx, mainMenuKB, MENU_TEXT) {
 }
 
 // ============================================================
-// دریافت جواب inline — callback: ans_X_Y
+// 📝 جواب inline — ans_X_Y
 // ============================================================
 export async function handleAnswer(ctx, stepIdx, optIdx) {
   const step = STEPS[stepIdx];
   const opt = step.options[optIdx];
+
   if (!opt) {
     await ctx.answerCallbackQuery("❌ گزینه نامعتبر");
     return;
@@ -86,34 +83,57 @@ export async function handleAnswer(ctx, stepIdx, optIdx) {
 
   const user = await getOrCreateUser(ctx.from);
   const answers = safeParse(user.tempAnswers);
-
-  // ذخیره جواب
   answers[step.key] = opt.data;
 
-  // بررسی حالت ویرایش
   const currentStep = user.currentStep ?? 0;
-  const isEditing = currentStep >= 100; // مراحل ۱۰۰+ = حالت ویرایش
+  const isEditing = currentStep >= 1000;
 
   if (isEditing) {
-    // برگشت به خلاصه
-    await updateUser(ctx.from.id, {
-      currentStep: 99, // ← 99 = صفحه خلاصه
-      tempAnswers: JSON.stringify(answers),
-    });
+    // پیدا کردن سوال بعدی در همین بخش
+    const editingSection = STEPS[currentStep - 1000]?.section;
+    const nextInSection = findNextInSection(stepIdx, editingSection);
 
-    const sc = calcScore(answers);
-    await ctx.editMessageText(buildSummaryText(answers, sc), {
-      parse_mode: "Markdown",
-      reply_markup: summaryKB(),
-    });
-    await ctx.answerCallbackQuery("✅ ویرایش ثبت شد");
+    if (nextInSection !== null) {
+      // هنوز سوال‌های این بخش مونده
+      await updateUser(ctx.from.id, {
+        currentStep: 1000 + nextInSection,
+        tempAnswers: JSON.stringify(answers),
+      });
+
+      const ns = STEPS[nextInSection];
+      if (ns.type === "text") {
+        await ctx.editMessageText(ns.question, {
+          parse_mode: "Markdown",
+          reply_markup: editCancelKB(),
+        });
+      } else {
+        await ctx.editMessageText(ns.question, {
+          parse_mode: "Markdown",
+          reply_markup: stepKB(nextInSection),
+        });
+      }
+    } else {
+      // بخش تمام شد → خلاصه
+      await updateUser(ctx.from.id, {
+        currentStep: 999,
+        tempAnswers: JSON.stringify(answers),
+      });
+
+      const sc = calcScore(answers);
+      await ctx.editMessageText(buildSummaryText(answers, sc), {
+        parse_mode: "Markdown",
+        reply_markup: summaryKB(),
+      });
+    }
+
+    await ctx.answerCallbackQuery("✅ ثبت شد");
     return;
   }
 
   // حالت عادی — مرحله بعد
   const next = stepIdx + 1;
 
-  if (next < STEPS.length) {
+  if (next < TOTAL_STEPS) {
     await updateUser(ctx.from.id, {
       currentStep: next,
       tempAnswers: JSON.stringify(answers),
@@ -132,9 +152,9 @@ export async function handleAnswer(ctx, stepIdx, optIdx) {
       });
     }
   } else {
-    // همه مراحل تمام → خلاصه
+    // همه تمام → خلاصه
     await updateUser(ctx.from.id, {
-      currentStep: 99,
+      currentStep: 999,
       tempAnswers: JSON.stringify(answers),
     });
 
@@ -149,27 +169,31 @@ export async function handleAnswer(ctx, stepIdx, optIdx) {
 }
 
 // ============================================================
-// ویرایش مرحله — callback: edit_X
+// ✏️ ویرایش بخش — edit_section_X
 // ============================================================
-export async function handleEdit(ctx, stepIdx) {
-  const step = STEPS[stepIdx];
+export async function handleEditSection(ctx, sectionKey) {
+  const firstIdx = STEPS.findIndex((s) => s.section === sectionKey);
+  if (firstIdx < 0) {
+    await ctx.answerCallbackQuery("❌ بخش پیدا نشد");
+    return;
+  }
 
-  // currentStep = 100 + stepIdx → مشخص‌کننده حالت ویرایش
   await updateUser(ctx.from.id, {
-    currentStep: 100 + stepIdx,
+    currentStep: 1000 + firstIdx,
   });
 
-  const title = `✏️ *ویرایش مرحله ${stepIdx + 1}*\n\n${step.question}`;
+  const step = STEPS[firstIdx];
+  const title = `✏️ *ویرایش ${step.question}`;
 
   if (step.type === "text") {
-    await ctx.editMessageText(title, {
+    await ctx.editMessageText(step.question, {
       parse_mode: "Markdown",
       reply_markup: editCancelKB(),
     });
   } else {
-    await ctx.editMessageText(title, {
+    await ctx.editMessageText(step.question, {
       parse_mode: "Markdown",
-      reply_markup: stepKB(stepIdx),
+      reply_markup: stepKB(firstIdx),
     });
   }
 
@@ -177,13 +201,13 @@ export async function handleEdit(ctx, stepIdx) {
 }
 
 // ============================================================
-// انصراف از ویرایش — برگشت به خلاصه
+// ↩️ برگشت به خلاصه
 // ============================================================
 export async function handleBackToSummary(ctx) {
   const user = await getOrCreateUser(ctx.from);
   const answers = safeParse(user.tempAnswers);
 
-  await updateUser(ctx.from.id, { currentStep: 99 });
+  await updateUser(ctx.from.id, { currentStep: 999 });
 
   const sc = calcScore(answers);
   await ctx.editMessageText(buildSummaryText(answers, sc), {
@@ -194,48 +218,47 @@ export async function handleBackToSummary(ctx) {
 }
 
 // ============================================================
-// تایید نهایی — محاسبه + ذخیره + گزارش
+// ✅ تایید نهایی
 // ============================================================
 export async function handleConfirm(ctx) {
   const user = await getOrCreateUser(ctx.from);
   const answers = safeParse(user.tempAnswers);
 
-  // محاسبه امتیاز
   const score = calcScore(answers);
   const risk = getRiskLevel(score);
   const report = generateReport(score, answers);
   const lt = getLeadTemp(score);
 
-  // ذخیره در consultations
+  // ذخیره
   await saveConsultation({
     userId: String(ctx.from.id),
-    electionType: answers.electionType || "",
+    fullName: answers.fullName || "",
+    electionType: answers.politicalAffiliation || "",
     region: answers.region || "",
-    answers: answers, // ← تابع db.js خودش JSON.stringify می‌کند
+    answers: answers,
     score: score,
     riskLevel: risk,
     finalReport: report,
   });
 
-  // بروزرسانی لید
   await upsertLead(ctx.from.id, {
     leadTemperature: lt,
     purchasedPlan: "none",
     notes: JSON.stringify({
       lastScore: score,
-      lastElection: answers.electionType,
+      fullName: answers.fullName,
+      region: answers.region,
     }),
   });
 
-  // ریست state کاربر
+  // ریست
   await updateUser(ctx.from.id, {
     currentStep: 0,
     tempAnswers: JSON.stringify({}),
   });
 
-  // ارسال نتیجه
   await ctx.editMessageText(
-    "✅ *تحلیل با موفقیت انجام شد!*\n\nگزارش شما در پیام بعدی ارسال می‌شود...",
+    "✅ *تحلیل با موفقیت انجام شد!*\n\nگزارش در پیام بعدی...",
     { parse_mode: "Markdown" }
   );
 
@@ -248,7 +271,7 @@ export async function handleConfirm(ctx) {
 }
 
 // ============================================================
-// دریافت پیام متنی (مرحله حوزه انتخابیه یا ویرایش متنی)
+// 💬 پیام متنی
 // ============================================================
 export async function handleTextInput(ctx, mainMenuKB, MENU_TEXT) {
   const text = ctx.message.text.trim();
@@ -256,18 +279,15 @@ export async function handleTextInput(ctx, mainMenuKB, MENU_TEXT) {
   const user = await getOrCreateUser(from);
   const cs = user.currentStep ?? 0;
 
-  // مشخص کردن ایندکس واقعی مرحله
   let realIdx;
   let isEditing = false;
 
-  if (cs >= 100) {
-    // حالت ویرایش
-    realIdx = cs - 100;
+  if (cs >= 1000) {
+    realIdx = cs - 1000;
     isEditing = true;
-  } else if (cs >= 0 && cs < STEPS.length) {
+  } else if (cs >= 0 && cs < TOTAL_STEPS) {
     realIdx = cs;
   } else {
-    // کاربر در مشاوره نیست → منو
     await ctx.reply(MENU_TEXT, {
       parse_mode: "Markdown",
       reply_markup: mainMenuKB(),
@@ -277,45 +297,64 @@ export async function handleTextInput(ctx, mainMenuKB, MENU_TEXT) {
 
   const step = STEPS[realIdx];
 
-  // فقط مراحل متنی قبول
   if (!step || step.type !== "text") {
     await ctx.reply("⚠️ لطفاً از دکمه‌های زیر پیام قبلی استفاده کنید.");
     return;
   }
 
-  // اعتبارسنجی
   if (text.length < 2) {
-    await ctx.reply("⚠️ لطفاً حداقل ۲ حرف وارد کنید.");
+    await ctx.reply("⚠️ حداقل *۲ حرف* وارد کنید.", { parse_mode: "Markdown" });
     return;
   }
-  if (text.length > 100) {
-    await ctx.reply("⚠️ حداکثر ۱۰۰ حرف مجاز است.");
+  if (text.length > 500) {
+    await ctx.reply("⚠️ حداکثر *۵۰۰ حرف* مجاز است.", { parse_mode: "Markdown" });
     return;
   }
 
-  // ذخیره
   const answers = safeParse(user.tempAnswers);
   answers[step.key] = text;
 
   if (isEditing) {
-    // برگشت به خلاصه
-    await updateUser(from.id, {
-      currentStep: 99,
-      tempAnswers: JSON.stringify(answers),
-    });
+    const editingSection = step.section;
+    const nextInSection = findNextInSection(realIdx, editingSection);
 
-    const sc = calcScore(answers);
-    await ctx.reply(buildSummaryText(answers, sc), {
-      parse_mode: "Markdown",
-      reply_markup: summaryKB(),
-    });
+    if (nextInSection !== null) {
+      await updateUser(from.id, {
+        currentStep: 1000 + nextInSection,
+        tempAnswers: JSON.stringify(answers),
+      });
+
+      const ns = STEPS[nextInSection];
+      if (ns.type === "text") {
+        await ctx.reply(ns.question, {
+          parse_mode: "Markdown",
+          reply_markup: editCancelKB(),
+        });
+      } else {
+        await ctx.reply(ns.question, {
+          parse_mode: "Markdown",
+          reply_markup: stepKB(nextInSection),
+        });
+      }
+    } else {
+      await updateUser(from.id, {
+        currentStep: 999,
+        tempAnswers: JSON.stringify(answers),
+      });
+
+      const sc = calcScore(answers);
+      await ctx.reply(buildSummaryText(answers, sc), {
+        parse_mode: "Markdown",
+        reply_markup: summaryKB(),
+      });
+    }
     return;
   }
 
-  // مرحله بعد
+  // عادی → بعدی
   const next = realIdx + 1;
 
-  if (next < STEPS.length) {
+  if (next < TOTAL_STEPS) {
     await updateUser(from.id, {
       currentStep: next,
       tempAnswers: JSON.stringify(answers),
@@ -334,9 +373,8 @@ export async function handleTextInput(ctx, mainMenuKB, MENU_TEXT) {
       });
     }
   } else {
-    // خلاصه
     await updateUser(from.id, {
-      currentStep: 99,
+      currentStep: 999,
       tempAnswers: JSON.stringify(answers),
     });
 
@@ -346,4 +384,14 @@ export async function handleTextInput(ctx, mainMenuKB, MENU_TEXT) {
       reply_markup: summaryKB(),
     });
   }
+}
+
+// ============================================================
+// 🔧 کمکی: پیدا کردن سوال بعدی در همون بخش
+// ============================================================
+function findNextInSection(currentIdx, section) {
+  for (let i = currentIdx + 1; i < TOTAL_STEPS; i++) {
+    if (STEPS[i].section === section) return i;
+  }
+  return null;
 }
