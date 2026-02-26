@@ -1,13 +1,13 @@
 // src/main.js
 // ─── نقطه ورود Appwrite Function ───
-// ربات تلگرامی «کاندیداتوری هوشمند» (@candidatoryiran_bot)
+// ربات «کاندیداتوری هوشمند» @candidatoryiran_bot
 
 import { Bot } from "grammy";
 import { initDB } from "./utils/db.js";
 import { mainMenuKB } from "./utils/keyboard.js";
 import { WELCOME_MESSAGE } from "./constants/questions.js";
 
-// فلوها
+// ─── Flows ───
 import {
   handleStartConsultation,
   handleAnswer,
@@ -18,12 +18,16 @@ import {
   handleTextInput,
 } from "./flows/consultation.js";
 
-import { handleShowPlans, handleSelectPlan } from "./flows/plans.js";
+import {
+  handleShowPlans,
+  handleSelectPlan,
+  handlePlanRequest,
+} from "./flows/plans.js";
 
 import {
   handleAboutUs,
   handleContactUs,
-  handleShowSamples,
+  handleSampleReports,
 } from "./flows/contact.js";
 
 import {
@@ -33,27 +37,21 @@ import {
 
 import {
   handleAdminCommand,
-  handleAdminCallbackQuery,
-  handleSearchNC,
-  handleSearchPhone,
+  handleAdminCallback,
+  handleAdminSearch,
 } from "./flows/admin.js";
 
-// ═══════════════════════════════════════
-
+// ═══════════════════════════════════════════
 export default async function (context) {
   const env = context.env || process.env;
-
-  // مقداردهی اولیه دیتابیس
   initDB(env);
 
   const bot = new Bot(env.BOT_TOKEN);
+  const ADMINS = (env.ADMIN_IDS || "").split(",").map((s) => s.trim());
 
-  // لیست آیدی ادمین‌ها
-  const ADMIN_IDS = (env.ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
-
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
   //  دستورات
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
 
   bot.command("start", async (ctx) => {
     await ctx.reply(WELCOME_MESSAGE, {
@@ -63,137 +61,148 @@ export default async function (context) {
   });
 
   bot.command("menu", async (ctx) => {
-    await ctx.reply("📋 *منوی اصلی*\n\nیکی از گزینه‌ها را انتخاب کنید:", {
+    await ctx.reply("📋 *منوی اصلی*\n\nگزینه مورد نظر را انتخاب کنید:", {
       parse_mode: "Markdown",
       reply_markup: mainMenuKB(),
     });
   });
 
-  // ادمین
   bot.command("admin", async (ctx) => {
-    if (ADMIN_IDS.includes(String(ctx.from.id))) {
+    if (ADMINS.includes(String(ctx.from.id))) {
       await handleAdminCommand(ctx);
     } else {
-      await ctx.reply("⛔ دسترسی ادمین ندارید.");
+      await ctx.reply("⛔ دسترسی ندارید.");
     }
   });
 
-  bot.command("search_nc", async (ctx) => {
-    if (!ADMIN_IDS.includes(String(ctx.from.id))) return;
-    const code = ctx.message.text.split(" ")[1];
-    if (!code) return ctx.reply("❌ استفاده: /search\\_nc 0012345678");
-    await handleSearchNC(ctx, code);
+  // ─── جستجوی ادمین ───
+  bot.command("search", async (ctx) => {
+    if (!ADMINS.includes(String(ctx.from.id))) return;
+    const q = ctx.message.text.replace("/search", "").trim();
+    if (q) await handleAdminSearch(ctx, "national_id", q);
+    else await ctx.reply("❌ کد ملی را وارد کنید: `/search 0012345678`", { parse_mode: "Markdown" });
   });
 
-  bot.command("search_phone", async (ctx) => {
-    if (!ADMIN_IDS.includes(String(ctx.from.id))) return;
-    const ph = ctx.message.text.split(" ")[1];
-    if (!ph) return ctx.reply("❌ استفاده: /search\\_phone 09121234567");
-    await handleSearchPhone(ctx, ph);
+  bot.command("searchphone", async (ctx) => {
+    if (!ADMINS.includes(String(ctx.from.id))) return;
+    const q = ctx.message.text.replace("/searchphone", "").trim();
+    if (q) await handleAdminSearch(ctx, "phone", q);
+    else await ctx.reply("❌ شماره را وارد کنید: `/searchphone 09121234567`", { parse_mode: "Markdown" });
   });
 
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
   //  Callback Queries
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
 
   bot.on("callback_query:data", async (ctx) => {
     const d = ctx.callbackQuery.data;
 
     try {
-      // منو
+      // ─── منو ───
       if (d === "menu") {
         try {
-          await ctx.editMessageText("📋 *منوی اصلی*\n\nیکی از گزینه‌ها را انتخاب کنید:", {
-            parse_mode: "Markdown", reply_markup: mainMenuKB(),
+          await ctx.editMessageText("📋 *منوی اصلی*\n\nگزینه مورد نظر:", {
+            parse_mode: "Markdown",
+            reply_markup: mainMenuKB(),
           });
         } catch {
-          await ctx.reply("📋 *منوی اصلی*\n\nیکی از گزینه‌ها را انتخاب کنید:", {
-            parse_mode: "Markdown", reply_markup: mainMenuKB(),
+          await ctx.reply("📋 *منوی اصلی*\n\nگزینه مورد نظر:", {
+            parse_mode: "Markdown",
+            reply_markup: mainMenuKB(),
           });
         }
-        return ctx.answerCallbackQuery();
+        await ctx.answerCallbackQuery();
+        return;
       }
 
-      // مشاوره
-      if (d === "start_consultation") return handleStartConsultation(ctx);
+      // ─── مشاوره ───
+      if (d === "start_consultation") return await handleStartConsultation(ctx);
 
-      if (d.startsWith("answer:")) {
-        const [, si, ...vp] = d.split(":");
-        return handleAnswer(ctx, parseInt(si), vp.join(":"));
+      if (d.startsWith("ans:")) {
+        const [, idx, ...rest] = d.split(":");
+        return await handleAnswer(ctx, parseInt(idx), rest.join(":"));
       }
 
-      if (d.startsWith("back_step:")) {
-        return handleBackStep(ctx, parseInt(d.split(":")[1]));
+      if (d.startsWith("back:")) {
+        return await handleBackStep(ctx, parseInt(d.split(":")[1]));
       }
 
-      if (d.startsWith("edit_step:")) {
-        return handleEdit(ctx, parseInt(d.split(":")[1]));
+      if (d.startsWith("edit:")) {
+        return await handleEdit(ctx, parseInt(d.split(":")[1]));
       }
 
-      if (d === "confirm_final") return handleConfirm(ctx);
-      if (d === "cancel_consultation") return handleCancelConsultation(ctx);
+      if (d === "confirm") return await handleConfirm(ctx);
+      if (d === "cancel") return await handleCancelConsultation(ctx);
 
-      // پلن‌ها
-      if (d === "show_plans") return handleShowPlans(ctx);
-      if (d.startsWith("plan:")) return handleSelectPlan(ctx, d.split(":")[1]);
+      // ─── پلن‌ها ───
+      if (d === "show_plans") return await handleShowPlans(ctx);
 
-      // آموزش
-      if (d === "edu:list") return handleShowEducationList(ctx);
-      if (d === "edu:noop") return ctx.answerCallbackQuery();
+      if (d.startsWith("plan:")) {
+        return await handleSelectPlan(ctx, d.split(":")[1]);
+      }
+
+      if (d.startsWith("plan_request:")) {
+        return await handlePlanRequest(ctx, d.split(":")[1]);
+      }
+
+      // ─── آموزش ───
+      if (d === "edu_list") return await handleShowEducationList(ctx);
+      if (d === "edu_noop") { await ctx.answerCallbackQuery(); return; }
       if (d.startsWith("edu:")) {
         const idx = parseInt(d.split(":")[1]);
-        if (!isNaN(idx)) return handleShowEducationCard(ctx, idx);
+        if (!isNaN(idx)) return await handleShowEducationCard(ctx, idx);
       }
 
-      // صفحات ثابت
-      if (d === "about_us") return handleAboutUs(ctx);
-      if (d === "contact_us") return handleContactUs(ctx);
-      if (d === "contact_support") return handleContactUs(ctx);
-      if (d === "show_samples") return handleShowSamples(ctx);
+      // ─── صفحات ───
+      if (d === "about_us") return await handleAboutUs(ctx);
+      if (d === "contact_us") return await handleContactUs(ctx);
+      if (d === "sample_reports") return await handleSampleReports(ctx);
 
-      // ادمین
-      if (d.startsWith("admin:")) {
-        if (ADMIN_IDS.includes(String(ctx.from.id))) {
-          return handleAdminCallbackQuery(ctx, d);
+      // ─── ادمین ───
+      if (d.startsWith("adm:")) {
+        if (ADMINS.includes(String(ctx.from.id))) {
+          return await handleAdminCallback(ctx, d);
         }
-        return ctx.answerCallbackQuery({ text: "⛔ دسترسی ندارید" });
+        await ctx.answerCallbackQuery({ text: "⛔ دسترسی ندارید" });
+        return;
       }
 
+      // ─── ناشناخته ───
       await ctx.answerCallbackQuery();
-    } catch (err) {
-      console.error("خطا callback:", err.message);
-      try { await ctx.answerCallbackQuery({ text: "❌ خطا — دوباره تلاش کنید" }); }
-      catch {}
+    } catch (e) {
+      console.error("خطای callback:", e.message);
+      try { await ctx.answerCallbackQuery({ text: "❌ خطا رخ داد" }); } catch {}
     }
   });
 
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
   //  پیام‌های متنی
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
 
   bot.on("message:text", async (ctx) => {
     try {
+      // اول بررسی مشاوره
       const handled = await handleTextInput(ctx);
+      if (handled) return;
 
-      if (!handled) {
-        await ctx.reply(
-          "📌 از منوی زیر گزینه مورد نظر را انتخاب کنید:\n\nیا /start بزنید.",
-          { parse_mode: "Markdown", reply_markup: mainMenuKB() }
-        );
-      }
-    } catch (err) {
-      console.error("خطا message:text:", err.message);
+      // پیام عادی → منو
+      await ctx.reply(
+        "📌 از منوی زیر انتخاب کنید یا /start بزنید.",
+        { reply_markup: mainMenuKB() }
+      );
+    } catch (e) {
+      console.error("خطای text:", e.message);
     }
   });
 
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
   //  پردازش آپدیت
-  // ─────────────────────────────────
+  // ═══════════════════════════════════════
 
   try {
     await bot.handleUpdate(context.req.body);
-  } catch (err) {
-    console.error("خطا handleUpdate:", err.message);
+  } catch (e) {
+    console.error("خطای handleUpdate:", e.message);
   }
 
   return context.res.json({ ok: true });
