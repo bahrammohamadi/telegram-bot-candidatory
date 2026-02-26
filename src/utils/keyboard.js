@@ -1,100 +1,150 @@
-import { InlineKeyboard } from "grammy";
-import { STEPS, SECTION_LABELS, TOTAL_STEPS } from "../constants/questions.js";
-import { answerLabel, calcScore, maxScore, getReadinessLevel } from "./score.js";
+// src/utils/keyboard.js
+// ─── تمام InlineKeyboard های پروژه ───
+// سازگار با ساختار جدید ۱۰ مرحله‌ای
 
-// منوی اصلی — با دکمه جدید "آخرین تحلیل من"
+import { InlineKeyboard } from "grammy";
+import { STEPS, TOTAL_STEPS, STEP_EMOJIS } from "../constants/questions.js";
+
+// ═══════════════════════════════════════
+//  منوی اصلی
+// ═══════════════════════════════════════
+
 export function mainMenuKB() {
   return new InlineKeyboard()
-    .text("🧠 مشاوره هوشمند کاندیداتوری", "start_consult")
+    .text("🚀 شروع تحلیل آمادگی", "start_consultation")
     .row()
-    .text("📋 آخرین تحلیل من", "my_report")
+    .text("📚 آموزش‌های تخصصی", "edu:list")
     .row()
-    .text("📦 پلن‌های خدمات", "show_plans")
+    .text("💼 بسته‌های خدماتی", "show_plans")
     .row()
-    .text("📞 ارتباط با ما", "contact")
+    .text("📞 ارتباط با ما", "contact_us")
     .row()
-    .text("📊 نمونه تحلیل‌ها", "samples")
-    .row()
-    .text("ℹ️ درباره ما", "about");
+    .text("ℹ️ درباره ما", "about_us")
+    .text("📄 نمونه تحلیل‌ها", "show_samples")
+    .row();
 }
 
-export function stepKB(idx) {
+// ═══════════════════════════════════════
+//  کیبورد مراحل
+// ═══════════════════════════════════════
+
+/** گزینه‌های مرحله choice */
+export function stepChoiceKB(stepIndex) {
+  const step = STEPS[stepIndex];
+  if (!step || step.type !== "choice") return new InlineKeyboard();
+
   const kb = new InlineKeyboard();
-  STEPS[idx].options.forEach((o, i) => {
-    kb.text(o.text, `ans_${idx}_${i}`).row();
-  });
-  kb.text("انصراف و بازگشت", "cancel_consult");
+
+  for (const opt of step.options) {
+    kb.text(opt.label, `answer:${stepIndex}:${opt.value}`).row();
+  }
+
+  if (stepIndex > 0) {
+    kb.text("⬅️ مرحله قبل", `back_step:${stepIndex - 1}`).row();
+  }
+
+  kb.text("❌ انصراف", "cancel_consultation").row();
+
   return kb;
 }
 
-export function textStepKB() {
-  return new InlineKeyboard().text("انصراف و بازگشت", "cancel_consult");
-}
-
-export function summaryKB() {
+/** کیبورد مرحله متنی */
+export function stepTextKB(stepIndex) {
   const kb = new InlineKeyboard();
-  const sections = ["A", "B", "C", "D", "E", "F"];
-  sections.forEach((sec) => {
-    const firstIdx = STEPS.findIndex((s) => s.section === sec);
-    if (firstIdx >= 0) {
-      kb.text("ویرایش " + SECTION_LABELS[sec], "edit_section_" + sec).row();
-    }
-  });
-  kb.text("تایید نهایی و دریافت گزارش", "confirm").row();
-  kb.text("انصراف", "cancel_consult");
+
+  if (stepIndex > 0) {
+    kb.text("⬅️ مرحله قبل", `back_step:${stepIndex - 1}`).row();
+  }
+
+  kb.text("❌ انصراف", "cancel_consultation").row();
+
   return kb;
 }
 
-export function editCancelKB() {
-  return new InlineKeyboard().text("انصراف از ویرایش", "back_summary");
+// ═══════════════════════════════════════
+//  کیبورد خلاصه
+// ═══════════════════════════════════════
+
+/** خلاصه پاسخ‌ها + دکمه ویرایش */
+export function summaryKB(answers) {
+  const kb = new InlineKeyboard();
+
+  for (let i = 0; i < TOTAL_STEPS; i++) {
+    const step = STEPS[i];
+    const emoji = STEP_EMOJIS[i] || "📝";
+    const filled = answers[step.id] !== undefined && answers[step.id] !== "";
+    const icon = filled ? "✏️" : "⚠️";
+    kb.text(`${emoji} ${icon} ${step.title}`, `edit_step:${i}`).row();
+  }
+
+  kb.text("✅ تایید نهایی و دریافت گزارش", "confirm_final").row();
+  kb.text("❌ انصراف", "cancel_consultation").row();
+
+  return kb;
 }
+
+// ═══════════════════════════════════════
+//  کیبورد بعد از گزارش
+// ═══════════════════════════════════════
 
 export function afterReportKB() {
   return new InlineKeyboard()
-    .text("📦 مشاهده پلن‌ها", "show_plans")
+    .text("📚 آموزش‌های تخصصی کاندیداتوری", "edu:list")
     .row()
-    .text("📞 ارتباط با ما", "contact")
+    .text("💼 مشاهده بسته‌ها و خدمات", "show_plans")
     .row()
-    .text("🔄 مشاوره جدید", "start_consult")
+    .text("🔄 تحلیل مجدد", "start_consultation")
     .row()
-    .text("🏠 منوی اصلی", "main_menu");
+    .text("🔙 منوی اصلی", "menu")
+    .row();
 }
 
-export function backKB() {
-  return new InlineKeyboard().text("🏠 بازگشت به منوی اصلی", "main_menu");
+// ═══════════════════════════════════════
+//  کیبوردهای صفحات ثابت
+// ═══════════════════════════════════════
+
+export function aboutUsKB() {
+  return new InlineKeyboard()
+    .text("📞 ارتباط با ما", "contact_us")
+    .row()
+    .text("💼 بسته‌ها", "show_plans")
+    .row()
+    .text("🔙 منو", "menu")
+    .row();
 }
 
-export function buildSummaryText(answers, score) {
-  const max = maxScore();
-  const readiness = getReadinessLevel(score);
-  const fullName = answers.fullName || "---";
+export function contactUsKB() {
+  return new InlineKeyboard()
+    .text("💼 مشاهده بسته‌ها", "show_plans")
+    .row()
+    .text("🔙 منو", "menu")
+    .row();
+}
 
-  let txt = "خلاصه اطلاعات شما\n";
-  txt += "نام: " + fullName + "\n";
-  txt += "━━━━━━━━━━━━━━━━━━━━━\n\n";
+export function samplesKB() {
+  return new InlineKeyboard()
+    .text("🚀 شروع تحلیل آمادگی", "start_consultation")
+    .row()
+    .text("🔙 منو", "menu")
+    .row();
+}
 
-  const sections = ["A", "B", "C", "D", "E", "F"];
-  for (const sec of sections) {
-    const secSteps = STEPS.filter((s) => s.section === sec);
-    txt += SECTION_LABELS[sec] + ":\n";
+// ═══════════════════════════════════════
+//  نوار پیشرفت متنی
+// ═══════════════════════════════════════
 
-    secSteps.forEach((step) => {
-      const raw = answers[step.key];
-      let display;
-      if (step.type === "text") {
-        display = raw ? (raw.length > 40 ? raw.substring(0, 40) + "..." : raw) : "---";
-      } else {
-        display = answerLabel(raw);
-      }
-      txt += "  - " + display + "\n";
-    });
-    txt += "\n";
+/**
+ * تولید نوار پیشرفت دایره‌ای
+ * @param {number} current - ایندکس فعلی (0-based)
+ * @returns {string}
+ */
+export function progressText(current) {
+  let t = "📊 ";
+  for (let i = 0; i < TOTAL_STEPS; i++) {
+    if (i < current) t += "🟢";
+    else if (i === current) t += "🔵";
+    else t += "⚪";
   }
-
-  txt += "━━━━━━━━━━━━━━━━━━━━━\n";
-  txt += "امتیاز: " + score + " از " + max + " (" + Math.round(readiness.percent) + "%)\n";
-  txt += "سطح: " + readiness.label + "\n\n";
-  txt += "تایید نهایی بزنید یا بخش مورد نظر را ویرایش کنید";
-
-  return txt;
+  t += ` (${current + 1}/${TOTAL_STEPS})`;
+  return t;
 }
