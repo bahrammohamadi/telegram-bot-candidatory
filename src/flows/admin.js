@@ -1,47 +1,35 @@
-// ============================================================
-// 🔐 پنل ادمین — مشاهده و مدیریت داده‌ها
-// ============================================================
-
 import { InlineKeyboard } from "grammy";
 import {
   isAdmin,
   listConsultations,
   getConsultation,
   updateConsultation,
+  searchConsultations,
 } from "../utils/db.js";
 
-const ADMIN_PIN = "1403"; // ← PIN امنیتی — بعداً عوض کن
+// ============================================================
+// 📋 توضیح گزینه های پنل ادمین:
+//
+// 📋 لیست کاندیداها — نمایش آخرین ثبت نام ها
+// 🔍 جستجو — جستجو با نام یا حوزه
+// 👁️ مشاهده — دیدن تمام اطلاعات یک کاندیدا
+// 🔄 تغییر وضعیت — عوض کردن مرحله بررسی:
+//    🟢 ثبت اولیه (free)
+//    🟡 درخواست پلن حرفه ای (pro_requested)
+//    🔵 پرداخت شده (pro_paid)
+//    ✅ تحلیل شده (analyzed)
+// 📝 یادداشت — اضافه کردن نکته برای خودت
+// ============================================================
 
-const STATUS_ICONS = {
-  free: "🟢",
-  pro_requested: "🟡",
-  pro_paid: "🔵",
-  analyzed: "✅",
+const STATUS_LABELS = {
+  free: "🟢 ثبت اولیه",
+  pro_requested: "🟡 درخواست پلن",
+  pro_paid: "🔵 پرداخت شده",
+  analyzed: "✅ تحلیل شده",
 };
 
 // ============================================================
-// 🔐 ورود ادمین — /admin
-// ============================================================
-export async function handleAdminCommand(ctx) {
-  const userId = ctx.from.id;
-  const admin = await isAdmin(userId);
-
-  if (!admin) {
-    await ctx.reply("⛔ شما دسترسی ادمین ندارید.");
-    return;
-  }
-
-  await ctx.reply(
-    "🔐 *پنل مدیریت*\n\nلطفاً کد امنیتی ۴ رقمی را وارد کنید:",
-    { parse_mode: "Markdown" }
-  );
-
-  // ذخیره state ادمین
-  // currentStep = 5000 یعنی منتظر PIN
-}
-
-// ============================================================
-// 📋 نمایش لیست مشاوره‌ها
+// 📋 لیست کاندیداها
 // ============================================================
 export async function handleAdminList(ctx, page = 0) {
   const result = await listConsultations(page, 5);
@@ -49,13 +37,14 @@ export async function handleAdminList(ctx, page = 0) {
   const total = result.total;
 
   if (docs.length === 0) {
-    await ctx.reply("📭 هیچ مشاوره‌ای ثبت نشده.");
+    await ctx.reply("📭 هیچ مشاوره ای ثبت نشده.");
     return;
   }
 
-  let txt = `🔐 *پنل مدیریت — لیست مشاوره‌ها*\n`;
-  txt += `📊 مجموع: ${total} | صفحه ${page + 1}\n`;
-  txt += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  let txt = "🔐 پنل مدیریت\n";
+  txt += "📋 لیست کاندیداها\n";
+  txt += "مجموع: " + total + " نفر | صفحه " + (page + 1) + "\n";
+  txt += "━━━━━━━━━━━━━━━━━━━━━\n\n";
 
   const kb = new InlineKeyboard();
 
@@ -65,41 +54,43 @@ export async function handleAdminList(ctx, page = 0) {
     try { answers = JSON.parse(doc.answers || "{}"); } catch {}
 
     const name = doc.fullName || answers.fullName || "بدون نام";
-    const region = doc.region || answers.region || "—";
+    const region = doc.region || answers.region || "---";
+    const phone = answers.phone || "---";
     const status = doc.status || "free";
-    const icon = STATUS_ICONS[status] || "⚪";
+    const statusLabel = STATUS_LABELS[status] || status;
     const score = doc.score || 0;
 
-    txt += `${num}. ${icon} *${name}*\n`;
-    txt += `   📍 ${region} | 📈 ${score} | ${status}\n\n`;
+    txt += num + ". " + statusLabel + "\n";
+    txt += "   نام: " + name + "\n";
+    txt += "   حوزه: " + region + "\n";
+    txt += "   تلفن: " + phone + "\n";
+    txt += "   امتیاز: " + score + "\n\n";
 
-    kb.text(`👁️ ${num}. ${name}`, `admin_view_${doc.$id}`).row();
+    kb.text("👁️ " + num + ". " + name, "admin_view_" + doc.$id).row();
   });
 
-  // Pagination
+  // صفحه بندی
   const hasNext = total > (page + 1) * 5;
   const hasPrev = page > 0;
 
-  if (hasPrev) kb.text("⬅️ قبلی", `admin_page_${page - 1}`);
-  if (hasNext) kb.text("➡️ بعدی", `admin_page_${page + 1}`);
+  if (hasPrev) kb.text("⬅️ صفحه قبل", "admin_page_" + (page - 1));
+  if (hasNext) kb.text("➡️ صفحه بعد", "admin_page_" + (page + 1));
   if (hasPrev || hasNext) kb.row();
 
+  kb.text("🔍 جستجو", "admin_search").row();
   kb.text("🏠 منوی اصلی", "main_menu");
 
-  await ctx.reply(txt, {
-    parse_mode: "Markdown",
-    reply_markup: kb,
-  });
+  await ctx.reply(txt, { reply_markup: kb });
 }
 
 // ============================================================
-// 👁️ مشاهده جزئیات یک مشاوره
+// 👁️ مشاهده جزئیات کاندیدا
 // ============================================================
 export async function handleAdminView(ctx, docId) {
   const doc = await getConsultation(docId);
 
   if (!doc) {
-    await ctx.answerCallbackQuery("❌ پیدا نشد");
+    await ctx.answerCallbackQuery("پیدا نشد");
     return;
   }
 
@@ -107,51 +98,53 @@ export async function handleAdminView(ctx, docId) {
   try { answers = JSON.parse(doc.answers || "{}"); } catch {}
 
   const status = doc.status || "free";
-  const icon = STATUS_ICONS[status] || "⚪";
+  const statusLabel = STATUS_LABELS[status] || status;
 
-  let txt = `🔐 *جزئیات مشاوره*\n`;
-  txt += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-  txt += `${icon} وضعیت: *${status}*\n`;
-  txt += `📈 امتیاز: *${doc.score || 0}*\n`;
-  txt += `📅 تاریخ: ${doc.createdAt || "—"}\n\n`;
+  let txt = "🔐 جزئیات کاندیدا\n";
+  txt += "━━━━━━━━━━━━━━━━━━━━━\n\n";
+  txt += "وضعیت: " + statusLabel + "\n";
+  txt += "امتیاز: " + (doc.score || 0) + "\n";
+  txt += "تاریخ ثبت: " + (doc.createdAt || "---") + "\n\n";
 
-  // نمایش تمام جواب‌ها
-  txt += `📋 *پاسخ‌ها:*\n`;
+  // اطلاعات مهم بالا
+  txt += "━━ اطلاعات کلیدی ━━\n";
+  txt += "نام: " + (answers.fullName || "---") + "\n";
+  txt += "کد ملی: " + (answers.nationalId || "---") + "\n";
+  txt += "تلفن: " + (answers.phone || "---") + "\n";
+  txt += "سن: " + (answers.age || "---") + "\n";
+  txt += "حوزه: " + (answers.region || "---") + "\n";
+  txt += "تحصیلات: " + (answers.education || "---") + "\n";
+  txt += "شغل: " + (answers.currentJob || "---") + "\n\n";
+
+  // بقیه جواب ها
+  txt += "━━ تمام پاسخ ها ━━\n";
   for (const [key, val] of Object.entries(answers)) {
-    const display = typeof val === "string" ? val : JSON.stringify(val);
-    txt += `• *${key}:* ${display}\n`;
+    if (["fullName", "nationalId", "phone", "age", "region", "education", "currentJob"].includes(key)) continue;
+    const display = typeof val === "string" ? val : String(val);
+    txt += key + ": " + display + "\n";
   }
 
-  txt += `\n━━━━━━━━━━━━━━━━━━━━━\n`;
-
+  // یادداشت ادمین
   if (doc.adminNotes) {
-    txt += `📝 یادداشت ادمین: ${doc.adminNotes}\n`;
+    txt += "\n━━ یادداشت ادمین ━━\n";
+    txt += doc.adminNotes + "\n";
   }
 
-  // کیبورد مدیریت
+  // کوتاه کردن اگه طولانیه
+  if (txt.length > 4000) {
+    txt = txt.substring(0, 3900) + "\n\n... (متن کوتاه شده)";
+  }
+
   const kb = new InlineKeyboard()
-    .text("🟡 Pro Requested", `admin_status_${docId}_pro_requested`)
-    .row()
-    .text("🔵 Pro Paid", `admin_status_${docId}_pro_paid`)
-    .row()
-    .text("✅ Analyzed", `admin_status_${docId}_analyzed`)
-    .row()
-    .text("📝 افزودن یادداشت", `admin_note_${docId}`)
-    .row()
-    .text("⬅️ بازگشت به لیست", "admin_list")
-    .row()
+    .text("🟡 درخواست پلن", "admin_status_" + docId + "_pro_requested").row()
+    .text("🔵 پرداخت شده", "admin_status_" + docId + "_pro_paid").row()
+    .text("✅ تحلیل شده", "admin_status_" + docId + "_analyzed").row()
+    .text("🟢 برگرداندن به اولیه", "admin_status_" + docId + "_free").row()
+    .text("📝 افزودن یادداشت", "admin_note_" + docId).row()
+    .text("⬅️ بازگشت به لیست", "admin_list").row()
     .text("🏠 منوی اصلی", "main_menu");
 
-  // چون ممکنه متن طولانی باشه
-  if (txt.length > 4000) {
-    txt = txt.substring(0, 3900) + "\n\n⚠️ _متن کوتاه شده..._";
-  }
-
-  await ctx.reply(txt, {
-    parse_mode: "Markdown",
-    reply_markup: kb,
-  });
-
+  await ctx.reply(txt, { reply_markup: kb });
   await ctx.answerCallbackQuery();
 }
 
@@ -161,57 +154,94 @@ export async function handleAdminView(ctx, docId) {
 export async function handleAdminStatus(ctx, docId, newStatus) {
   try {
     await updateConsultation(docId, { status: newStatus });
-    await ctx.answerCallbackQuery(`✅ وضعیت → ${newStatus}`);
-
-    // رفرش صفحه
+    const label = STATUS_LABELS[newStatus] || newStatus;
+    await ctx.answerCallbackQuery("وضعیت تغییر کرد: " + label);
     await handleAdminView(ctx, docId);
   } catch (e) {
-    await ctx.answerCallbackQuery("❌ خطا: " + e.message);
+    await ctx.answerCallbackQuery("خطا: " + e.message);
   }
 }
 
 // ============================================================
-// 📝 شروع افزودن یادداشت
+// 📝 شروع یادداشت
 // ============================================================
 export async function handleAdminNoteStart(ctx, docId, updateUserFn) {
-  // ذخیره state: منتظر یادداشت برای این داکیومنت
   await updateUserFn(ctx.from.id, {
-    currentStep: 6000, // 6000 = منتظر یادداشت ادمین
+    currentStep: 6000,
     tempAnswers: JSON.stringify({ adminNoteDocId: docId }),
   });
 
-  await ctx.reply(
-    "📝 *یادداشت خود را تایپ کنید:*\n\n_این یادداشت فقط برای شما قابل مشاهده است._",
-    { parse_mode: "Markdown" }
-  );
-
+  await ctx.reply("📝 یادداشت خود را تایپ کنید:\n(فقط شما میبینید)");
   await ctx.answerCallbackQuery();
 }
 
 // ============================================================
-// 💬 ذخیره یادداشت ادمین (از پیام متنی)
+// 💬 ذخیره یادداشت
 // ============================================================
 export async function handleAdminNoteText(ctx) {
-  const user = await (await import("../utils/db.js")).getOrCreateUser(ctx.from);
+  const { getOrCreateUser, updateUser, updateConsultation: updateCons } = await import("../utils/db.js");
+  const user = await getOrCreateUser(ctx.from);
   const temp = JSON.parse(user.tempAnswers || "{}");
   const docId = temp.adminNoteDocId;
 
   if (!docId) {
-    await ctx.reply("⚠️ خطا. دوباره از لیست انتخاب کنید.");
+    await ctx.reply("خطا. دوباره از لیست انتخاب کنید.");
     return;
   }
 
-  const note = ctx.message.text.trim();
+  await updateCons(docId, { adminNotes: ctx.message.text.trim() });
+  await updateUser(ctx.from.id, { currentStep: 0, tempAnswers: "{}" });
+  await ctx.reply("یادداشت ذخیره شد.");
+}
 
-  await updateConsultation(docId, {
-    adminNotes: note,
+// ============================================================
+// 🔍 شروع جستجو
+// ============================================================
+export async function handleAdminSearchStart(ctx, updateUserFn) {
+  await updateUserFn(ctx.from.id, {
+    currentStep: 7000,
+    tempAnswers: "{}",
   });
 
-  // ریست state
-  await (await import("../utils/db.js")).updateUser(ctx.from.id, {
-    currentStep: 0,
-    tempAnswers: JSON.stringify({}),
+  await ctx.reply("🔍 نام یا حوزه انتخابیه را تایپ کنید:");
+  await ctx.answerCallbackQuery();
+}
+
+// ============================================================
+// 💬 انجام جستجو
+// ============================================================
+export async function handleAdminSearchText(ctx) {
+  const query = ctx.message.text.trim();
+  const { searchConsultations, updateUser } = await import("../utils/db.js");
+
+  await updateUser(ctx.from.id, { currentStep: 0, tempAnswers: "{}" });
+
+  const docs = await searchConsultations(query);
+
+  if (docs.length === 0) {
+    await ctx.reply("نتیجه ای برای '" + query + "' پیدا نشد.\n\nدوباره /admin بزنید.");
+    return;
+  }
+
+  let txt = "🔍 نتایج جستجو: " + query + "\n";
+  txt += "━━━━━━━━━━━━━━━━━━━━━\n\n";
+
+  const kb = new InlineKeyboard();
+
+  docs.forEach((doc, i) => {
+    let answers = {};
+    try { answers = JSON.parse(doc.answers || "{}"); } catch {}
+
+    const name = doc.fullName || answers.fullName || "بدون نام";
+    const region = doc.region || answers.region || "---";
+    const status = STATUS_LABELS[doc.status || "free"];
+
+    txt += (i + 1) + ". " + name + " | " + region + " | " + status + "\n";
+    kb.text("👁️ " + name, "admin_view_" + doc.$id).row();
   });
 
-  await ctx.reply("✅ یادداشت ذخیره شد.");
+  kb.text("⬅️ بازگشت", "admin_list").row();
+  kb.text("🏠 منو", "main_menu");
+
+  await ctx.reply(txt, { reply_markup: kb });
 }
