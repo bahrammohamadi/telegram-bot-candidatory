@@ -1,5 +1,5 @@
 // ============================================================
-// 🗄️ توابع دیتابیس — نسخه آپدیت شده
+// 🗄️ توابع دیتابیس — نسخه کامل نهایی
 // ============================================================
 
 import { Client, Databases, ID, Query } from "node-appwrite";
@@ -25,14 +25,19 @@ export function initDB(env) {
 }
 
 // ============================================================
-// 👤 users
+// 👤 کالکشن users
 // ============================================================
 
 export async function getUser(userId) {
   try {
-    return await _databases.getDocument(_config.dbId, _config.users, String(userId));
+    return await _databases.getDocument(
+      _config.dbId,
+      _config.users,
+      String(userId)
+    );
   } catch (e) {
     if (e.code === 404) return null;
+    console.error("getUser:", e.message);
     return null;
   }
 }
@@ -40,17 +45,22 @@ export async function getUser(userId) {
 export async function createUser(from) {
   try {
     const now = new Date().toISOString();
-    return await _databases.createDocument(_config.dbId, _config.users, String(from.id), {
-      userId: String(from.id),
-      username: from.username || "",
-      firstName: from.first_name || "",
-      lastName: from.last_name || "",
-      role: "user",
-      createdAt: now,
-      currentStep: 0,
-      tempAnswers: JSON.stringify({}),
-      lastInteraction: now,
-    });
+    return await _databases.createDocument(
+      _config.dbId,
+      _config.users,
+      String(from.id),
+      {
+        userId: String(from.id),
+        username: from.username || "",
+        firstName: from.first_name || "",
+        lastName: from.last_name || "",
+        role: "user",
+        createdAt: now,
+        currentStep: 0,
+        tempAnswers: JSON.stringify({}),
+        lastInteraction: now,
+      }
+    );
   } catch (e) {
     console.error("createUser:", e.message);
     throw e;
@@ -59,38 +69,94 @@ export async function createUser(from) {
 
 export async function getOrCreateUser(from) {
   let user = await getUser(from.id);
-  if (!user) user = await createUser(from);
+  if (!user) {
+    user = await createUser(from);
+  }
   return user;
 }
 
 export async function updateUser(userId, data) {
   try {
     data.lastInteraction = new Date().toISOString();
-    await _databases.updateDocument(_config.dbId, _config.users, String(userId), data);
+    await _databases.updateDocument(
+      _config.dbId,
+      _config.users,
+      String(userId),
+      data
+    );
   } catch (e) {
     console.error("updateUser:", e.message);
     throw e;
   }
 }
 
-/**
- * چک کردن ادمین بودن
- */
 export async function isAdmin(userId) {
   const user = await getUser(userId);
   return user && user.role === "admin";
 }
 
-/**
- * لیست آخرین مشاوره‌ها برای ادمین
- */
+// ============================================================
+// 📊 کالکشن consultations
+// ============================================================
+
+export async function saveConsultation(data) {
+  try {
+    const now = new Date().toISOString();
+    return await _databases.createDocument(
+      _config.dbId,
+      _config.consult,
+      ID.unique(),
+      {
+        userId: data.userId,
+        fullName: data.fullName || "",
+        electionType: data.electionType || "",
+        region: data.region || "",
+        answers: JSON.stringify(data.answers),
+        score: data.score || 0,
+        riskLevel: data.riskLevel || "low",
+        status: "free",
+        adminNotes: "",
+        analysisReport: "",
+        finalReport: data.finalReport || "",
+        createdAt: now,
+        updatedAt: now,
+      }
+    );
+  } catch (e) {
+    console.error("saveConsultation:", e.message);
+    throw e;
+  }
+}
+
+export async function getLastConsultation(userId) {
+  try {
+    const res = await _databases.listDocuments(
+      _config.dbId,
+      _config.consult,
+      [
+        Query.equal("userId", String(userId)),
+        Query.orderDesc("$createdAt"),
+        Query.limit(1),
+      ]
+    );
+    return res.documents.length > 0 ? res.documents[0] : null;
+  } catch (e) {
+    console.error("getLastConsultation:", e.message);
+    return null;
+  }
+}
+
 export async function listConsultations(page = 0, limit = 5) {
   try {
-    const res = await _databases.listDocuments(_config.dbId, _config.consult, [
-      Query.orderDesc("$createdAt"),
-      Query.limit(limit),
-      Query.offset(page * limit),
-    ]);
+    const res = await _databases.listDocuments(
+      _config.dbId,
+      _config.consult,
+      [
+        Query.orderDesc("$createdAt"),
+        Query.limit(limit),
+        Query.offset(page * limit),
+      ]
+    );
     return res;
   } catch (e) {
     console.error("listConsultations:", e.message);
@@ -98,25 +164,28 @@ export async function listConsultations(page = 0, limit = 5) {
   }
 }
 
-/**
- * دریافت یک مشاوره
- */
 export async function getConsultation(docId) {
   try {
-    return await _databases.getDocument(_config.dbId, _config.consult, docId);
+    return await _databases.getDocument(
+      _config.dbId,
+      _config.consult,
+      docId
+    );
   } catch (e) {
     console.error("getConsultation:", e.message);
     return null;
   }
 }
 
-/**
- * بروزرسانی مشاوره (ادمین)
- */
 export async function updateConsultation(docId, data) {
   try {
     data.updatedAt = new Date().toISOString();
-    await _databases.updateDocument(_config.dbId, _config.consult, docId, data);
+    await _databases.updateDocument(
+      _config.dbId,
+      _config.consult,
+      docId,
+      data
+    );
   } catch (e) {
     console.error("updateConsultation:", e.message);
     throw e;
@@ -124,35 +193,7 @@ export async function updateConsultation(docId, data) {
 }
 
 // ============================================================
-// 📊 consultations
-// ============================================================
-
-export async function saveConsultation(data) {
-  try {
-    const now = new Date().toISOString();
-    return await _databases.createDocument(_config.dbId, _config.consult, ID.unique(), {
-      userId: data.userId,
-      fullName: data.fullName || "",
-      electionType: data.electionType || "",
-      region: data.region || "",
-      answers: JSON.stringify(data.answers),
-      score: data.score || 0,
-      riskLevel: data.riskLevel || "low",
-      status: "free",
-      adminNotes: "",
-      analysisReport: "",
-      finalReport: data.finalReport || "",
-      createdAt: now,
-      updatedAt: now,
-    });
-  } catch (e) {
-    console.error("saveConsultation:", e.message);
-    throw e;
-  }
-}
-
-// ============================================================
-// 🎯 leads_status
+// 🎯 کالکشن leads_status
 // ============================================================
 
 export async function upsertLead(userId, data) {
@@ -161,7 +202,10 @@ export async function upsertLead(userId, data) {
 
   try {
     await _databases.getDocument(_config.dbId, _config.leads, uid);
-    await _databases.updateDocument(_config.dbId, _config.leads, uid, { ...data, updatedAt: now });
+    await _databases.updateDocument(_config.dbId, _config.leads, uid, {
+      ...data,
+      updatedAt: now,
+    });
   } catch (e) {
     if (e.code === 404) {
       try {
@@ -177,6 +221,8 @@ export async function upsertLead(userId, data) {
       } catch (ce) {
         console.error("createLead:", ce.message);
       }
+    } else {
+      console.error("upsertLead:", e.message);
     }
   }
 }
