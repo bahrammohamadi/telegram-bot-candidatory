@@ -1,6 +1,5 @@
 // src/flows/consultation.js
-// ─── هندلرهای مراحل مشاوره پایه — فاز ۱ (۹ مرحله) ───
-// نسخه ۳ — با پشتیبانی از فاز عمیق
+// ─── هندلرهای مراحل مشاوره پایه — فاز ۱ (۹ مرحله) — نسخه نهایی ───
 // سازگار با ساختار فعلی دیتابیس (userId, tempAnswers, currentStep)
 
 import { STEPS, TOTAL_STEPS } from "../constants/questions.js";
@@ -21,11 +20,11 @@ import {
 } from "../utils/keyboard.js";
 
 // ─── ثابت‌های وضعیت فاز ۱ ───
-const ST_SUMMARY = 99;    // حالت خلاصه
-const ST_DONE = 200;      // تکمیل شده
-// ویرایش: 100 + stepIndex (مثلاً 103 = ویرایش مرحله 3)
+const ST_SUMMARY = 99;
+const ST_DONE = 200;
+// ویرایش فاز ۱: 100 + stepIndex
 
-// ─── ثابت‌های وضعیت فاز ۲ (برای تشخیص) ───
+// ─── ثابت‌های فاز ۲ (فقط برای تشخیص) ───
 const DEEP_BASE = 1000;
 const DEEP_DONE = 2000;
 
@@ -37,7 +36,6 @@ function validateInput(text, type) {
 
   switch (type) {
     case "national_id": {
-      // حذف کاراکترهای اضافی
       const c = t.replace(/[\s\-]/g, "");
       if (!/^\d{10}$/.test(c)) {
         return {
@@ -48,7 +46,6 @@ function validateInput(text, type) {
             "مثال: `0012345678`",
         };
       }
-      // بررسی کدهای تکراری (نامعتبر)
       if (/^(\d)\1{9}$/.test(c)) {
         return {
           ok: false,
@@ -59,9 +56,7 @@ function validateInput(text, type) {
     }
 
     case "phone": {
-      // حذف کاراکترهای اضافی
       let c = t.replace(/[\s\-\+]/g, "");
-      // تبدیل +98 به 0
       if (c.startsWith("98") && c.length === 12) c = "0" + c.substring(2);
       if (!/^09\d{9}$/.test(c)) {
         return {
@@ -102,21 +97,17 @@ async function showStep(ctx, userId, idx) {
   const step = STEPS[idx];
   await updateUser(userId, { currentStep: idx });
 
-  // ساخت متن سؤال
   let text = `${progressText(idx)}\n\n`;
   text += `*${step.title}*\n`;
   text += `━━━━━━━━━━━━━━━━━━━\n\n`;
   text += step.question;
 
-  // نمایش placeholder برای سؤالات متنی
   if (step.type === "text" && step.placeholder) {
     text += `\n\n💬 _${step.placeholder}_`;
   }
 
-  // انتخاب کیبورد مناسب
   const kb = step.type === "choice" ? stepChoiceKB(idx) : stepTextKB(idx);
 
-  // ارسال پیام
   if (ctx.callbackQuery) {
     try {
       await ctx.editMessageText(text, {
@@ -138,7 +129,6 @@ export async function handleStartConsultation(ctx) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
-  // بازیابی پاسخ‌های موجود
   let existing = {};
   if (user.tempAnswers) {
     try {
@@ -148,19 +138,17 @@ export async function handleStartConsultation(ctx) {
     }
   }
 
-  // اگر کد ملی و شماره تماس قبلاً ثبت شده → رد شدن
+  // اگر کد ملی و شماره قبلاً ثبت شده → رد شدن
   let startIdx = 0;
-
   if (user.nationalId && user.phone) {
     existing.national_id = user.nationalId;
     existing.phone = user.phone;
-    startIdx = 2; // از نوع انتخابات شروع
+    startIdx = 2;
   } else if (user.nationalId) {
     existing.national_id = user.nationalId;
-    startIdx = 1; // از شماره تماس شروع
+    startIdx = 1;
   }
 
-  // بروزرسانی وضعیت کاربر
   await updateUser(userId, {
     currentStep: startIdx,
     tempAnswers: JSON.stringify(existing),
@@ -169,7 +157,6 @@ export async function handleStartConsultation(ctx) {
 
   if (ctx.callbackQuery) await ctx.answerCallbackQuery();
 
-  // پیام شروع
   if (startIdx === 0) {
     await ctx.reply(
       "🚀 *تحلیل آمادگی کاندیداتوری*\n" +
@@ -182,13 +169,11 @@ export async function handleStartConsultation(ctx) {
     );
   } else {
     await ctx.reply(
-      `✅ اطلاعات هویتی شما قبلاً ثبت شده.\n` +
-        `از مرحله ${startIdx + 1} ادامه می‌دهیم...`,
+      `✅ اطلاعات هویتی شما قبلاً ثبت شده.\nاز مرحله ${startIdx + 1} ادامه می‌دهیم...`,
       { parse_mode: "Markdown" }
     );
   }
 
-  // نمایش مرحله اول (یا مرحله‌ای که باید از آن شروع شود)
   await showStep(ctx, userId, startIdx);
 }
 
@@ -199,7 +184,6 @@ export async function handleAnswer(ctx, stepIndex, value) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
-  // بازیابی پاسخ‌ها
   let answers = {};
   try {
     answers = JSON.parse(user.tempAnswers || "{}");
@@ -207,7 +191,6 @@ export async function handleAnswer(ctx, stepIndex, value) {
     answers = {};
   }
 
-  // ذخیره پاسخ جدید
   const step = STEPS[stepIndex];
   if (step) answers[step.id] = value;
 
@@ -218,8 +201,8 @@ export async function handleAnswer(ctx, stepIndex, value) {
 
   await ctx.answerCallbackQuery({ text: `✅ ${step?.title || ""} ثبت شد` });
 
-  // بررسی حالت ویرایش
-  const isEditing = user.currentStep >= 100 && user.currentStep < ST_DONE;
+  // حالت ویرایش → برگشت به خلاصه
+  const isEditing = user.currentStep >= 100 && user.currentStep < DEEP_BASE;
   if (isEditing) {
     await showSummary(ctx, userId, answers);
     return;
@@ -241,38 +224,34 @@ export async function handleTextInput(ctx) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
-  // ─── بررسی: آیا در فاز عمیق هستیم؟ → ارجاع به deep handler ───
+  // ─── اگر در فاز عمیق هستیم → ارجاع به deep handler ───
   if (user.currentStep >= DEEP_BASE && user.currentStep < DEEP_DONE) {
-    return false; // deep_assessment.js هندل می‌کند
+    return false;
   }
 
-  // ─── بررسی: آیا اصلاً در حالت مشاوره هستیم؟ ───
+  // ─── آیا در حالت مشاوره فاز ۱ هستیم؟ ───
   if (
     user.currentStep === undefined ||
     user.currentStep === null ||
     user.currentStep === ST_DONE ||
     user.currentStep === ST_SUMMARY
   ) {
-    return false; // در حالت مشاوره نیست
+    return false;
   }
 
-  // تشخیص شماره مرحله و حالت ویرایش
+  // تشخیص مرحله و حالت ویرایش
   let stepIdx;
   let isEditing = false;
 
   if (user.currentStep >= 100 && user.currentStep < DEEP_BASE) {
-    // حالت ویرایش فاز ۱ (100 + stepIndex)
     stepIdx = user.currentStep - 100;
     isEditing = true;
   } else {
-    // حالت عادی فاز ۱
     stepIdx = user.currentStep;
   }
 
-  // بررسی محدوده
   if (stepIdx < 0 || stepIdx >= TOTAL_STEPS) return false;
 
-  // فقط سؤالات متنی هندل شوند
   const step = STEPS[stepIdx];
   if (step.type !== "text") return false;
 
@@ -282,10 +261,10 @@ export async function handleTextInput(ctx) {
   const v = validateInput(input, step.validation);
   if (!v.ok) {
     await ctx.reply(v.err, { parse_mode: "Markdown" });
-    return true; // هندل شد (خطای اعتبارسنجی)
+    return true;
   }
 
-  // بازیابی و بروزرسانی پاسخ‌ها
+  // ذخیره پاسخ
   let answers = {};
   try {
     answers = JSON.parse(user.tempAnswers || "{}");
@@ -294,25 +273,19 @@ export async function handleTextInput(ctx) {
   }
   answers[step.id] = v.val;
 
-  // داده‌های بروزرسانی
   const updateData = {
     tempAnswers: JSON.stringify(answers),
     lastInteraction: new Date().toISOString(),
   };
 
-  // ذخیره فیلدهای هویتی جداگانه در کالکشن users
-  if (step.id === "national_id") {
-    updateData.nationalId = v.val;
-  } else if (step.id === "phone") {
-    updateData.phone = v.val;
-  }
+  // ذخیره فیلدهای هویتی جداگانه
+  if (step.id === "national_id") updateData.nationalId = v.val;
+  else if (step.id === "phone") updateData.phone = v.val;
 
   await updateUser(userId, updateData);
 
-  // تایید دریافت
   await ctx.reply(`✅ *${step.title}* ثبت شد.`, { parse_mode: "Markdown" });
 
-  // تصمیم: ویرایش → خلاصه | عادی → مرحله بعد
   if (isEditing) {
     await showSummary(ctx, userId, answers);
   } else {
@@ -324,11 +297,11 @@ export async function handleTextInput(ctx) {
     }
   }
 
-  return true; // هندل شد
+  return true;
 }
 
 // ═══════════════════════════════════════════
-//  نمایش خلاصه پاسخ‌ها (قبل از تایید)
+//  نمایش خلاصه
 // ═══════════════════════════════════════════
 async function showSummary(ctx, userId, answers) {
   await updateUser(userId, { currentStep: ST_SUMMARY });
@@ -343,11 +316,9 @@ async function showSummary(ctx, userId, answers) {
 
     if (ans) {
       if (step.type === "choice") {
-        // نمایش لیبل گزینه
         const opt = step.options.find((o) => o.value === ans);
         display = opt ? opt.label : ans;
       } else {
-        // ماسک اطلاعات حساس
         if (step.id === "national_id") {
           display = ans.substring(0, 3) + "****" + ans.substring(7);
         } else if (step.id === "phone") {
@@ -382,22 +353,17 @@ async function showSummary(ctx, userId, answers) {
 }
 
 // ═══════════════════════════════════════════
-//  ویرایش یک مرحله (edit:stepIndex)
+//  ویرایش مرحله
 // ═══════════════════════════════════════════
 export async function handleEdit(ctx, stepIndex) {
   const userId = String(ctx.from.id);
-
-  // ذخیره حالت ویرایش: 100 + stepIndex
   await updateUser(userId, { currentStep: 100 + stepIndex });
-
   if (ctx.callbackQuery) await ctx.answerCallbackQuery();
-
-  // نمایش مرحله برای ویرایش
   await showStep(ctx, userId, stepIndex);
 }
 
 // ═══════════════════════════════════════════
-//  بازگشت به مرحله قبل (back:stepIndex)
+//  بازگشت به مرحله قبل
 // ═══════════════════════════════════════════
 export async function handleBackStep(ctx, stepIndex) {
   const userId = String(ctx.from.id);
@@ -412,7 +378,6 @@ export async function handleConfirm(ctx) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, ctx.from);
 
-  // بازیابی پاسخ‌ها
   let answers = {};
   try {
     answers = JSON.parse(user.tempAnswers || "{}");
@@ -443,12 +408,12 @@ export async function handleConfirm(ctx) {
     await ctx.answerCallbackQuery({ text: "⏳ در حال تولید گزارش..." });
   }
 
-  // ─── محاسبات ───
+  // محاسبات
   const score = calcScore(answers);
   const risk = getRiskLevel(score);
   const report = generateReport(score, answers);
 
-  // ─── ذخیره در consultations ───
+  // ذخیره در consultations
   try {
     await saveConsultation(userId, {
       electionType: answers.election_type || "",
@@ -464,7 +429,7 @@ export async function handleConfirm(ctx) {
     console.error("خطا در ذخیره مشاوره:", e.message);
   }
 
-  // ─── بروزرسانی leads_status ───
+  // بروزرسانی leads_status
   try {
     await upsertLead(userId, {
       leadTemperature: score >= 75 ? "hot" : score >= 50 ? "warm" : "cold",
@@ -474,13 +439,13 @@ export async function handleConfirm(ctx) {
     console.error("خطا در بروزرسانی لید:", e.message);
   }
 
-  // ─── بروزرسانی وضعیت کاربر ───
+  // بروزرسانی وضعیت
   await updateUser(userId, {
     currentStep: ST_DONE,
     lastInteraction: new Date().toISOString(),
   });
 
-  // ─── ارسال گزارش ───
+  // ارسال گزارش
   const kb = afterReportKB();
 
   try {
@@ -497,12 +462,12 @@ export async function handleConfirm(ctx) {
 }
 
 // ═══════════════════════════════════════════
-//  انصراف از مشاوره
+//  انصراف
 // ═══════════════════════════════════════════
 export async function handleCancelConsultation(ctx) {
   const userId = String(ctx.from.id);
 
-  // ریست وضعیت (ولی پاسخ‌های هویتی حفظ شوند)
+  // حفظ پاسخ‌های عمیق اگر وجود دارند
   const user = await getOrCreateUser(userId, ctx.from);
   let temp = {};
   try {
@@ -511,7 +476,6 @@ export async function handleCancelConsultation(ctx) {
     temp = {};
   }
 
-  // حفظ پاسخ‌های عمیق اگر وجود دارند
   const preserved = {};
   if (temp._deep) preserved._deep = temp._deep;
 
@@ -527,8 +491,7 @@ export async function handleCancelConsultation(ctx) {
 
   const kb = mainMenuKB();
   const msg =
-    "❌ *مشاوره لغو شد.*\n\n" +
-    "📌 هر زمان خواستید دوباره از منوی اصلی شروع کنید.";
+    "❌ *مشاوره لغو شد.*\n\n📌 هر زمان خواستید دوباره از منوی اصلی شروع کنید.";
 
   try {
     await ctx.editMessageText(msg, {
