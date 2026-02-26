@@ -1,17 +1,20 @@
 // src/utils/db.js
-// ─── توابع CRUD با node-appwrite ───
-// سازگار با دیتابیس فعلی: users / consultations / leads_status
-// فیلدهای جدید اضافه‌شده: nationalId, phone, fullName
+// ─── توابع CRUD — سازگار با ساختار واقعی دیتابیس ───
+// کالکشن‌ها: users, consultations, leads_status
+// فیلدهای جدید: nationalId (string 10), phone (string 11)
 
 import { Client, Databases, Query, ID } from "node-appwrite";
 
-let client, databases, dbId;
-let usersCol, consultationsCol, leadsCol;
+let client;
+let databases;
+let dbId;
+let usersCol;
+let consultCol;
+let leadsCol;
 
-// ═══════════════════════════════════════
-//  مقداردهی اولیه
-// ═══════════════════════════════════════
-
+/**
+ * مقداردهی اولیه
+ */
 export function initDB(env) {
   client = new Client()
     .setEndpoint(env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1")
@@ -22,36 +25,36 @@ export function initDB(env) {
 
   dbId = env.APPWRITE_DB_ID || "kandidatory_db";
   usersCol = env.APPWRITE_USERS_COLLECTION || "users";
-  consultationsCol = env.APPWRITE_CONSULTATIONS_COLLECTION || "consultations";
+  consultCol = env.APPWRITE_CONSULTATIONS_COLLECTION || "consultations";
   leadsCol = env.APPWRITE_LEADS_COLLECTION || "leads_status";
 }
 
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 //  Users
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 
 /**
  * دریافت یا ایجاد کاربر
- * فیلد userId = تلگرام آیدی (string)
+ * ستون‌ها: userId, username, firstName, lastName, currentStep, tempAnswers,
+ *          nationalId, phone, role, createdAt, lastInteraction
  */
 export async function getOrCreateUser(telegramId, fromData = {}) {
   try {
     const res = await databases.listDocuments(dbId, usersCol, [
-      Query.equal("userId", telegramId),
+      Query.equal("userId", String(telegramId)),
       Query.limit(1),
     ]);
 
     if (res.documents.length > 0) return res.documents[0];
 
-    // ایجاد کاربر جدید
+    // ایجاد جدید
     const doc = await databases.createDocument(dbId, usersCol, ID.unique(), {
-      userId: telegramId,
+      userId: String(telegramId),
       username: fromData.username || "",
       firstName: fromData.first_name || "",
       lastName: fromData.last_name || "",
       nationalId: "",
       phone: "",
-      fullName: "",
       currentStep: null,
       tempAnswers: "{}",
       role: "user",
@@ -60,9 +63,9 @@ export async function getOrCreateUser(telegramId, fromData = {}) {
     });
 
     return doc;
-  } catch (err) {
-    console.error("خطا getOrCreateUser:", err.message);
-    throw err;
+  } catch (e) {
+    console.error("خطا در getOrCreateUser:", e.message);
+    throw e;
   }
 }
 
@@ -72,150 +75,159 @@ export async function getOrCreateUser(telegramId, fromData = {}) {
 export async function updateUser(telegramId, data) {
   try {
     const res = await databases.listDocuments(dbId, usersCol, [
-      Query.equal("userId", telegramId),
+      Query.equal("userId", String(telegramId)),
       Query.limit(1),
     ]);
 
-    if (res.documents.length === 0) throw new Error(`کاربر ${telegramId} یافت نشد`);
+    if (res.documents.length === 0)
+      throw new Error(`کاربر ${telegramId} یافت نشد`);
 
     await databases.updateDocument(dbId, usersCol, res.documents[0].$id, data);
-  } catch (err) {
-    console.error("خطا updateUser:", err.message);
-    throw err;
+  } catch (e) {
+    console.error("خطا در updateUser:", e.message);
+    throw e;
   }
 }
 
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 //  Consultations
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
 
 /**
  * ذخیره مشاوره جدید
- * سازگار با ستون‌های موجود: userId, electionType, region, answers, score, riskLevel, finalReport, fullName, status
+ * ستون‌ها: userId, electionType, region, answers, score, riskLevel,
+ *          finalReport, fullName, status, adminNotes, analysisReport
  */
 export async function saveConsultation(telegramId, data) {
   try {
-    await databases.createDocument(dbId, consultationsCol, ID.unique(), {
-      userId: telegramId,
+    await databases.createDocument(dbId, consultCol, ID.unique(), {
+      userId: String(telegramId),
       electionType: data.electionType || "",
       region: data.region || "",
-      answers: data.answers || "",
+      answers: data.answers || "{}",
       score: data.score || 0,
-      riskLevel: data.riskLevel || "medium",
+      riskLevel: data.riskLevel || "low",
       finalReport: data.finalReport || "",
       fullName: data.fullName || "",
       status: data.status || "free",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      adminNotes: "",
+      analysisReport: "",
     });
-  } catch (err) {
-    console.error("خطا saveConsultation:", err.message);
-    throw err;
+  } catch (e) {
+    console.error("خطا در saveConsultation:", e.message);
+    throw e;
   }
 }
 
-// ═══════════════════════════════════════
-//  Leads
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
+//  Leads Status
+// ═══════════════════════════════════════════
 
 /**
  * ایجاد یا بروزرسانی لید
- * سازگار با ستون‌های leads_status: userId, leadTemperature, purchasedPlan, notes, ...
+ * ستون‌ها: userId, leadTemperature, purchasedPlan, lastFollowUp, notes
  */
 export async function upsertLead(telegramId, data) {
   try {
     const res = await databases.listDocuments(dbId, leadsCol, [
-      Query.equal("userId", telegramId),
+      Query.equal("userId", String(telegramId)),
       Query.limit(1),
     ]);
 
     if (res.documents.length > 0) {
-      await databases.updateDocument(dbId, leadsCol, res.documents[0].$id, {
-        ...data,
-        updatedAt: new Date().toISOString(),
-      });
+      // بروزرسانی
+      const existing = res.documents[0];
+      const updateData = {};
+
+      if (data.leadTemperature) updateData.leadTemperature = data.leadTemperature;
+      if (data.purchasedPlan) updateData.purchasedPlan = data.purchasedPlan;
+      if (data.notes) {
+        // اضافه کردن به یادداشت‌های قبلی
+        const prev = existing.notes || "";
+        updateData.notes = prev
+          ? `${prev}\n---\n${data.notes}`
+          : data.notes;
+      }
+      updateData.lastFollowUp = new Date().toISOString();
+
+      await databases.updateDocument(dbId, leadsCol, existing.$id, updateData);
     } else {
+      // ایجاد جدید
       await databases.createDocument(dbId, leadsCol, ID.unique(), {
-        userId: telegramId,
+        userId: String(telegramId),
         leadTemperature: data.leadTemperature || "cold",
         purchasedPlan: data.purchasedPlan || "none",
+        lastFollowUp: new Date().toISOString(),
         notes: data.notes || "",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       });
     }
-  } catch (err) {
-    console.error("خطا upsertLead:", err.message);
-    throw err;
+  } catch (e) {
+    console.error("خطا در upsertLead:", e.message);
+    throw e;
   }
 }
 
-// ═══════════════════════════════════════
-//  جستجو (پنل ادمین)
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════
+//  توابع جستجو (برای پنل ادمین)
+// ═══════════════════════════════════════════
 
-/** جستجو با کد ملی */
-export async function findUserByNationalId(nationalId) {
+/**
+ * جستجو با کد ملی
+ */
+export async function findByNationalId(nationalId) {
   try {
     const res = await databases.listDocuments(dbId, usersCol, [
       Query.equal("nationalId", nationalId),
-      Query.limit(1),
+      Query.limit(5),
     ]);
-    return res.documents.length > 0 ? res.documents[0] : null;
-  } catch (err) {
-    console.error("خطا findUserByNationalId:", err.message);
-    return null;
+    return res.documents;
+  } catch (e) {
+    console.error("خطا در findByNationalId:", e.message);
+    return [];
   }
 }
 
-/** جستجو با شماره تماس */
-export async function findUserByPhone(phone) {
+/**
+ * جستجو با شماره تماس
+ */
+export async function findByPhone(phone) {
   try {
     const res = await databases.listDocuments(dbId, usersCol, [
       Query.equal("phone", phone),
-      Query.limit(1),
+      Query.limit(5),
     ]);
-    return res.documents.length > 0 ? res.documents[0] : null;
-  } catch (err) {
-    console.error("خطا findUserByPhone:", err.message);
-    return null;
+    return res.documents;
+  } catch (e) {
+    console.error("خطا در findByPhone:", e.message);
+    return [];
   }
 }
 
-/** دریافت لیست لیدها */
-export async function listLeads(limit = 25, offset = 0) {
-  try {
-    return await databases.listDocuments(dbId, leadsCol, [
-      Query.orderDesc("$createdAt"),
-      Query.limit(limit),
-      Query.offset(offset),
-    ]);
-  } catch (err) {
-    console.error("خطا listLeads:", err.message);
-    return { documents: [], total: 0 };
-  }
-}
-
-/** دریافت مشاوره‌های یک کاربر */
+/**
+ * دریافت مشاوره‌های یک کاربر
+ */
 export async function getUserConsultations(telegramId) {
   try {
-    return await databases.listDocuments(dbId, consultationsCol, [
-      Query.equal("userId", telegramId),
+    const res = await databases.listDocuments(dbId, consultCol, [
+      Query.equal("userId", String(telegramId)),
       Query.orderDesc("$createdAt"),
       Query.limit(10),
     ]);
-  } catch (err) {
-    console.error("خطا getUserConsultations:", err.message);
-    return { documents: [], total: 0 };
+    return res.documents;
+  } catch (e) {
+    console.error("خطا در getUserConsultations:", e.message);
+    return [];
   }
 }
 
-/** آمار کلی */
+/**
+ * آمار کلی
+ */
 export async function getStats() {
   try {
     const [u, c, l] = await Promise.all([
       databases.listDocuments(dbId, usersCol, [Query.limit(1)]),
-      databases.listDocuments(dbId, consultationsCol, [Query.limit(1)]),
+      databases.listDocuments(dbId, consultCol, [Query.limit(1)]),
       databases.listDocuments(dbId, leadsCol, [Query.limit(1)]),
     ]);
     return {
@@ -223,8 +235,24 @@ export async function getStats() {
       totalConsultations: c.total,
       totalLeads: l.total,
     };
-  } catch (err) {
-    console.error("خطا getStats:", err.message);
+  } catch (e) {
+    console.error("خطا در getStats:", e.message);
     return { totalUsers: 0, totalConsultations: 0, totalLeads: 0 };
+  }
+}
+
+/**
+ * لیست آخرین لیدها
+ */
+export async function listLeads(limit = 10, offset = 0) {
+  try {
+    return await databases.listDocuments(dbId, leadsCol, [
+      Query.orderDesc("$createdAt"),
+      Query.limit(limit),
+      Query.offset(offset),
+    ]);
+  } catch (e) {
+    console.error("خطا در listLeads:", e.message);
+    return { documents: [], total: 0 };
   }
 }
