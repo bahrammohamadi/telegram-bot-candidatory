@@ -226,3 +226,48 @@ export async function upsertLead(userId, data) {
     }
   }
 }
+
+// ============================================================
+// 🔍 جستجو در مشاوره ها
+// ============================================================
+export async function searchConsultations(query) {
+  try {
+    // جستجو در fullName
+    const byName = await _databases.listDocuments(
+      _config.dbId,
+      _config.consult,
+      [
+        Query.contains("fullName", query),
+        Query.orderDesc("$createdAt"),
+        Query.limit(10),
+      ]
+    );
+
+    // جستجو در region
+    const byRegion = await _databases.listDocuments(
+      _config.dbId,
+      _config.consult,
+      [
+        Query.contains("region", query),
+        Query.orderDesc("$createdAt"),
+        Query.limit(10),
+      ]
+    );
+
+    // ترکیب و حذف تکراری
+    const allDocs = [...byName.documents, ...byRegion.documents];
+    const unique = [];
+    const seen = new Set();
+    for (const doc of allDocs) {
+      if (!seen.has(doc.$id)) {
+        seen.add(doc.$id);
+        unique.push(doc);
+      }
+    }
+
+    return unique;
+  } catch (e) {
+    console.error("searchConsultations:", e.message);
+    return [];
+  }
+}
