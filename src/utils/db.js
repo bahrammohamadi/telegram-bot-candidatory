@@ -1,7 +1,9 @@
 // src/utils/db.js
-// ─── توابع CRUD — سازگار با ساختار واقعی دیتابیس ───
-// کالکشن‌ها: users, consultations, leads_status
-// فیلدهای جدید: nationalId (string 10), phone (string 11)
+// ═══════════════════════════════════════════════════════════════
+//  توابع CRUD — سازگار با ساختار واقعی دیتابیس Appwrite
+//  کالکشن‌ها: users, consultations, leads_status
+//  فیلدهای جدید در users: nationalId (string 10), phone (string 11)
+// ═══════════════════════════════════════════════════════════════
 
 import { Client, Databases, Query, ID } from "node-appwrite";
 
@@ -13,7 +15,7 @@ let consultCol;
 let leadsCol;
 
 /**
- * مقداردهی اولیه
+ * مقداردهی اولیه — باید در ابتدای هر execution فراخوانی شود
  */
 export function initDB(env) {
   client = new Client()
@@ -34,9 +36,7 @@ export function initDB(env) {
 // ═══════════════════════════════════════════
 
 /**
- * دریافت یا ایجاد کاربر
- * ستون‌ها: userId, username, firstName, lastName, currentStep, tempAnswers,
- *          nationalId, phone, role, createdAt, lastInteraction
+ * دریافت یا ایجاد کاربر بر اساس telegramId
  */
 export async function getOrCreateUser(telegramId, fromData = {}) {
   try {
@@ -47,7 +47,7 @@ export async function getOrCreateUser(telegramId, fromData = {}) {
 
     if (res.documents.length > 0) return res.documents[0];
 
-    // ایجاد جدید
+    // ایجاد کاربر جدید
     const doc = await databases.createDocument(dbId, usersCol, ID.unique(), {
       userId: String(telegramId),
       username: fromData.username || "",
@@ -79,8 +79,9 @@ export async function updateUser(telegramId, data) {
       Query.limit(1),
     ]);
 
-    if (res.documents.length === 0)
+    if (res.documents.length === 0) {
       throw new Error(`کاربر ${telegramId} یافت نشد`);
+    }
 
     await databases.updateDocument(dbId, usersCol, res.documents[0].$id, data);
   } catch (e) {
@@ -95,8 +96,6 @@ export async function updateUser(telegramId, data) {
 
 /**
  * ذخیره مشاوره جدید
- * ستون‌ها: userId, electionType, region, answers, score, riskLevel,
- *          finalReport, fullName, status, adminNotes, analysisReport
  */
 export async function saveConsultation(telegramId, data) {
   try {
@@ -125,7 +124,6 @@ export async function saveConsultation(telegramId, data) {
 
 /**
  * ایجاد یا بروزرسانی لید
- * ستون‌ها: userId, leadTemperature, purchasedPlan, lastFollowUp, notes
  */
 export async function upsertLead(telegramId, data) {
   try {
@@ -135,24 +133,19 @@ export async function upsertLead(telegramId, data) {
     ]);
 
     if (res.documents.length > 0) {
-      // بروزرسانی
       const existing = res.documents[0];
       const updateData = {};
 
       if (data.leadTemperature) updateData.leadTemperature = data.leadTemperature;
       if (data.purchasedPlan) updateData.purchasedPlan = data.purchasedPlan;
       if (data.notes) {
-        // اضافه کردن به یادداشت‌های قبلی
         const prev = existing.notes || "";
-        updateData.notes = prev
-          ? `${prev}\n---\n${data.notes}`
-          : data.notes;
+        updateData.notes = prev ? `${prev}\n---\n${data.notes}` : data.notes;
       }
       updateData.lastFollowUp = new Date().toISOString();
 
       await databases.updateDocument(dbId, leadsCol, existing.$id, updateData);
     } else {
-      // ایجاد جدید
       await databases.createDocument(dbId, leadsCol, ID.unique(), {
         userId: String(telegramId),
         leadTemperature: data.leadTemperature || "cold",
@@ -168,7 +161,7 @@ export async function upsertLead(telegramId, data) {
 }
 
 // ═══════════════════════════════════════════
-//  توابع جستجو (برای پنل ادمین)
+//  توابع جستجو (پنل ادمین)
 // ═══════════════════════════════════════════
 
 /**
