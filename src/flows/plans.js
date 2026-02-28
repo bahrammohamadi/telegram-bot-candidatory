@@ -1,48 +1,232 @@
-// src/flows/plans.js — CommonJS
+// src/flows/plans.js
+// ─── نمایش و مدیریت بسته‌های خدماتی — فروش‌محور ───
+// نسخه اصلاح‌شده: ۱۴۰۴/۱۲/۰۸ — متن‌های متقاعدکننده‌تر + lastInteractionNew + UX بهتر
 
 const { InlineKeyboard } = require("grammy");
-const { upsertLead } = require("../utils/db.js");
+const { upsertLead, updateUser } = require("../utils/db.js"); // updateUser برای lastInteractionNew
 
+// لیست بسته‌ها — حرفه‌ای، با حس فوریت و ارزش
 const PLANS = [
-  { id: "starter", emoji: "🌱", name: "بسته راه‌اندازی", subtitle: "مناسب تازه‌واردها", price: "۲,۸۰۰,۰۰۰ تومان", badge: "", features: ["✅ گزارش PDF ۱۵+ صفحه", "✅ مشاوره تلفنی ۴۵ دقیقه", "✅ راهنمای ثبت‌نام", "✅ چک‌لیست ۳۰ اقدام", "✅ گروه پشتیبانی"], cta: "📞 تماس بگیرید" },
-  { id: "professional", emoji: "⭐", name: "بسته حرفه‌ای", subtitle: "🔥 پرفروش‌ترین", price: "۸,۵۰۰,۰۰۰ تومان", badge: "🔥", features: ["✅ تمام خدمات راه‌اندازی", "✅ استراتژی کمپین", "✅ ۳ جلسه مشاوره ۶۰ دقیقه", "✅ طراحی شعار", "✅ برنامه تبلیغات", "✅ آموزش فن بیان", "✅ تحلیل رقبا"], cta: "📞 رزرو — ظرفیت محدود" },
-  { id: "vip", emoji: "💎", name: "بسته VIP", subtitle: "مدیریت کامل کمپین", price: "۲۸,۰۰۰,۰۰۰ تومان", badge: "💎", features: ["✅ تمام خدمات حرفه‌ای", "✅ مدیر کمپین اختصاصی", "✅ تیم اجرایی", "✅ محتوای تبلیغاتی", "✅ مدیریت شبکه‌های اجتماعی", "✅ مدیریت بحران", "✅ پشتیبانی ۲۴/۷"], cta: "📞 جلسه حضوری" },
-  { id: "single_session", emoji: "🎓", name: "مشاوره تکی", subtitle: "یک جلسه تخصصی", price: "۱,۵۰۰,۰۰۰ تومان", badge: "", features: ["✅ جلسه ۶۰ دقیقه", "✅ تحلیل وضعیت", "✅ پاسخ به سؤالات", "✅ نقشه راه PDF"], cta: "📞 رزرو جلسه" },
+  {
+    id: "starter",
+    emoji: "🌱",
+    name: "بسته راه‌اندازی",
+    subtitle: "ایده‌آل برای تازه‌واردان",
+    price: "۲,۸۰۰,۰۰۰ تومان",
+    badge: "",
+    features: [
+      "گزارش PDF جامع ۱۵+ صفحه",
+      "مشاوره تلفنی اختصاصی ۴۵ دقیقه",
+      "راهنمای گام‌به‌گام ثبت‌نام",
+      "چک‌لیست ۳۰ اقدام فوری",
+      "دسترسی به گروه پشتیبانی VIP",
+    ],
+    cta: "📞 همین حالا تماس بگیرید",
+  },
+  {
+    id: "professional",
+    emoji: "⭐",
+    name: "بسته حرفه‌ای",
+    subtitle: "🔥 پرفروش‌ترین بسته",
+    price: "۸,۵۰۰,۰۰۰ تومان",
+    badge: "🔥",
+    features: [
+      "تمام خدمات بسته راه‌اندازی",
+      "استراتژی اختصاصی کمپین",
+      "۳ جلسه مشاوره ۶۰ دقیقه‌ای",
+      "طراحی شعار و پیام انتخاباتی",
+      "برنامه تبلیغاتی ۹۰ روزه",
+      "آموزش فن بیان و سخنرانی",
+      "تحلیل رقبا و نقاط ضعف",
+    ],
+    cta: "📞 رزرو فوری — ظرفیت محدود",
+  },
+  {
+    id: "vip",
+    emoji: "💎",
+    name: "بسته VIP",
+    subtitle: "مدیریت کامل کمپین شما",
+    price: "۲۸,۰۰۰,۰۰۰ تومان",
+    badge: "💎",
+    features: [
+      "تمام خدمات بسته حرفه‌ای",
+      "مدیر کمپین اختصاصی",
+      "تیم اجرایی و عملیاتی",
+      "تولید محتوای تبلیغاتی",
+      "مدیریت شبکه‌های اجتماعی",
+      "مدیریت بحران و شایعه",
+      "پشتیبانی ۲۴/۷ اولویت‌دار",
+    ],
+    cta: "📞 جلسه حضوری هماهنگ کنید",
+  },
+  {
+    id: "single_session",
+    emoji: "🎓",
+    name: "مشاوره تکی",
+    subtitle: "یک جلسه تخصصی عمیق",
+    price: "۱,۵۰۰,۰۰۰ تومان",
+    badge: "",
+    features: [
+      "جلسه ۶۰ دقیقه‌ای اختصاصی",
+      "تحلیل وضعیت فعلی شما",
+      "پاسخ به تمام سؤالات",
+      "نقشه راه شخصی PDF",
+    ],
+    cta: "📞 رزرو سریع جلسه",
+  },
 ];
 
+/**
+ * کیبورد لیست بسته‌ها
+ */
 function plansListKB() {
   const kb = new InlineKeyboard();
-  for (const p of PLANS) { kb.text(`${p.badge ? p.badge + " " : ""}${p.emoji} ${p.name} — ${p.price}`, `plan:${p.id}`).row(); }
-  kb.text("🔙 منو", "menu").row();
+
+  for (const p of PLANS) {
+    const badge = p.badge ? `${p.badge} ` : "";
+    kb.text(`${badge}${p.emoji} ${p.name} — ${p.price}`, `plan:${p.id}`).row();
+  }
+
+  kb.text("🔙 بازگشت به منو", "menu").row();
   return kb;
 }
 
+/**
+ * نمایش صفحه اصلی بسته‌ها
+ */
 async function handleShowPlans(ctx) {
-  const t = "💼 *خدمات تخصصی*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 مشاوره تخصصی شانس موفقیت را ۳ برابر می‌کند.\n\n─── بسته انتخاب کنید: ───";
+  const userId = String(ctx.from.id);
+
+  // آپدیت آخرین تعامل
+  await updateUser(userId, {
+    lastInteractionNew: new Date().toISOString().slice(0, 19),
+  });
+
+  let t = "💼 *بسته‌های تخصصی کاندیداتوری هوشمند*\n";
+  t += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+  t += "📌 مشاوره و استراتژی حرفه‌ای شانس موفقیت شما را چند برابر می‌کند.\n";
+  t += "هر بسته دقیقاً متناسب با مرحله آمادگی شما طراحی شده است.\n\n";
+  t += "─── بسته مناسب خود را انتخاب کنید ───";
+
   const kb = plansListKB();
-  if (ctx.callbackQuery) { try { await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb }); } catch { await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb }); } await ctx.answerCallbackQuery(); }
-  else await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+
+  try {
+    if (ctx.callbackQuery) {
+      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb });
+    } else {
+      await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+    }
+    await ctx.answerCallbackQuery();
+  } catch (e) {
+    console.error("خطا در نمایش بسته‌ها:", e.message);
+    await ctx.reply("⚠️ خطایی رخ داد. لطفاً دوباره امتحان کنید.");
+  }
 }
 
+/**
+ * نمایش جزئیات یک بسته خاص
+ */
 async function handleSelectPlan(ctx, planId) {
-  const plan = PLANS.find((p) => p.id === planId);
-  if (!plan) { await ctx.answerCallbackQuery({ text: "❌ یافت نشد" }); return; }
-  let t = `${plan.emoji} *${plan.name}*\n_${plan.subtitle}_\n━━━━━━━━━━━━━━━━━━━\n💰 *${plan.price}*\n\n📋 *شامل:*\n`;
-  for (const f of plan.features) t += `  ${f}\n`;
-  t += `\n🎯 *${plan.cta}*\n📱 ۰۹۱۲-XXX-XXXX | 💬 @candidatory\\_support`;
-  const kb = new InlineKeyboard().text("📞 ثبت درخواست", `plan_request:${planId}`).row().text("📋 همه بسته‌ها", "show_plans").row().text("🔙 منو", "menu").row();
-  try { await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb }); } catch { await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb }); }
-  await ctx.answerCallbackQuery();
+  const userId = String(ctx.from.id);
+  const plan = PLANS.find(p => p.id === planId);
+
+  if (!plan) {
+    await ctx.answerCallbackQuery({ text: "❌ بسته موردنظر یافت نشد" });
+    return;
+  }
+
+  // آپدیت آخرین تعامل
+  await updateUser(userId, {
+    lastInteractionNew: new Date().toISOString().slice(0, 19),
+  });
+
+  let t = `${plan.emoji} *${plan.name}*\n`;
+  t += `_${plan.subtitle}_ — ${plan.price}\n`;
+  t += "━━━━━━━━━━━━━━━━━━━\n\n";
+  t += "📋 *این بسته شامل:*\n\n";
+
+  for (const f of plan.features) {
+    t += `${f}\n`;
+  }
+
+  t += "\n🎯 *اقدام بعدی:*\n";
+  t += `👉 ${plan.cta}\n`;
+  t += "📱 ۰۹۱۲-XXX-XXXX | 💬 @candidatory_support";
+
+  const kb = new InlineKeyboard()
+    .text("📞 ثبت درخواست این بسته", `plan_request:${planId}`).row()
+    .text("📋 مشاهده همه بسته‌ها", "show_plans").row()
+    .text("🔙 بازگشت به منو", "menu").row();
+
+  try {
+    if (ctx.callbackQuery) {
+      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb });
+    } else {
+      await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+    }
+    await ctx.answerCallbackQuery();
+  } catch (e) {
+    console.error("خطا در نمایش جزئیات بسته:", e.message);
+    await ctx.reply("⚠️ خطایی رخ داد. لطفاً دوباره امتحان کنید.");
+  }
 }
 
+/**
+ * ثبت درخواست کاربر برای بسته
+ */
 async function handlePlanRequest(ctx, planId) {
-  const plan = PLANS.find((p) => p.id === planId);
-  if (!plan) { await ctx.answerCallbackQuery({ text: "❌ یافت نشد" }); return; }
-  try { await upsertLead(String(ctx.from.id), { purchasedPlan: plan.id, leadTemperature: "hot", notes: `علاقه‌مند به «${plan.name}»` }); } catch (e) { console.error(e.message); }
-  const t = `✅ *درخواست «${plan.name}» ثبت شد!*\n\n📞 کارشناسان تماس خواهند گرفت.\n💬 @candidatory\\_support`;
-  const kb = new InlineKeyboard().text("📋 بسته‌ها", "show_plans").row().text("🔙 منو", "menu").row();
-  try { await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb }); } catch { await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb }); }
-  await ctx.answerCallbackQuery({ text: `✅ «${plan.name}» ثبت شد!`, show_alert: true });
+  const userId = String(ctx.from.id);
+  const plan = PLANS.find(p => p.id === planId);
+
+  if (!plan) {
+    await ctx.answerCallbackQuery({ text: "❌ بسته موردنظر یافت نشد" });
+    return;
+  }
+
+  // آپدیت آخرین تعامل
+  await updateUser(userId, {
+    lastInteractionNew: new Date().toISOString().slice(0, 19),
+  });
+
+  // ثبت علاقه‌مندی در لید
+  try {
+    await upsertLead(userId, {
+      purchasedPlan: plan.id,
+      leadTemperature: "hot",
+      notes: `درخواست بسته: «${plan.name}» — ${plan.price} — ${new Date().toLocaleString("fa-IR")}`,
+    });
+  } catch (e) {
+    console.error("خطا در ثبت درخواست بسته:", e.message);
+  }
+
+  let t = `✅ *درخواست شما برای «${plan.name}» با موفقیت ثبت شد!*\n\n`;
+  t += "📞 کارشناسان ما در اولین فرصت با شما تماس خواهند گرفت.\n";
+  t += "💬 در صورت نیاز سریع: @candidatory_support\n\n";
+  t += "ممنون از اعتمادتون! 🚀";
+
+  const kb = new InlineKeyboard()
+    .text("📋 مشاهده بسته‌ها", "show_plans").row()
+    .text("🔙 بازگشت به منو", "menu").row();
+
+  try {
+    if (ctx.callbackQuery) {
+      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: kb });
+    } else {
+      await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+    }
+
+    await ctx.answerCallbackQuery({
+      text: `✅ درخواست «${plan.name}» ثبت شد!`,
+      show_alert: true,
+    });
+  } catch (e) {
+    console.error("خطا در نمایش تأیید درخواست:", e.message);
+    await ctx.reply("✅ درخواست ثبت شد. کارشناسان تماس می‌گیرند.");
+  }
 }
 
-module.exports = { handleShowPlans, handleSelectPlan, handlePlanRequest };
+module.exports = {
+  handleShowPlans,
+  handleSelectPlan,
+  handlePlanRequest,
+};
