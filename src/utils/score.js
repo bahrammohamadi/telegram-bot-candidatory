@@ -1,7 +1,6 @@
-// src/utils/score.js — CommonJS
-// ═══════════════════════════════════════════════════════════════
-//  سیستم امتیازدهی، تحلیل ابعاد و تولید گزارش
-// ═══════════════════════════════════════════════════════════════
+// src/utils/score.js
+// ─── سیستم امتیازدهی، تحلیل ابعاد و تولید گزارش حرفه‌ای ───
+// نسخه اصلاح‌شده: ۱۴۰۴/۱۲/۰۸ — بهبود ساختار گزارش + تاریخ دقیق فارسی + خوانایی بهتر
 
 const {
   STEPS,
@@ -10,31 +9,30 @@ const {
 } = require("../constants/questions.js");
 
 /**
- * محاسبه امتیاز کل
+ * محاسبه امتیاز کل (۰ تا ۱۲۵)
  */
 function calcScore(answers) {
-  var total = 0;
-  for (var i = 0; i < SCORED_STEP_IDS.length; i++) {
-    var stepId = SCORED_STEP_IDS[i];
-    var step = STEPS.find(function (s) {
-      return s.id === stepId;
-    });
+  let total = 0;
+
+  for (const stepId of SCORED_STEP_IDS) {
+    const step = STEPS.find(s => s.id === stepId);
     if (!step || step.type !== "choice") continue;
-    var selected = answers[stepId];
+
+    const selected = answers[stepId];
     if (!selected) continue;
-    var opt = step.options.find(function (o) {
-      return o.value === selected;
-    });
+
+    const opt = step.options.find(o => o.value === selected);
     if (opt) total += opt.score;
   }
+
   return total;
 }
 
 /**
- * سطح ریسک / آمادگی
+ * تعیین سطح ریسک / آمادگی + توصیه‌ها
  */
 function getRiskLevel(score) {
-  var pct = Math.round((score / MAX_SCORE) * 100);
+  const pct = Math.round((score / MAX_SCORE) * 100);
 
   if (pct >= 80) {
     return {
@@ -43,13 +41,13 @@ function getRiskLevel(score) {
       title: "آمادگی عالی",
       riskText: "low",
       description:
-        "شما در وضعیت بسیار مناسبی قرار دارید. با بهینه‌سازی کمپین، شانس بالایی برای موفقیت دارید.",
+        "شما در وضعیت بسیار مناسبی قرار دارید. با اجرای یک کمپین هدفمند، شانس بالایی برای موفقیت خواهید داشت.",
       recommendation:
-        "💡 توصیه: روی استراتژی رسانه‌ای و متمایزسازی پیام تمرکز کنید. نمایندگان شعب را از الان آماده کنید.",
+        "💡 تمرکز اصلی: استراتژی رسانه‌ای، متمایزسازی پیام و آماده‌سازی نمایندگان شعب از همین حالا.",
       actionItems: [
-        "تدوین برنامه تبلیغاتی هفته‌ای",
+        "تدوین برنامه تبلیغاتی هفتگی",
         "آماده‌سازی نمایندگان شعب رأی‌گیری",
-        "تقویت حضور در شبکه‌های اجتماعی",
+        "تقویت حضور هدفمند در شبکه‌های اجتماعی",
       ],
     };
   }
@@ -61,13 +59,13 @@ function getRiskLevel(score) {
       title: "آمادگی خوب",
       riskText: "medium_low",
       description:
-        "پتانسیل خوبی دارید ولی نقاط ضعفی قابل اصلاح وجود دارد. با برنامه‌ریزی می‌توانید رقابتی جدی داشته باشید.",
+        "پتانسیل خوبی دارید، اما چند نقطه ضعف قابل اصلاح وجود دارد. با برنامه‌ریزی دقیق می‌توانید رقابتی جدی باشید.",
       recommendation:
-        "💡 توصیه: نقاط ضعف شناسایی‌شده را با کمک مشاور تخصصی برطرف کنید.",
+        "💡 نقاط ضعف شناسایی‌شده را اولویت‌بندی کنید و با مشاور تخصصی مشورت نمایید.",
       actionItems: [
-        "شناسایی و تقویت نقاط ضعف",
+        "تقویت نقاط ضعف کلیدی",
         "مشاوره تخصصی انتخاباتی",
-        "تشکیل تیم حداقلی",
+        "تشکیل تیم حداقلی فعال",
       ],
     };
   }
@@ -79,13 +77,13 @@ function getRiskLevel(score) {
       title: "آمادگی متوسط",
       riskText: "medium",
       description:
-        "نیاز به تقویت جدی در چند حوزه کلیدی دارید. بدون اقدام فوری، ریسک شکست بالاست.",
+        "نیاز به کار جدی در چند حوزه اصلی دارید. بدون اقدام فوری، ریسک شکست قابل توجه است.",
       recommendation:
-        "💡 توصیه: قبل از ثبت‌نام حتماً مشاوره بگیرید. ساخت تیم و تدوین پیام اولویت اول شماست.",
+        "💡 قبل از ثبت‌نام رسمی حتماً مشاوره بگیرید. ساخت تیم و پیام انتخاباتی اولویت اول است.",
       actionItems: [
         "مشاوره فوری تخصصی",
-        "ساخت تیم انتخاباتی",
-        "تدوین پیام و شعار انتخاباتی",
+        "تشکیل تیم انتخاباتی",
+        "تدوین پیام و شعار متمایز",
         "برنامه‌ریزی بودجه تبلیغات",
       ],
     };
@@ -98,14 +96,14 @@ function getRiskLevel(score) {
       title: "آمادگی ضعیف",
       riskText: "high",
       description:
-        "ریسک شکست بسیار بالاست. شرکت در انتخابات بدون آماده‌سازی اساسی توصیه نمی‌شود.",
+        "ریسک شکست در شرایط فعلی بسیار بالاست. شرکت بدون آماده‌سازی اساسی توصیه نمی‌شود.",
       recommendation:
-        "💡 توصیه: حداقل ۶ ماه قبل از انتخابات شروع به آماده‌سازی کنید. از بسته آموزشی استفاده کنید.",
+        "💡 حداقل ۶ ماه زمان برای آماده‌سازی نیاز است. از بسته‌های آموزشی و مشاوره شروع کنید.",
       actionItems: [
         "ثبت‌نام در دوره آموزشی جامع",
         "شروع فعالیت اجتماعی محلی",
         "ساخت شبکه ارتباطی",
-        "مشاوره با افراد باتجربه",
+        "مشورت با افراد باتجربه انتخاباتی",
       ],
     };
   }
@@ -116,72 +114,59 @@ function getRiskLevel(score) {
     title: "آمادگی بسیار ضعیف",
     riskText: "very_high",
     description:
-      "در شرایط فعلی، کاندیداتوری به هیچ عنوان توصیه نمی‌شود. ابتدا باید زیرساخت‌های لازم را بسازید.",
+      "در وضعیت فعلی، کاندیداتوری اصلاً توصیه نمی‌شود. ابتدا باید زیرساخت‌های پایه را بسازید.",
     recommendation:
-      "💡 توصیه: ابتدا در فعالیت‌های اجتماعی و خیریه محلی حضور فعال پیدا کنید. برای دوره بعدی برنامه‌ریزی کنید.",
+      "💡 ابتدا در فعالیت‌های اجتماعی و خیریه محلی حضور فعال پیدا کنید و برای دوره بعدی برنامه‌ریزی نمایید.",
     actionItems: [
       "حضور فعال در مراسم‌ها و رویدادهای محلی",
-      "عضویت در تشکل‌ها و NGOها",
+      "عضویت و فعالیت در تشکل‌ها و NGOها",
       "ساخت اعتبار اجتماعی طی ۱–۲ سال",
-      "برنامه‌ریزی بلندمدت برای دوره بعدی انتخابات",
+      "برنامه‌ریزی بلندمدت برای انتخابات بعدی",
     ],
   };
 }
 
 /**
- * تحلیل جزئی هر بُعد
+ * تحلیل تفصیلی هر بعد (برای نمایش در گزارش)
  */
 function analyzeDimensions(answers) {
-  var dims = [];
+  const dims = [];
 
-  for (var i = 0; i < SCORED_STEP_IDS.length; i++) {
-    var stepId = SCORED_STEP_IDS[i];
-    var step = STEPS.find(function (s) {
-      return s.id === stepId;
-    });
+  for (const stepId of SCORED_STEP_IDS) {
+    const step = STEPS.find(s => s.id === stepId);
     if (!step || step.type !== "choice") continue;
 
-    var selectedVal = answers[stepId];
-    var stepScore = 0;
-    var selectedLabel = "پاسخ داده نشده";
+    const selectedVal = answers[stepId];
+    let stepScore = 0;
+    let selectedLabel = "پاسخ داده نشده";
 
     if (selectedVal) {
-      var opt = step.options.find(function (o) {
-        return o.value === selectedVal;
-      });
+      const opt = step.options.find(o => o.value === selectedVal);
       if (opt) {
         stepScore = opt.score;
         selectedLabel = opt.label;
       }
     }
 
-    var pct = Math.round((stepScore / 25) * 100);
-    var statusEmoji = "🔴";
-    var statusText = "بحرانی";
+    const pct = Math.round((stepScore / 25) * 100);
 
-    if (pct >= 80) {
-      statusEmoji = "🟢";
-      statusText = "عالی";
-    } else if (pct >= 60) {
-      statusEmoji = "🔵";
-      statusText = "خوب";
-    } else if (pct >= 40) {
-      statusEmoji = "🟡";
-      statusText = "متوسط";
-    } else if (pct >= 20) {
-      statusEmoji = "🟠";
-      statusText = "ضعیف";
-    }
+    let statusEmoji = "🔴";
+    let statusText = "بحرانی";
+
+    if (pct >= 80) { statusEmoji = "🟢"; statusText = "عالی"; }
+    else if (pct >= 60) { statusEmoji = "🔵"; statusText = "خوب"; }
+    else if (pct >= 40) { statusEmoji = "🟡"; statusText = "متوسط"; }
+    else if (pct >= 20) { statusEmoji = "🟠"; statusText = "ضعیف"; }
 
     dims.push({
-      stepId: stepId,
+      stepId,
       title: step.title,
       score: stepScore,
       maxScore: 25,
       percent: pct,
-      statusEmoji: statusEmoji,
-      statusText: statusText,
-      selectedLabel: selectedLabel,
+      statusEmoji,
+      statusText,
+      selectedLabel,
     });
   }
 
@@ -189,133 +174,102 @@ function analyzeDimensions(answers) {
 }
 
 /**
- * نوار پیشرفت بصری
+ * تولید نوار پیشرفت بصری (█ و ░)
  */
-function bar(percent, len) {
-  if (!len) len = 10;
-  var filled = Math.round((percent / 100) * len);
-  var empty = len - filled;
-  var result = "";
-  for (var i = 0; i < filled; i++) result += "█";
-  for (var j = 0; j < empty; j++) result += "░";
-  return result;
+function bar(percent, len = 10) {
+  const filled = Math.round((percent / 100) * len);
+  const empty = len - filled;
+  return "█".repeat(filled) + "░".repeat(empty);
 }
 
 /**
- * تولید گزارش حرفه‌ای
+ * تولید گزارش نهایی کامل و حرفه‌ای
  */
 function generateReport(score, answers) {
-  var pct = Math.round((score / MAX_SCORE) * 100);
-  var risk = getRiskLevel(score);
-  var dims = analyzeDimensions(answers);
+  const pct = Math.round((score / MAX_SCORE) * 100);
+  const risk = getRiskLevel(score);
+  const dims = analyzeDimensions(answers);
 
   // اطلاعات پایه
-  var elecStep = STEPS.find(function (s) {
-    return s.id === "election_type";
-  });
-  var elecOpt = null;
-  if (elecStep) {
-    elecOpt = elecStep.options.find(function (o) {
-      return o.value === answers.election_type;
-    });
-  }
-  var elecLabel = elecOpt ? elecOpt.label : "نامشخص";
-  var constituency = answers.constituency || "نامشخص";
+  const elecStep = STEPS.find(s => s.id === "election_type");
+  const elecOpt = elecStep?.options.find(o => o.value === answers.election_type);
+  const elecLabel = elecOpt?.label || "نامشخص";
 
-  // ─── ساخت گزارش ───
-  var r = "";
+  const constituency = answers.constituency || "نامشخص";
+
+  // تاریخ و ساعت به فارسی
+  const reportDate = new Date().toLocaleString("fa-IR", {
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+
+  let r = "";
 
   r += "📊 *گزارش تحلیل آمادگی کاندیداتوری*\n";
   r += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
   // اطلاعات عمومی
-  r += "📋 *اطلاعات عمومی:*\n";
-  r += "├ 🗳️ انتخابات: " + elecLabel + "\n";
-  r += "├ 📍 حوزه: " + constituency + "\n";
-  r += "└ 📅 تاریخ: " + new Date().toLocaleDateString("fa-IR") + "\n\n";
+  r += "📋 *اطلاعات عمومی*\n";
+  r += `├ 🗳️ نوع انتخابات: ${elecLabel}\n`;
+  r += `├ 📍 حوزه انتخابیه: ${constituency}\n`;
+  r += `└ 📅 تاریخ گزارش: ${reportDate}\n\n`;
 
-  // امتیاز کلی
-  r += "═══════════════════════\n";
-  r += risk.emoji + " *" + risk.title + "*\n";
-  r += "═══════════════════════\n\n";
-  r +=
-    "🏆 امتیاز: *" +
-    score +
-    "* از *" +
-    MAX_SCORE +
-    "* (*" +
-    pct +
-    "%*)\n";
-  r += bar(pct, 15) + " " + pct + "%\n\n";
-  r += "📋 " + risk.description + "\n\n";
+  // امتیاز و سطح کلی
+  r += "═══════════════════════════════════════════\n";
+  r += `${risk.emoji} *${risk.title}*\n`;
+  r += "═══════════════════════════════════════════\n\n";
+
+  r += `🏆 امتیاز کل: *${score}* از *${MAX_SCORE}*  (${pct}%)\n`;
+  r += `${bar(pct, 15)}  ${pct}%\n\n`;
+
+  r += `${risk.description}\n\n`;
 
   // تحلیل ابعاد
-  r += "─── 📈 *تحلیل تفصیلی ابعاد* ───\n\n";
+  r += "─── 📈 *تحلیل تفصیلی هر بعد* ───\n\n";
 
-  for (var i = 0; i < dims.length; i++) {
-    var d = dims[i];
-    r += d.statusEmoji + " *" + d.title + "* — " + d.statusText + "\n";
-    r +=
-      "   " +
-      bar(d.percent, 10) +
-      " " +
-      d.score +
-      "/" +
-      d.maxScore +
-      " (" +
-      d.percent +
-      "%)\n";
-    r += "   📌 _" + d.selectedLabel + "_\n\n";
+  for (const d of dims) {
+    r += `${d.statusEmoji} *${d.title}* — ${d.statusText}\n`;
+    r += ` ${bar(d.percent, 10)}  ${d.score}/${d.maxScore} (${d.percent}%)\n`;
+    r += ` 📌 _${d.selectedLabel}_\n\n`;
   }
 
   // نقاط قوت
-  var strengths = dims.filter(function (d) {
-    return d.percent >= 70;
-  });
+  const strengths = dims.filter(d => d.percent >= 70);
   if (strengths.length > 0) {
     r += "─── ✅ *نقاط قوت شما* ───\n\n";
-    for (var s = 0; s < strengths.length; s++) {
-      r += "• " + strengths[s].title + " (" + strengths[s].percent + "%)\n";
+    for (const s of strengths) {
+      r += `• ${s.title} (${s.percent}%)\n`;
     }
     r += "\n";
   }
 
   // نقاط ضعف
-  var weaknesses = dims.filter(function (d) {
-    return d.percent < 45;
-  });
+  const weaknesses = dims.filter(d => d.percent < 45);
   if (weaknesses.length > 0) {
     r += "─── ⚠️ *نقاط نیاز به تقویت فوری* ───\n\n";
-    for (var w = 0; w < weaknesses.length; w++) {
-      r +=
-        "• " +
-        weaknesses[w].title +
-        " (" +
-        weaknesses[w].percent +
-        "%) — " +
-        weaknesses[w].statusText +
-        "\n";
+    for (const w of weaknesses) {
+      r += `• ${w.title} (${w.percent}%) — ${w.statusText}\n`;
     }
     r += "\n";
   }
 
-  // توصیه
+  // توصیه اصلی
   r += "─── 💡 *توصیه اصلی* ───\n\n";
-  r += risk.recommendation + "\n\n";
+  r += `${risk.recommendation}\n\n`;
 
   // اقدامات فوری
-  if (risk.actionItems && risk.actionItems.length > 0) {
-    r += "─── 🚀 *اقدامات فوری پیشنهادی* ───\n\n";
-    for (var a = 0; a < risk.actionItems.length; a++) {
-      r += (a + 1) + ". " + risk.actionItems[a] + "\n";
-    }
+  if (risk.actionItems?.length > 0) {
+    r += "─── 🚀 *اقدامات پیشنهادی فوری* ───\n\n";
+    risk.actionItems.forEach((item, i) => {
+      r += `${i + 1}. ${item}\n`;
+    });
     r += "\n";
   }
 
   // فوتر
   r += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  r += "🤖 _کاندیداتوری هوشمند | @candidatoryiran\\_bot_\n";
-  r += "📞 _برای مشاوره تخصصی: منوی خدمات و بسته‌ها_";
+  r += "🤖 ساخته‌شده با ❤️ توسط کاندیداتوری هوشمند\n";
+  r += "📞 برای مشاوره تخصصی و بسته‌های حرفه‌ای → منوی خدمات";
 
   return r;
 }
