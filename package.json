@@ -1,21 +1,12 @@
 {
   "name": "kandidatory-bot",
   "version": "2.0.0",
-  "description": "ربات تلگرامی کاندیداتوری هوشمند - تحلیل آمادگی کاندیداتوری برای انتخابات ایران",
+  "description": "ربات تلگرامی کاندیداتوری هوشمند",
   "main": "src/main.js",
   "scripts": {
-    "start": "node src/main.js",
-    "setup-db": "node setup-db.js"
+    "start": "node src/main.js"
   },
-  "keywords": [
-    "telegram",
-    "bot",
-    "grammy",
-    "appwrite",
-    "election",
-    "candidatory",
-    "iran"
-  ],
+  "keywords": ["telegram", "bot", "grammy", "appwrite"],
   "author": "Candidatory Team",
   "license": "MIT",
   "dependencies": {
