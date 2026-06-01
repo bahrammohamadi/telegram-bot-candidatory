@@ -1,6 +1,6 @@
 // src/main.js — نسخه نهایی ۱۴۰۴/۱۲/۰۸
 // ═══════════════════════════════════════════════════════════════
-// ✅ فیکس: حذف dotenv + فیکس JSON.parse
+// ✅ فیکس: Bot not initialized
 // ═══════════════════════════════════════════════════════════════
 
 const { Bot, session } = require("grammy");
@@ -42,7 +42,19 @@ const {
 // Bot init
 // ═══════════════════════════════════════════════════════════════
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
-const bot = new Bot(BOT_TOKEN);
+
+// ✅ فیکس: خواندن BOT_INFO از environment variable
+let botInfo;
+try {
+  botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : undefined;
+} catch (e) {
+  console.error("❌ خطا در parse کردن BOT_INFO:", e);
+}
+
+// ✅ ایجاد bot با botInfo (برای serverless)
+const bot = new Bot(BOT_TOKEN, {
+  botInfo: botInfo,
+});
 
 bot.use(
   session({
@@ -172,7 +184,8 @@ module.exports = async ({ req, res, log, error }) => {
     // برای GET requests
     return res.json({ 
       status: "Bot is running", 
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
+      botInfo: botInfo || "Not set"
     });
   } catch (e) {
     error("Function error:", e);
