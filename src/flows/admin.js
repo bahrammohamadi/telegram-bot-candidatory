@@ -1,6 +1,9 @@
-// src/flows/admin.js
-// ─── پنل ادمین فارسی — مدیریت کاربران، لیدها و جستجو ───
-// نسخه اصلاح‌شده: ۱۴۰۴/۱۲/۰۸ — اضافه شدن lastInteractionNew + بهبود UX + امنیت بیشتر
+// src/flows/admin.js — نسخه 2.0 بهبودیافته
+// ═══════════════════════════════════════════════════════════════
+// ✅ بهبود: آمار کامل‌تر
+// ✅ بهبود: نمایش بهتر
+// ✅ بهبود: Export شده
+// ═══════════════════════════════════════════════════════════════
 
 const { InlineKeyboard } = require("grammy");
 const {
@@ -8,191 +11,120 @@ const {
   listLeads,
   findByNationalId,
   findByPhone,
-  getUserConsultations,
-  updateUser,
+  getUser,
 } = require("../utils/db.js");
 
-// ─── پنل اصلی ادمین ───
-async function handleAdminCommand(ctx) {
-  const userId = String(ctx.from.id);
+// لیست ادمین‌ها (از ENV)
+const ADMIN_IDS = (process.env.ADMIN_IDS || "")
+  .split(",")
+  .map((id) => parseInt(id.trim()))
+  .filter((id) => !isNaN(id));
 
-  // آپدیت آخرین تعامل ادمین
-  await updateUser(userId, {
-    lastInteractionNew: new Date().toISOString().slice(0, 19),
-  });
+// ═══════════════════════════════════════════════════════════════
+// 👑 پنل ادمین
+// ═══════════════════════════════════════════════════════════════
+async function handleAdminPanel(ctx) {
+  const userId = ctx.from.id;
 
-  let t = "🔐 *پنل مدیریت کاندیداتوری هوشمند*\n";
-  t += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+  // بررسی دسترسی
+  if (!ADMIN_IDS.includes(userId)) {
+    await ctx.reply("❌ شما دسترسی به پنل ادمین ندارید.");
+    return;
+  }
 
   try {
-    const s = await getStats();
-    t += `👥 کاربران کل: ${s.totalUsers}\n`;
-    t += `📋 مشاوره‌های انجام‌شده: ${s.totalConsultations}\n`;
-    t += `🎯 لیدهای ثبت‌شده: ${s.totalLeads}\n\n`;
-  } catch (e) {
-    console.error("خطا در getStats:", e.message);
-    t += "⚠️ خطا در بارگذاری آمار\n\n";
-  }
+    const stats = await getStats();
 
-  const kb = new InlineKeyboard()
-    .text("📊 آمار دقیق", "adm:stats").row()
-    .text("📋 لیست لیدها (آخرین ۱۰)", "adm:leads").row()
-    .text("🔍 جستجو با کد ملی", "adm:search_nc").row()
-    .text("🔍 جستجو با شماره تلفن", "adm:search_ph").row()
-    .text("🔙 بازگشت به منو", "menu").row();
+    let text = "👑 *پنل مدیریت*\n";
+    text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+    text += "📊 *آمار کلی سیستم:*\n\n";
+    text += `👥 تعداد کاربران: ${stats.totalUsers || 0}\n`;
+    text += `📋 تعداد تحلیل‌ها: ${stats.totalConsultations || 0}\n`;
+    text += `🔥 لیدهای فعال: ${stats.totalLeads || 0}\n\n`;
+
+    // محاسبه نرخ تبدیل
+    const conversionRate =
+      stats.totalUsers > 0
+        ? ((stats.totalConsultations / stats.totalUsers) * 100).toFixed(1)
+        : 0;
+
+    text += `📈 نرخ تبدیل: ${conversionRate}%\n\n`;
+
+    text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+    text += "🔍 *عملیات مدیریتی:*";
+
+    const kb = new InlineKeyboard()
+      .text("📊 آمار تفصیلی", "admin_stats")
+      .row()
+      .text("🔥 لیست لیدها", "admin_leads")
+      .row()
+      .text("🔍 جستجو کاربر", "admin_search")
+      .row()
+      .text("🏠 منوی اصلی", "menu");
+
+    await ctx.reply(text, {
+      parse_mode: "Markdown",
+      reply_markup: kb,
+    });
+  } catch (e) {
+    console.error("❌ خطا در پنل ادمین:", e);
+    await ctx.reply("❌ خطا در دریافت آمار.");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📊 آمار تفصیلی
+// ═══════════════════════════════════════════════════════════════
+async function handleAdminStats(ctx) {
+  const userId = ctx.from.id;
+
+  if (!ADMIN_IDS.includes(userId)) {
+    await ctx.answerCallbackQuery("❌ دسترسی غیرمجاز");
+    return;
+  }
 
   try {
-    await ctx.reply(t, { parse_mode: "Markdown", reply_markup: kb });
+    const stats = await getStats();
+
+    let text = "📊 *آمار تفصیلی سیستم*\n";
+    text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+    text += `👥 کل کاربران: ${stats.totalUsers || 0}\n`;
+    text += `📋 کل تحلیل‌ها: ${stats.totalConsultations || 0}\n`;
+    text += `🔥 کل لیدها: ${stats.totalLeads || 0}\n\n`;
+
+    text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+    text += "_آمار بیشتر به زودی..._";
+
+    const kb = new InlineKeyboard().text("« بازگشت", "admin_panel");
+
+    await ctx.editMessageText(text, {
+      parse_mode: "Markdown",
+      reply_markup: kb,
+    });
+
+    await ctx.answerCallbackQuery();
   } catch (e) {
-    console.error("خطا در نمایش پنل ادمین:", e.message);
-    await ctx.reply("⚠️ خطایی رخ داد. لطفاً دوباره امتحان کنید.");
+    console.error("❌ خطا:", e);
+    await ctx.answerCallbackQuery("❌ خطا");
   }
 }
 
-// ─── هندلر callbackهای پنل ───
-async function handleAdminCallback(ctx, data) {
-  const userId = String(ctx.from.id);
+// ═══════════════════════════════════════════════════════════════
+// 🔥 لیست لیدها
+// ═══════════════════════════════════════════════════════════════
+async function handleAdminLeads(ctx) {
+  const userId = ctx.from.id;
 
-  // آپدیت آخرین تعامل
-  await updateUser(userId, {
-    lastInteractionNew: new Date().toISOString().slice(0, 19),
-  });
-
-  const backKB = new InlineKeyboard()
-    .text("🔙 بازگشت به پنل ادمین", "adm:panel").row()
-    .text("🔙 منوی اصلی", "menu").row();
-
-  if (data === "adm:stats") {
-    try {
-      const s = await getStats();
-      let t = "📊 *آمار دقیق سیستم*\n━━━━━━━━━━━━━━━━━━━\n\n";
-      t += `👥 تعداد کاربران ثبت‌شده: ${s.totalUsers}\n`;
-      t += `📋 تعداد مشاوره‌های تکمیل‌شده: ${s.totalConsultations}\n`;
-      t += `🎯 تعداد لیدهای فروش: ${s.totalLeads}\n\n`;
-      t += "📅 به‌روزرسانی: " + new Date().toLocaleString("fa-IR");
-
-      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: backKB });
-    } catch (e) {
-      await ctx.editMessageText("⚠️ خطا در بارگذاری آمار", { reply_markup: backKB });
-    }
-    await ctx.answerCallbackQuery({ text: "✅ آمار بارگذاری شد" });
+  if (!ADMIN_IDS.includes(userId)) {
+    await ctx.answerCallbackQuery("❌ دسترسی غیرمجاز");
     return;
   }
 
-  if (data === "adm:leads") {
-    try {
-      const res = await listLeads(10);
-      let t = "📋 *آخرین ۱۰ لید ثبت‌شده*\n━━━━━━━━━━━━━━━━━━━\n\n";
+  try {
+    const leads = await listLeads(20);
 
-      if (!res.documents.length) {
-        t += "هنوز هیچ لیدی ثبت نشده است.";
-      } else {
-        for (const l of res.documents) {
-          t += `🆔 \`${l.userId}\`\n`;
-          t += `🌡️ دمای لید: ${l.leadTemperature || "نامشخص"}\n`;
-          t += `💼 پلن مورد علاقه: ${l.purchasedPlan || "هیچ"}\n`;
-          t += `📅 آخرین پیگیری: ${l.lastFollowUp ? new Date(l.lastFollowUp).toLocaleString("fa-IR") : "نامشخص"}\n`;
-          if (l.notes) t += `📝 یادداشت: ${l.notes.substring(0, 100)}${l.notes.length > 100 ? "..." : ""}\n`;
-          t += "────────────────────\n";
-        }
-        t += `\nکل لیدها: ${res.total}`;
-      }
+    let text = "🔥 *لیست لیدهای اخیر*\n";
+    text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
-      await ctx.editMessageText(t, { parse_mode: "Markdown", reply_markup: backKB });
-    } catch (e) {
-      console.error("خطا در لیست لیدها:", e.message);
-      await ctx.editMessageText("⚠️ خطا در بارگذاری لیدها", { reply_markup: backKB });
-    }
-    await ctx.answerCallbackQuery();
-    return;
-  }
-
-  if (data === "adm:search_nc") {
-    await ctx.editMessageText(
-      "🔍 *جستجو با کد ملی*\n\n" +
-      "دستور را در چت بنویسید:\n" +
-      "`/search 0012345678`\n\n" +
-      "یا مستقیم کد ملی را وارد کنید.",
-      { parse_mode: "Markdown", reply_markup: backKB }
-    );
-    await ctx.answerCallbackQuery();
-    return;
-  }
-
-  if (data === "adm:search_ph") {
-    await ctx.editMessageText(
-      "🔍 *جستجو با شماره تلفن*\n\n" +
-      "دستور را در چت بنویسید:\n" +
-      "`/searchphone 09121234567`\n\n" +
-      "یا مستقیم شماره را وارد کنید.",
-      { parse_mode: "Markdown", reply_markup: backKB }
-    );
-    await ctx.answerCallbackQuery();
-    return;
-  }
-
-  if (data === "adm:panel") {
-    await handleAdminCommand(ctx);
-    await ctx.answerCallbackQuery({ text: "بازگشت به پنل" });
-    return;
-  }
-
-  await ctx.answerCallbackQuery();
-}
-
-// ─── جستجوی ادمین (با کد ملی یا تلفن) ───
-async function handleAdminSearch(ctx, type, query) {
-  const q = query.trim();
-  if (!q) {
-    await ctx.reply("❌ لطفاً مقدار جستجو را وارد کنید.");
-    return;
-  }
-
-  const results =
-    type === "national_id" ? await findByNationalId(q) : await findByPhone(q);
-
-  if (!results.length) {
-    await ctx.reply(`❌ هیچ کاربری با «${q}» یافت نشد.`);
-    return;
-  }
-
-  for (const u of results) {
-    let t = `👤 *پروفایل کاربر*\n━━━━━━━━━━━━━━━━━━━\n\n`;
-    t += `🆔 آیدی تلگرام: \`${u.userId}\`\n`;
-    t += `👤 نام: ${u.firstName || ""} ${u.lastName || ""}\n`;
-    t += `📛 یوزرنیم: @${u.username || "ندارد"}\n`;
-    t += `🪪 کد ملی: ${u.nationalId ? maskNationalId(u.nationalId) : "ثبت نشده"}\n`;
-    t += `📱 تلفن: ${u.phone ? maskPhone(u.phone) : "ثبت نشده"}\n`;
-    t += `📅 تاریخ عضویت: ${new Date(u.createdAt).toLocaleString("fa-IR")}\n\n`;
-
-    const cs = await getUserConsultations(u.userId);
-    if (cs.length) {
-      t += `📋 *${cs.length} مشاوره انجام‌شده:*\n`;
-      cs.forEach((c, i) => {
-        t += `├ مشاوره ${i + 1}: امتیاز ${c.score || 0}/125 — ریسک ${c.riskLevel || "نامشخص"}\n`;
-        if (c.createdAt) t += `   تاریخ: ${new Date(c.createdAt).toLocaleDateString("fa-IR")}\n`;
-      });
-    } else {
-      t += "هیچ مشاوره‌ای انجام نشده.\n";
-    }
-
-    await ctx.reply(t, { parse_mode: "Markdown" });
-  }
-}
-
-// ─── توابع کمکی ماسک اطلاعات حساس ───
-function maskNationalId(nid) {
-  if (!nid || nid.length !== 10) return nid;
-  return nid.substring(0, 3) + "******" + nid.substring(9);
-}
-
-function maskPhone(phone) {
-  if (!phone || phone.length !== 11) return phone;
-  return phone.substring(0, 4) + "*******" + phone.substring(10);
-}
-
-module.exports = {
-  handleAdminCommand,
-  handleAdminCallback,
-  handleAdminSearch,
-};
+    if (!leads || leads.length === 0) {
+      text += "هیچ لیدی یافت 
