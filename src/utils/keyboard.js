@@ -1,144 +1,155 @@
 // src/utils/keyboard.js
-// ─── تمام InlineKeyboard های پروژه — CommonJS ───
-// نسخه اصلاح‌شده: ۱۴۰۴/۱۲/۰۸ — اضافه شدن دکمه تاریخچه + بهبود خوانایی
+// ═══════════════════════════════════════════════════════════════
+// ⌨️ Keyboard Utilities - تمام کیبوردهای ربات
+// نسخه: 2.0 - پاکسازی‌شده + بهبودیافته
+// ═══════════════════════════════════════════════════════════════
 
 const { InlineKeyboard } = require("grammy");
 const { STEPS, TOTAL_STEPS, STEP_EMOJIS } = require("../constants/questions.js");
 
-/**
- * منوی اصلی (با دکمه تاریخچه اضافه‌شده)
- */
+// ═══════════════════════════════════════════════════════════════
+// 🏠 منوی اصلی
+// ═══════════════════════════════════════════════════════════════
 function mainMenuKB() {
   return new InlineKeyboard()
-    .text("🚀 شروع تحلیل آمادگی", "start_consultation").row()
-    .text("📂 تاریخچه تحلیل‌های من", "show_history").row()           // دکمه جدید — تاریخچه
-    .text("📚 آموزش‌های تخصصی", "edu_list").row()
-    .text("💼 خدمات و بسته‌ها", "show_plans").row()
-    .text("📞 ارتباط با ما", "contact_us").row()
-    .text("📄 نمونه تحلیل‌ها", "sample_reports").row()
-    .text("ℹ️ درباره ما", "about_us").row();
+    .text("🎯 شروع مشاوره", "start_consultation")
+    .row()
+    .text("📚 آموزش کاندیداتوری", "show_education")
+    .row()
+    .text("💼 بسته‌های خدماتی", "show_plans")
+    .row()
+    .text("📜 تاریخچه تحلیل‌ها", "show_history")
+    .row()
+    .text("📞 تماس با ما", "contact_us")
+    .text("ℹ️ درباره ما", "about_us");
 }
 
-/**
- * کیبورد گزینه‌ای برای یک مرحله (choice)
- * گزینه پیش‌فرض (isDefault) اول می‌آید
- */
-function stepChoiceKB(stepIndex) {
-  const step = STEPS[stepIndex];
-  if (!step || step.type !== "choice") return new InlineKeyboard();
+// ═══════════════════════════════════════════════════════════════
+// 📋 کیبورد هر مرحله از سؤالات
+// ═══════════════════════════════════════════════════════════════
+function stepKeyboard(stepId) {
+  const step = STEPS.find((s) => s.id === stepId);
+  if (!step) return new InlineKeyboard();
 
   const kb = new InlineKeyboard();
 
-  // مرتب‌سازی: گزینه پیش‌فرض اول
-  const sorted = [...step.options].sort((a, b) => {
-    if (a.isDefault) return -1;
-    if (b.isDefault) return 1;
-    return 0;
-  });
-
-  for (const opt of sorted) {
-    kb.text(opt.label, `ans:${stepIndex}:${opt.value}`).row();
+  // دکمه‌های پاسخ
+  if (step.type === "choice" && step.options) {
+    step.options.forEach((opt) => {
+      kb.text(opt.label, `answer:${stepId}:${opt.value}`).row();
+    });
+  } else if (step.type === "scale") {
+    // دکمه‌های عددی (مثلاً 1 تا 10)
+    const min = step.min || 1;
+    const max = step.max || 10;
+    
+    for (let i = min; i <= max; i++) {
+      kb.text(String(i), `answer:${stepId}:${i}`);
+      if (i % 3 === 0 || i === max) kb.row();
+    }
   }
 
-  // ناوبری
+  // دکمه بازگشت (اگر مرحله اول نباشد)
+  const stepIndex = STEPS.findIndex((s) => s.id === stepId);
   if (stepIndex > 0) {
-    kb.text("⬅️ مرحله قبل", `back:${stepIndex - 1}`).row();
+    const prevStep = STEPS[stepIndex - 1];
+    kb.text(`« ویرایش: ${prevStep.shortTitle || 'قبلی'}`, `edit_step:${prevStep.id}`);
   }
-  kb.text("❌ انصراف", "cancel").row();
+
+  // دکمه منو
+  kb.text("🏠 منو", "menu");
 
   return kb;
 }
 
-/**
- * کیبورد برای مراحل متنی (text)
- */
-function stepTextKB(stepIndex) {
-  const kb = new InlineKeyboard();
-
-  if (stepIndex > 0) {
-    kb.text("⬅️ مرحله قبل", `back:${stepIndex - 1}`).row();
-  }
-  kb.text("❌ انصراف", "cancel").row();
-
-  return kb;
-}
-
-/**
- * کیبورد خلاصه پاسخ‌ها (قبل از تایید نهایی)
- * هر مرحله با آیکون پر/خالی
- */
-function summaryKB(answers) {
-  const kb = new InlineKeyboard();
-
-  for (let i = 0; i < TOTAL_STEPS; i++) {
-    const step = STEPS[i];
-    const emoji = STEP_EMOJIS[i] || "📝";
-    const filled = answers[step.id] !== undefined && answers[step.id] !== "";
-    const icon = filled ? "✏️" : "⚠️"; // پر یا خالی
-
-    kb.text(`${emoji} ${icon} ${step.title}`, `edit:${i}`).row();
-  }
-
-  kb.text("✅ تایید نهایی و دریافت گزارش", "confirm").row();
-  kb.text("❌ انصراف", "cancel").row();
-
-  return kb;
-}
-
-/**
- * کیبورد بعد از نمایش گزارش
- * شامل آموزش، بسته‌ها، شروع مجدد و منو
- */
-function afterReportKB() {
+// ═══════════════════════════════════════════════════════════════
+// ✅ کیبورد تأیید نهایی
+// ═══════════════════════════════════════════════════════════════
+function confirmationKB() {
   return new InlineKeyboard()
-    .text("📚 آموزش‌های تخصصی", "edu_list").row()
-    .text("💼 بسته‌ها و خدمات", "show_plans").row()
-    .text("🔄 شروع مجدد تحلیل", "start_consultation").row()
-    .text("🔙 بازگشت به منو", "menu").row();
+    .text("✅ تأیید و دریافت گزارش", "confirm_final")
+    .row()
+    .text("🔄 شروع مجدد", "reset_consultation")
+    .row()
+    .text("🏠 منو", "menu");
 }
 
-/**
- * کیبورد صفحه "درباره ما"
- */
-function aboutUsKB() {
-  return new InlineKeyboard()
-    .text("📞 ارتباط با ما", "contact_us").row()
-    .text("🔙 بازگشت به منو", "menu").row();
-}
-
-/**
- * کیبورد صفحه "ارتباط با ما"
- */
+// ═══════════════════════════════════════════════════════════════
+// 📞 کیبورد تماس با ما
+// ═══════════════════════════════════════════════════════════════
 function contactUsKB() {
   return new InlineKeyboard()
-    .text("💼 مشاهده بسته‌ها", "show_plans").row()
-    .text("🔙 بازگشت به منو", "menu").row();
+    .url("📱 تلگرام پشتیبانی", "https://t.me/candidatory_support")
+    .row()
+    .text("« بازگشت", "menu");
 }
 
-/**
- * نوار پیشرفت بصری (برای نمایش در مراحل)
- */
-function progressText(currentStep) {
-  let t = "📊 پیشرفت: ";
-  for (let i = 0; i < TOTAL_STEPS; i++) {
-    if (i < currentStep) t += "🟢";       // تکمیل‌شده
-    else if (i === currentStep) t += "🔵"; // فعلی
-    else t += "⚪";                        // باقی‌مانده
+// ═══════════════════════════════════════════════════════════════
+// ℹ️ کیبورد درباره ما
+// ═══════════════════════════════════════════════════════════════
+function aboutUsKB() {
+  return new InlineKeyboard()
+    .url("🌐 وب‌سایت", "https://candidatory.ir")
+    .row()
+    .url("📱 کانال تلگرام", "https://t.me/candidatoryiran_bot")
+    .row()
+    .text("« بازگشت", "menu");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📜 کیبورد تاریخچه
+// ═══════════════════════════════════════════════════════════════
+function historyKB(consultations) {
+  const kb = new InlineKeyboard();
+
+  if (consultations && consultations.length > 0) {
+    consultations.slice(0, 10).forEach((c) => {
+      const date = new Date(c.$createdAt || c.createdAt);
+      const label = `📊 ${c.electionType || 'تحلیل'} - ${date.toLocaleDateString('fa-IR')}`;
+      kb.text(label, `history_detail:${c.$id}`).row();
+    });
   }
-  t += ` (${currentStep + 1}/${TOTAL_STEPS})`;
-  return t;
+
+  kb.text("🏠 منو", "menu");
+  return kb;
 }
 
-// ═══════════════════════════════════════════
-// Export تمام کیبوردها
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// 💼 کیبورد بسته‌ها (ساده‌شده)
+// ═══════════════════════════════════════════════════════════════
+function plansKB() {
+  return new InlineKeyboard()
+    .text("🆓 رایگان", "select_plan:free")
+    .row()
+    .text("🚀 راه‌اندازی", "select_plan:starter")
+    .row()
+    .text("💼 حرفه‌ای", "select_plan:professional")
+    .row()
+    .text("👑 ویژه", "select_plan:vip")
+    .row()
+    .text("« بازگشت", "menu");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📚 کیبورد آموزش
+// ═══════════════════════════════════════════════════════════════
+function educationMenuKB() {
+  return new InlineKeyboard()
+    .text("📖 لیست کارت‌های آموزشی", "show_education")
+    .row()
+    .text("« بازگشت", "menu");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Export
+// ═══════════════════════════════════════════════════════════════
 module.exports = {
   mainMenuKB,
-  stepChoiceKB,
-  stepTextKB,
-  summaryKB,
-  afterReportKB,
-  aboutUsKB,
+  stepKeyboard,
+  confirmationKB,
   contactUsKB,
-  progressText,
+  aboutUsKB,
+  historyKB,
+  plansKB,
+  educationMenuKB,
 };
