@@ -1,266 +1,291 @@
-// src/main.js
-// ═══════════════════════════════════════════════════════════════
-// نقطه ورود Appwrite Function — ربات «کاندیداتوری هوشمند»
-// فرمت: CommonJS (سازگار با Appwrite Runtime Node.js)
-// نسخه اصلاح‌شده: ۱۴۰۴/۱۲/۰۸ — با فیکس پایداری و lastInteractionNew
-// ═══════════════════════════════════════════════════════════════
+// src/utils/db.js
+// ─── CommonJS — سازگار با دیتابیس واقعی Appwrite ───
+// اصلاح‌شده:
+// ۱. نام ENV variables با تنظیمات Appwrite هماهنگ شد (DATABASE_ID, COLLECTION_*)
+// ۲. endpoint پیش‌فرض به fra.cloud.appwrite.io اصلاح شد
+// ۳. باگ فیلتر null در updateUser برطرف شد (currentStep: null حالا کار می‌کند)
+// ۴. پشتیبانی از هر دو نام ENV برای سازگاری با نسخه‌های قبلی
 
-const { Bot } = require("grammy");
-const { initDB, updateUser } = require("./utils/db.js"); // updateUser رو برای آپدیت lastInteractionNew نیاز داریم
-const { mainMenuKB } = require("./utils/keyboard.js");
-const { WELCOME_MESSAGE } = require("./constants/questions.js");
+const { Client, Databases, Query, ID } = require("node-appwrite");
 
-// ─── هندلرهای اصلی ───
-const {
-  handleStartConsultation,
-  handleAnswer,
-  handleEdit,
-  handleBackStep,
-  handleConfirm,
-  handleCancelConsultation,
-  handleTextInput,
-} = require("./flows/consultation.js");
+let client;
+let databases;
+let dbId;
+let usersCol;
+let consultCol;
+let leadsCol;
 
-const {
-  handleShowPlans,
-  handleSelectPlan,
-  handlePlanRequest,
-} = require("./flows/plans.js");
+/**
+ * مقداردهی اولیه دیتابیس
+ * پشتیبانی از هر دو فرمت نام ENV (قدیمی و جدید Appwrite)
+ */
+function initDB(env) {
+  // endpoint: سرور Frankfurt
+  const endpoint =
+    env.APPWRITE_ENDPOINT ||
+    "https://fra.cloud.appwrite.io/v1";
 
-const {
-  handleAboutUs,
-  handleContactUs,
-  handleSampleReports,
-} = require("./flows/contact.js");
+  client = new Client()
+    .setEndpoint(endpoint)
+    .setProject(env.APPWRITE_PROJECT_ID)
+    .setKey(env.APPWRITE_API_KEY);
 
-const {
-  handleShowEducationList,
-  handleShowEducationCard,
-  handleEducationView,
-  handleRelatedCards,
-} = require("./flows/educational.js");
+  databases = new Databases(client);
 
-const {
-  handleAdminCommand,
-  handleAdminCallback,
-  handleAdminSearch,
-} = require("./flows/admin.js");
+  // پشتیبانی از هر دو نام ENV (نام جدید Appwrite اولویت دارد)
+  dbId      = env.DATABASE_ID               || env.APPWRITE_DB_ID                       || "kandidatory_db";
+  usersCol  = env.COLLECTION_USERS          || env.APPWRITE_USERS_COLLECTION             || "users";
+  consultCol= env.COLLECTION_CONSULT        || env.APPWRITE_CONSULTATIONS_COLLECTION     || "consultations";
+  leadsCol  = env.COLLECTION_LEADS          || env.APPWRITE_LEADS_COLLECTION             || "leads_status";
 
-// ═══════════════════════════════════════════
-// تابع اصلی — Appwrite Function
-// ═══════════════════════════════════════════
-module.exports = async function (context) {
-  const env = context.env || process.env;
+  console.log(`✅ DB init — endpoint: ${endpoint} | db: ${dbId}`);
+}
 
-  // مقداردهی دیتابیس
-  initDB(env);
-
-  // ─── ساخت بات با فیکس Bot not initialized ───
-  let bot;
+/**
+ * دریافت یا ایجاد کاربر
+ */
+async function getOrCreateUser(telegramId, fromData = {}) {
   try {
-    // اولویت ۱: اگر BOT_INFO در env تعریف شده (پیشنهاد Appwrite)
-    if (env.BOT_INFO) {
-      const botInfo = JSON.parse(env.BOT_INFO);
-      bot = new Bot(env.BOT_TOKEN, { botInfo });
-    } else {
-      // اولویت ۲: ساخت معمولی + await init()
-      bot = new Bot(env.BOT_TOKEN);
-      await bot.init(); // این خط مهم‌ترین فیکس خطای "Bot not initialized" است
-    }
-  } catch (initError) {
-    console.error("❌ خطا در مقداردهی بات:", initError.message);
-    // fallback نهایی: بدون init — فقط برای جلوگیری از crash کامل
-    bot = new Bot(env.BOT_TOKEN);
-  }
+    const res = await databases.listDocuments(dbId, usersCol, [
+      Query.equal("userId", String(telegramId)),
+      Query.limit(1),
+    ]);
 
-  // لیست ادمین‌ها (از env)
-  const ADMINS = (env.ADMIN_IDS || "")
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
+    if (res.documents.length > 0) return res.documents[0];
 
-  // ─── Middleware کوچک: هر بار که کاربر تعاملی دارد، lastInteractionNew رو آپدیت کن ───
-  bot.use(async (ctx, next) => {
+    const nowShort = new Date().toISOString().slice(0, 19);
+
+    const userData = {
+      userId:             String(telegramId),
+      username:           fromData.username    || "",
+      firstName:          fromData.first_name  || "",
+      lastName:           fromData.last_name   || "",
+      currentStep:        null,
+      tempAnswers:        "{}",
+      role:               "user",
+      createdAt:          new Date().toISOString(),
+      lastInteractionNew: nowShort,
+      nationalId:         "",
+      phone:              "",
+    };
+
     try {
-      const userId = String(ctx.from?.id);
-      if (userId) {
-        // آپدیت زمان آخرین فعالیت (با فرمت کوتاه برای سازگاری با string 30 یا 50)
-        await updateUser(userId, {
-          lastInteractionNew: new Date().toISOString().slice(0, 19), // "2026-02-28T14:35:22"
-        });
-      }
-    } catch (e) {
-      console.error("⚠️ خطا در آپدیت lastInteractionNew:", e.message);
-      // خطا را نادیده می‌گیریم تا ربات متوقف نشود
+      return await databases.createDocument(dbId, usersCol, ID.unique(), userData);
+    } catch (err) {
+      // اگر فیلدهای اختیاری در schema نبودن، بدون آن‌ها امتحان کن
+      console.warn("⚠️ تلاش دوم بدون nationalId/phone:", err.message);
+      const fallback = { ...userData };
+      delete fallback.nationalId;
+      delete fallback.phone;
+      return await databases.createDocument(dbId, usersCol, ID.unique(), fallback);
     }
-    await next();
-  });
-
-  // ═══════════════════════════════════════
-  // دستورات (Commands)
-  // ═══════════════════════════════════════
-  bot.command("start", async (ctx) => {
-    try {
-      await ctx.reply(WELCOME_MESSAGE, {
-        parse_mode: "Markdown",
-        reply_markup: mainMenuKB(),
-      });
-    } catch (e) {
-      console.error("خطا در /start:", e.message);
-    }
-  });
-
-  bot.command("menu", async (ctx) => {
-    try {
-      await ctx.reply("📋 *منوی اصلی*\n\nگزینه مورد نظر را انتخاب کنید:", {
-        parse_mode: "Markdown",
-        reply_markup: mainMenuKB(),
-      });
-    } catch (e) {
-      console.error("خطا در /menu:", e.message);
-    }
-  });
-
-  bot.command("admin", async (ctx) => {
-    if (ADMINS.includes(String(ctx.from.id))) {
-      await handleAdminCommand(ctx);
-    } else {
-      await ctx.reply("⛔ دسترسی ندارید.");
-    }
-  });
-
-  bot.command("search", async (ctx) => {
-    if (!ADMINS.includes(String(ctx.from.id))) return;
-    const q = ctx.message.text.replace("/search", "").trim();
-    if (q) await handleAdminSearch(ctx, "national_id", q);
-    else
-      await ctx.reply("❌ کد ملی را وارد کنید:\n\n`/search 0012345678`", {
-        parse_mode: "Markdown",
-      });
-  });
-
-  bot.command("searchphone", async (ctx) => {
-    if (!ADMINS.includes(String(ctx.from.id))) return;
-    const q = ctx.message.text.replace("/searchphone", "").trim();
-    if (q) await handleAdminSearch(ctx, "phone", q);
-    else
-      await ctx.reply("❌ شماره را وارد کنید:\n\n`/searchphone 09121234567`", {
-        parse_mode: "Markdown",
-      });
-  });
-
-  // ═══════════════════════════════════════
-  // Callback Queries (دکمه‌ها)
-  // ═══════════════════════════════════════
-  bot.on("callback_query:data", async (ctx) => {
-    const d = ctx.callbackQuery.data;
-    try {
-      // ─── منوی اصلی ───
-      if (d === "menu") {
-        try {
-          await ctx.editMessageText("📋 *منوی اصلی*\n\nگزینه مورد نظر را انتخاب کنید:", {
-            parse_mode: "Markdown",
-            reply_markup: mainMenuKB(),
-          });
-        } catch {
-          await ctx.reply("📋 *منوی اصلی*\n\nگزینه مورد نظر را انتخاب کنید:", {
-            parse_mode: "Markdown",
-            reply_markup: mainMenuKB(),
-          });
-        }
-        await ctx.answerCallbackQuery();
-        return;
-      }
-
-      // ─── مشاوره هوشمند ───
-      if (d === "start_consultation") return await handleStartConsultation(ctx);
-      if (d.startsWith("ans:")) {
-        const parts = d.split(":");
-        const idx = parseInt(parts[1]);
-        const val = parts.slice(2).join(":");
-        return await handleAnswer(ctx, idx, val);
-      }
-      if (d.startsWith("back:")) return await handleBackStep(ctx, parseInt(d.split(":")[1]));
-      if (d.startsWith("edit:")) return await handleEdit(ctx, parseInt(d.split(":")[1]));
-      if (d === "confirm") return await handleConfirm(ctx);
-      if (d === "cancel") return await handleCancelConsultation(ctx);
-
-      // ─── پلن‌ها ───
-      if (d === "show_plans") return await handleShowPlans(ctx);
-      if (d.startsWith("plan:")) return await handleSelectPlan(ctx, d.split(":")[1]);
-      if (d.startsWith("plan_request:")) return await handlePlanRequest(ctx, d.split(":")[1]);
-
-      // ─── آموزش‌ها ───
-      if (d === "edu_list") return await handleShowEducationList(ctx);
-      if (d === "edu_noop") {
-        await ctx.answerCallbackQuery();
-        return;
-      }
-      if (d.startsWith("eduv:")) {
-        const parts = d.split(":");
-        const cardId = parseInt(parts[1]);
-        const view = parts[2] || "summary";
-        if (!isNaN(cardId)) return await handleEducationView(ctx, cardId, view);
-      }
-      if (d.startsWith("edurel:")) {
-        const cardId = parseInt(d.split(":")[1]);
-        if (!isNaN(cardId)) return await handleRelatedCards(ctx, cardId);
-      }
-      if (d.startsWith("edu:")) {
-        const cardId = parseInt(d.split(":")[1]);
-        if (!isNaN(cardId)) return await handleShowEducationCard(ctx, cardId);
-      }
-
-      // ─── صفحات ثابت ───
-      if (d === "about_us") return await handleAboutUs(ctx);
-      if (d === "contact_us") return await handleContactUs(ctx);
-      if (d === "sample_reports") return await handleSampleReports(ctx);
-
-      // ─── پنل ادمین ───
-      if (d.startsWith("adm:")) {
-        if (ADMINS.includes(String(ctx.from.id))) {
-          return await handleAdminCallback(ctx, d);
-        }
-        await ctx.answerCallbackQuery({ text: "⛔ دسترسی ندارید" });
-        return;
-      }
-
-      // ─── callback ناشناخته ───
-      await ctx.answerCallbackQuery();
-    } catch (e) {
-      console.error("❌ خطای callback_query:", e.message, e.stack);
-      try {
-        await ctx.answerCallbackQuery({ text: "❌ خطایی رخ داد، دوباره امتحان کنید" });
-      } catch {}
-    }
-  });
-
-  // ═══════════════════════════════════════
-  // پیام‌های متنی
-  // ═══════════════════════════════════════
-  bot.on("message:text", async (ctx) => {
-    try {
-      const handled = await handleTextInput(ctx);
-      if (handled) return;
-
-      // اگر هیچ هندلری نبود → پیام راهنما
-      await ctx.reply("📌 لطفاً از منوی زیر استفاده کنید یا /start بزنید.", {
-        reply_markup: mainMenuKB(),
-      });
-    } catch (e) {
-      console.error("❌ خطای message:text:", e.message);
-    }
-  });
-
-  // ═══════════════════════════════════════
-  // پردازش آپدیت تلگرام
-  // ═══════════════════════════════════════
-  try {
-    await bot.handleUpdate(context.req.body);
   } catch (e) {
-    console.error("❌ خطای کلی handleUpdate:", e.message, e.stack);
+    console.error("❌ خطا در getOrCreateUser:", e.message);
+    throw e;
   }
+}
 
-  // همیشه 200 OK برگردون (الزامی برای Appwrite webhook)
-  return context.res.json({ ok: true });
+/**
+ * بروزرسانی کاربر
+ * اصلاح باگ: null مجاز است (برای reset کردن currentStep)
+ * فقط undefined فیلتر می‌شود
+ */
+async function updateUser(telegramId, data) {
+  try {
+    const res = await databases.listDocuments(dbId, usersCol, [
+      Query.equal("userId", String(telegramId)),
+      Query.limit(1),
+    ]);
+
+    if (res.documents.length === 0) {
+      console.warn(`⚠️ کاربر ${telegramId} یافت نشد — ایجاد خودکار`);
+      await getOrCreateUser(telegramId, {});
+      return;
+    }
+
+    // فقط undefined فیلتر می‌شود — null مجاز است (برای reset currentStep)
+    const cleanData = {};
+    for (const key in data) {
+      if (data[key] !== undefined) {
+        cleanData[key] = data[key];
+      }
+    }
+
+    // آپدیت خودکار lastInteractionNew اگر در data نبود
+    if (!("lastInteractionNew" in cleanData)) {
+      cleanData.lastInteractionNew = new Date().toISOString().slice(0, 19);
+    }
+
+    await databases.updateDocument(dbId, usersCol, res.documents[0].$id, cleanData);
+  } catch (e) {
+    console.error("❌ خطا در updateUser:", e.message);
+    // throw نمی‌کنیم تا ربات متوقف نشه
+  }
+}
+
+/**
+ * ذخیره مشاوره جدید
+ */
+async function saveConsultation(telegramId, data) {
+  try {
+    await databases.createDocument(dbId, consultCol, ID.unique(), {
+      userId:         String(telegramId),
+      electionType:   data.electionType   || "",
+      region:         data.region         || "",
+      answers:        data.answers        || "{}",
+      score:          data.score          || 0,
+      riskLevel:      data.riskLevel      || "low",
+      finalReport:    data.finalReport    || "",
+      fullName:       data.fullName       || "",
+      status:         data.status         || "free",
+      adminNotes:     data.adminNotes     || "",
+      analysisReport: data.analysisReport || "",
+      createdAt:      new Date().toISOString(),
+      updatedAt:      new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("❌ خطا در saveConsultation:", e.message);
+    throw e;
+  }
+}
+
+/**
+ * ایجاد یا بروزرسانی لید
+ */
+async function upsertLead(telegramId, data) {
+  try {
+    const res = await databases.listDocuments(dbId, leadsCol, [
+      Query.equal("userId", String(telegramId)),
+      Query.limit(1),
+    ]);
+
+    const now = new Date().toISOString();
+
+    if (res.documents.length > 0) {
+      const existing = res.documents[0];
+      const upd = { updatedAt: now };
+
+      if (data.leadTemperature) upd.leadTemperature = data.leadTemperature;
+      if (data.purchasedPlan)   upd.purchasedPlan   = data.purchasedPlan;
+      if (data.notes) {
+        const prev = existing.notes || "";
+        upd.notes = prev ? `${prev}\n---\n${data.notes}` : data.notes;
+      }
+      upd.lastFollowUp = now;
+
+      await databases.updateDocument(dbId, leadsCol, existing.$id, upd);
+    } else {
+      await databases.createDocument(dbId, leadsCol, ID.unique(), {
+        userId:           String(telegramId),
+        leadTemperature:  data.leadTemperature || "cold",
+        purchasedPlan:    data.purchasedPlan   || "none",
+        lastFollowUp:     now,
+        notes:            data.notes           || "",
+        createdAt:        now,
+        updatedAt:        now,
+      });
+    }
+  } catch (e) {
+    console.error("❌ خطا در upsertLead:", e.message);
+    throw e;
+  }
+}
+
+/**
+ * جستجو با کد ملی
+ */
+async function findByNationalId(nationalId) {
+  try {
+    const res = await databases.listDocuments(dbId, usersCol, [
+      Query.equal("nationalId", nationalId),
+      Query.limit(5),
+    ]);
+    return res.documents;
+  } catch (e) {
+    console.error("خطا در findByNationalId:", e.message);
+    return [];
+  }
+}
+
+/**
+ * جستجو با شماره تلفن
+ */
+async function findByPhone(phone) {
+  try {
+    const res = await databases.listDocuments(dbId, usersCol, [
+      Query.equal("phone", phone),
+      Query.limit(5),
+    ]);
+    return res.documents;
+  } catch (e) {
+    console.error("خطا در findByPhone:", e.message);
+    return [];
+  }
+}
+
+/**
+ * دریافت مشاوره‌های یک کاربر
+ */
+async function getUserConsultations(telegramId) {
+  try {
+    const res = await databases.listDocuments(dbId, consultCol, [
+      Query.equal("userId", String(telegramId)),
+      Query.orderDesc("$createdAt"),
+      Query.limit(10),
+    ]);
+    return res.documents;
+  } catch (e) {
+    console.error("خطا در getUserConsultations:", e.message);
+    return [];
+  }
+}
+
+/**
+ * آمار کلی (برای پنل ادمین)
+ */
+async function getStats() {
+  try {
+    const [u, c, l] = await Promise.all([
+      databases.listDocuments(dbId, usersCol,   [Query.limit(1)]),
+      databases.listDocuments(dbId, consultCol, [Query.limit(1)]),
+      databases.listDocuments(dbId, leadsCol,   [Query.limit(1)]),
+    ]);
+    return {
+      totalUsers:         u.total,
+      totalConsultations: c.total,
+      totalLeads:         l.total,
+    };
+  } catch (e) {
+    console.error("خطا در getStats:", e.message);
+    return { totalUsers: 0, totalConsultations: 0, totalLeads: 0 };
+  }
+}
+
+/**
+ * لیست آخرین لیدها (برای پنل ادمین)
+ */
+async function listLeads(limit = 10, offset = 0) {
+  try {
+    return await databases.listDocuments(dbId, leadsCol, [
+      Query.orderDesc("$createdAt"),
+      Query.limit(limit),
+      Query.offset(offset),
+    ]);
+  } catch (e) {
+    console.error("خطا در listLeads:", e.message);
+    return { documents: [], total: 0 };
+  }
+}
+
+module.exports = {
+  initDB,
+  getOrCreateUser,
+  updateUser,
+  saveConsultation,
+  upsertLead,
+  findByNationalId,
+  findByPhone,
+  getUserConsultations,
+  getStats,
+  listLeads,
 };
