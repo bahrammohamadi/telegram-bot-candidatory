@@ -1,11 +1,19 @@
-// src/main.js — نسخه نهایی ۱۴۰۴/۱۲/۰۸
+// src/main.js — نسخه 2.0
 // ═══════════════════════════════════════════════════════════════
-// ✅ فیکس: Bot not initialized
+// ✅ پاکسازی‌شده از کدهای بلااستفاده
+// ✅ اضافه شدن Rate Limiting
+// ✅ بهبود Error Handling
+// ✅ بهبود Security
 // ═══════════════════════════════════════════════════════════════
 
 const { Bot, session } = require("grammy");
 const { getOrCreateUser, updateUser } = require("./utils/db.js");
 const { mainMenuKB } = require("./utils/keyboard.js");
+
+// ═══════════════════════════════════════════════════════════════
+// Middleware
+// ═══════════════════════════════════════════════════════════════
+const { rateLimitMiddleware, startCleanup } = require("./middleware/rate-limit.js");
 
 // ═══════════════════════════════════════════════════════════════
 // Flows
@@ -16,62 +24,83 @@ const {
   handleEdit,
   handleConfirm,
   handleReset,
+  handleTextInput,
 } = require("./flows/consultation.js");
 
 const { handleShowPlans, handleSelectPlan } = require("./flows/plans.js");
 const { handleAdminPanel } = require("./flows/admin.js");
 const { handleAboutUs, handleContactUs, handleSampleReports } = require("./flows/contact.js");
 const { handleShowHistory, handleHistoryDetail } = require("./flows/history.js");
-const { handleShowAssessments, handleSelectAssessment, handleAssessmentLocked } = require("./flows/assessments.js");
+
 const {
   handleShowEducationList,
   handleShowEducationCard,
   handleEducationView,
   handleRelatedCards,
 } = require("./flows/educational.js");
-const {
-  handleStartDeepAssessment,
-  handleDeepAnswer,
-  handleDeepConfirm,
-  handleDeepEdit,
-  handleDeepReset,
-  handleDeepTextInput,
-} = require("./flows/deep_assessment.js");
 
 // ═══════════════════════════════════════════════════════════════
 // Bot init
 // ═══════════════════════════════════════════════════════════════
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
-// ✅ فیکس: خواندن BOT_INFO از environment variable
+// ✅ فیکس: botInfo از ENV یا Hardcoded
+const HARDCODED_BOT_INFO = {
+  id: 8478705530,
+  is_bot: true,
+  first_name: "کاندیداتوری هوشمند",
+  username: "candidatoryiran_bot",
+  can_join_groups: true,
+  can_read_all_group_messages: false,
+  supports_inline_queries: false,
+};
+
 let botInfo;
 try {
-  botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : undefined;
+  botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : HARDCODED_BOT_INFO;
 } catch (e) {
-  console.error("❌ خطا در parse کردن BOT_INFO:", e);
+  console.warn("⚠️ BOT_INFO parse failed, using hardcoded");
+  botInfo = HARDCODED_BOT_INFO;
 }
 
-// ✅ ایجاد bot با botInfo (برای serverless)
 const bot = new Bot(BOT_TOKEN, {
   botInfo: botInfo,
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Session
+// ═══════════════════════════════════════════════════════════════
 bot.use(
   session({
-    initial: () => ({ step: 0, answers: {}, deepStep: 0, deepAnswers: {}, deepModuleId: null }),
+    initial: () => ({
+      step: 0,
+      answers: {},
+    }),
   })
 );
 
 // ═══════════════════════════════════════════════════════════════
-// Middleware: save user info
+// 🛡️ Rate Limiting (جلوگیری از Spam)
+// ═══════════════════════════════════════════════════════════════
+bot.use(rateLimitMiddleware());
+
+// شروع پاکسازی خودکار
+startCleanup();
+
+// ═══════════════════════════════════════════════════════════════
+// Middleware: ذخیره اطلاعات کاربر
 // ═══════════════════════════════════════════════════════════════
 bot.use(async (ctx, next) => {
   if (ctx.from) {
-    await getOrCreateUser(ctx.from.id, {
-      username: ctx.from.username || null,
-      firstName: ctx.from.first_name || null,
-      lastName: ctx.from.last_name || null,
-    });
+    try {
+      await getOrCreateUser(ctx.from.id, {
+        username: ctx.from.username || null,
+        firstName: ctx.from.first_name || null,
+        lastName: ctx.from.last_name || null,
+      });
+    } catch (e) {
+      console.error("❌ خطا در ذخیره کاربر:", e.message);
+    }
   }
   await next();
 });
@@ -102,40 +131,42 @@ bot.command("admin", handleAdminPanel);
 // ═══════════════════════════════════════════════════════════════
 
 bot.callbackQuery("menu", async (ctx) => {
-  await ctx.editMessageText("📋 *منوی اصلی:*", {
-    parse_mode: "Markdown",
-    reply_markup: mainMenuKB(),
-  });
+  try {
+    await ctx.editMessageText("📋 *منوی اصلی:*", {
+      parse_mode: "Markdown",
+      reply_markup: mainMenuKB(),
+    });
+  } catch {
+    await ctx.reply("📋 *منوی اصلی:*", {
+      parse_mode: "Markdown",
+      reply_markup: mainMenuKB(),
+    });
+  }
   await ctx.answerCallbackQuery();
 });
 
+// Consultation
 bot.callbackQuery("start_consultation", handleStartConsultation);
 bot.callbackQuery(/^answer:\d+:/, handleAnswer);
 bot.callbackQuery(/^edit_step:\d+$/, handleEdit);
 bot.callbackQuery("confirm_final", handleConfirm);
 bot.callbackQuery("reset_consultation", handleReset);
 
+// History
 bot.callbackQuery("show_history", handleShowHistory);
 bot.callbackQuery(/^history_detail:/, handleHistoryDetail);
 
+// Plans
 bot.callbackQuery("show_plans", handleShowPlans);
 bot.callbackQuery(/^select_plan:/, handleSelectPlan);
 
-bot.callbackQuery("show_assessments", handleShowAssessments);
-bot.callbackQuery(/^assess:/, handleSelectAssessment);
-bot.callbackQuery(/^assess_locked:/, handleAssessmentLocked);
-
+// Education
 bot.callbackQuery("show_education", handleShowEducationList);
 bot.callbackQuery(/^edu_card:/, handleShowEducationCard);
 bot.callbackQuery(/^edu_view:/, handleEducationView);
 bot.callbackQuery(/^edu_related:/, handleRelatedCards);
 
-bot.callbackQuery(/^deep_start:/, handleStartDeepAssessment);
-bot.callbackQuery(/^deep_answer:/, handleDeepAnswer);
-bot.callbackQuery(/^deep_edit:/, handleDeepEdit);
-bot.callbackQuery("deep_confirm", handleDeepConfirm);
-bot.callbackQuery("deep_reset", handleDeepReset);
-
+// Contact
 bot.callbackQuery("about_us", handleAboutUs);
 bot.callbackQuery("contact_us", handleContactUs);
 bot.callbackQuery("sample_reports", handleSampleReports);
@@ -144,26 +175,28 @@ bot.callbackQuery("sample_reports", handleSampleReports);
 // Text Messages
 // ═══════════════════════════════════════════════════════════════
 bot.on("message:text", async (ctx) => {
-  if (ctx.session.deepStep > 0 && ctx.session.deepModuleId) {
-    return await handleDeepTextInput(ctx);
-  }
-
+  // اگر در حال پاسخ به سؤالات است
   if (ctx.session.step > 0) {
-    const { handleTextInput } = require("./flows/consultation.js");
     return await handleTextInput(ctx);
   }
 
-  await ctx.reply(
-    "لطفاً از منوی زیر استفاده کنید یا /start بزنید.",
-    { reply_markup: mainMenuKB() }
-  );
+  // پیام پیش‌فرض
+  await ctx.reply("لطفاً از منوی زیر استفاده کنید یا /start بزنید.", {
+    reply_markup: mainMenuKB(),
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
 // Error Handler
 // ═══════════════════════════════════════════════════════════════
 bot.catch((err) => {
-  console.error("❌ Bot Error:", err);
+  const ctx = err.ctx;
+  console.error(`❌ خطا برای کاربر ${ctx.from?.id}:`, err.error);
+  
+  // لاگ دقیق‌تر
+  if (err.error.stack) {
+    console.error(err.error.stack);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -172,23 +205,22 @@ bot.catch((err) => {
 module.exports = async ({ req, res, log, error }) => {
   try {
     if (req.method === "POST") {
-      // ✅ فیکس: req.body در Appwrite قبلاً object است
-      const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      
-      log("Received update:", JSON.stringify(update));
-      
+      const update = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+      log("📨 Received update from Telegram");
+
       await bot.handleUpdate(update);
       return res.json({ ok: true });
     }
-    
-    // برای GET requests
-    return res.json({ 
-      status: "Bot is running", 
+
+    // GET request - Health Check
+    return res.json({
+      status: "✅ Bot is running",
       timestamp: new Date().toISOString(),
-      botInfo: botInfo || "Not set"
+      botInfo: botInfo,
     });
   } catch (e) {
-    error("Function error:", e);
+    error("❌ Function error:", e);
     return res.json({ ok: false, error: e.message }, 500);
   }
 };
