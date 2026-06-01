@@ -1,15 +1,10 @@
-// setup-db.js — تبدیل‌شده به CommonJS
+// setup-db.js — نسخه نهایی ۱۴۰۴/۱۲/۰۸
 // ═══════════════════════════════════════════════════════════════
-// ✅ فیکس: تبدیل از ESM به CommonJS
-// ✅ اسکریپت اضافه کردن فیلدهای جدید به دیتابیس
+// ✅ فیکس: حذف dotenv
 // ═══════════════════════════════════════════════════════════════
 
-require("dotenv").config();
 const { Client, Databases } = require("node-appwrite");
 
-// ═══════════════════════════════════════════════════════════════
-// تنظیمات
-// ═══════════════════════════════════════════════════════════════
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT || "https://fra.cloud.appwrite.io/v1")
   .setProject(process.env.APPWRITE_PROJECT_ID || "fra-699d6797003d63f0fd8c")
@@ -20,11 +15,8 @@ const db = new Databases(client);
 const DB = process.env.DATABASE_ID || process.env.APPWRITE_DB_ID || "699d6d5a0038857d3279";
 const USERS = process.env.COLLECTION_USERS || process.env.APPWRITE_USERS_COLLECTION || "users";
 
-// ═══════════════════════════════════════════════════════════════
-// اضافه کردن فیلدهای جدید
-// ═══════════════════════════════════════════════════════════════
 async function addNewFields() {
-  console.log("\n🔧 در حال اضافه کردن فیلدهای جدید به کالکشن users...\n");
+  console.log("\n🔧 در حال اضافه کردن فیلدهای جدید...\n");
 
   const fields = [
     { key: "nationalId", size: 10 },
@@ -41,13 +33,10 @@ async function addNewFields() {
       if (e.code === 409) {
         console.log(`ℹ️  فیلد ${f.key} قبلاً وجود دارد.`);
       } else {
-        console.error(`❌ خطا در ساخت ${f.key}:`, e.message);
+        console.error(`❌ خطا:`, e.message);
       }
     }
   }
-
-  // ایندکس‌ها
-  console.log("\n🔧 در حال اضافه کردن ایندکس‌ها...\n");
 
   const indexes = [
     { key: "idx_nationalId", field: "nationalId" },
@@ -67,14 +56,7 @@ async function addNewFields() {
     }
   }
 
-  console.log("\n✅ تمام فیلدهای جدید اضافه شدند!");
-  console.log("⚠️  توجه: ایندکس‌ها ممکن است ۱–۲ دقیقه طول بکشد تا فعال شوند.\n");
+  console.log("\n✅ تمام فیلدها اضافه شدند!\n");
 }
 
-// ═══════════════════════════════════════════════════════════════
-// اجرا
-// ═══════════════════════════════════════════════════════════════
-addNewFields().catch((err) => {
-  console.error("❌ خطای کلی:", err);
-  process.exit(1);
-});
+addNewFields().catch(console.error);
