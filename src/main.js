@@ -1,9 +1,4 @@
-// src/main.js — نسخه 2.0
-// ═══════════════════════════════════════════════════════════════
-// ✅ پاکسازی‌شده از کدهای بلااستفاده
-// ✅ اضافه شدن Rate Limiting
-// ✅ بهبود Error Handling
-// ✅ بهبود Security
+// src/main.js - نسخه 2.0 تمیز و بدون خطا
 // ═══════════════════════════════════════════════════════════════
 
 const { Bot, session } = require("grammy");
@@ -44,7 +39,6 @@ const {
 // ═══════════════════════════════════════════════════════════════
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
-// ✅ فیکس: botInfo از ENV یا Hardcoded
 const HARDCODED_BOT_INFO = {
   id: 8478705530,
   is_bot: true,
@@ -59,7 +53,7 @@ let botInfo;
 try {
   botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : HARDCODED_BOT_INFO;
 } catch (e) {
-  console.warn("⚠️ BOT_INFO parse failed, using hardcoded");
+  console.warn("BOT_INFO parse failed, using hardcoded");
   botInfo = HARDCODED_BOT_INFO;
 }
 
@@ -80,15 +74,13 @@ bot.use(
 );
 
 // ═══════════════════════════════════════════════════════════════
-// 🛡️ Rate Limiting (جلوگیری از Spam)
+// Rate Limiting
 // ═══════════════════════════════════════════════════════════════
 bot.use(rateLimitMiddleware());
-
-// شروع پاکسازی خودکار
 startCleanup();
 
 // ═══════════════════════════════════════════════════════════════
-// Middleware: ذخیره اطلاعات کاربر
+// Middleware: save user info
 // ═══════════════════════════════════════════════════════════════
 bot.use(async (ctx, next) => {
   if (ctx.from) {
@@ -99,7 +91,7 @@ bot.use(async (ctx, next) => {
         lastName: ctx.from.last_name || null,
       });
     } catch (e) {
-      console.error("❌ خطا در ذخیره کاربر:", e.message);
+      console.error("Error saving user:", e.message);
     }
   }
   await next();
@@ -110,7 +102,7 @@ bot.use(async (ctx, next) => {
 // ═══════════════════════════════════════════════════════════════
 bot.command("start", async (ctx) => {
   await ctx.reply(
-    "🎯 *به کاندیداتوری هوشمند خوش آمدید!*\n\n" +
+    "🎯 به کاندیداتوری هوشمند خوش آمدید!\n\n" +
       "سامانه تحلیل و مشاوره آمادگی کاندیداتوری\n\n" +
       "از منوی زیر انتخاب کنید:",
     { parse_mode: "Markdown", reply_markup: mainMenuKB() }
@@ -118,7 +110,7 @@ bot.command("start", async (ctx) => {
 });
 
 bot.command("menu", async (ctx) => {
-  await ctx.reply("📋 *منوی اصلی:*", {
+  await ctx.reply("📋 منوی اصلی:", {
     parse_mode: "Markdown",
     reply_markup: mainMenuKB(),
   });
@@ -132,12 +124,12 @@ bot.command("admin", handleAdminPanel);
 
 bot.callbackQuery("menu", async (ctx) => {
   try {
-    await ctx.editMessageText("📋 *منوی اصلی:*", {
+    await ctx.editMessageText("📋 منوی اصلی:", {
       parse_mode: "Markdown",
       reply_markup: mainMenuKB(),
     });
   } catch {
-    await ctx.reply("📋 *منوی اصلی:*", {
+    await ctx.reply("📋 منوی اصلی:", {
       parse_mode: "Markdown",
       reply_markup: mainMenuKB(),
     });
@@ -175,12 +167,10 @@ bot.callbackQuery("sample_reports", handleSampleReports);
 // Text Messages
 // ═══════════════════════════════════════════════════════════════
 bot.on("message:text", async (ctx) => {
-  // اگر در حال پاسخ به سؤالات است
   if (ctx.session.step > 0) {
     return await handleTextInput(ctx);
   }
 
-  // پیام پیش‌فرض
   await ctx.reply("لطفاً از منوی زیر استفاده کنید یا /start بزنید.", {
     reply_markup: mainMenuKB(),
   });
@@ -191,9 +181,8 @@ bot.on("message:text", async (ctx) => {
 // ═══════════════════════════════════════════════════════════════
 bot.catch((err) => {
   const ctx = err.ctx;
-  console.error(`❌ خطا برای کاربر ${ctx.from?.id}:`, err.error);
-  
-  // لاگ دقیق‌تر
+  console.error("Bot error for user", ctx.from?.id, ":", err.error);
+
   if (err.error.stack) {
     console.error(err.error.stack);
   }
@@ -207,20 +196,19 @@ module.exports = async ({ req, res, log, error }) => {
     if (req.method === "POST") {
       const update = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-      log("📨 Received update from Telegram");
+      log("Received update from Telegram");
 
       await bot.handleUpdate(update);
       return res.json({ ok: true });
     }
 
-    // GET request - Health Check
     return res.json({
-      status: "✅ Bot is running",
+      status: "Bot is running",
       timestamp: new Date().toISOString(),
       botInfo: botInfo,
     });
   } catch (e) {
-    error("❌ Function error:", e);
+    error("Function error:", e);
     return res.json({ ok: false, error: e.message }, 500);
   }
 };
