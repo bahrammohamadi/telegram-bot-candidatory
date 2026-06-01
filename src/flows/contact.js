@@ -1,87 +1,92 @@
-// src/flows/contact.js — نسخه 2.0 اصلاح‌شده
-// ═══════════════════════════════════════════════════════════════
-// ✅ فیکس: تمام توابع export شده
-// ✅ بهبود: اطلاعات تماس کامل‌تر
-// ✅ بهبود: UX بهتر
-// ═══════════════════════════════════════════════════════════════
-
 const { InlineKeyboard } = require("grammy");
 
-// ═══════════════════════════════════════════════════════════════
-// ℹ️ درباره ما
-// ═══════════════════════════════════════════════════════════════
 async function handleAboutUs(ctx) {
   const text =
-    "ℹ️ *درباره کاندیداتوری*\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "🎯 *نخستین سامانه تحلیل آمادگی کاندیداتوری در ایران*\n\n" +
-    "ما کمک می‌کنیم تا کاندیداهای انتخاباتی با استفاده از\n" +
-    "ابزارهای هوشمند، شانس موفقیت خود را افزایش دهند.\n\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "📊 *خدمات ما:*\n\n" +
-    "• تحلیل آمادگی کاندیداتوری\n" +
-    "• مشاوره استراتژیک کمپین\n" +
-    "• آموزش تخصصی انتخاباتی\n" +
-    "• تولید محتوای رسانه‌ای\n" +
-    "• تحلیل رقبا و بازار\n\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "🏆 *آمار ما:*\n\n" +
-    "• بیش از 1000 کاندیدا\n" +
-    "• نرخ موفقیت 68%\n" +
-    "• پوشش 31 استان\n\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "📱 *کانال‌های ارتباطی:*\n\n" +
-    "تلگرام: @candidatoryiran_bot\n" +
-    "وب‌سایت: candidatory.ir";
+    "ℹ️ درباره کاندیداتوری\n\n" +
+    "نخستین سامانه تحلیل آمادگی کاندیداتوری در ایران\n\n" +
+    "ما کمک می کنیم کاندیداها با ابزارهای هوشمند، شانس موفقیت خود را افزایش دهند.\n\n" +
+    "📊 خدمات:\n" +
+    "• تحلیل آمادگی\n" +
+    "• مشاوره استراتژیک\n" +
+    "• آموزش تخصصی\n\n" +
+    "تلگرام: @candidatoryiran_bot";
 
   const kb = new InlineKeyboard()
-    .url("🌐 وب‌سایت", "https://candidatory.ir")
-    .row()
-    .url("📱 کانال تلگرام", "https://t.me/candidatoryiran_bot")
+    .url("🌐 وب سایت", "https://candidatory.ir")
     .row()
     .text("« بازگشت", "menu");
 
   if (ctx.callbackQuery) {
     try {
-      await ctx.editMessageText(text, {
-        parse_mode: "Markdown",
-        reply_markup: kb,
-      });
+      await ctx.editMessageText(text, { reply_markup: kb });
     } catch {
-      await ctx.reply(text, {
-        parse_mode: "Markdown",
-        reply_markup: kb,
-      });
+      await ctx.reply(text, { reply_markup: kb });
     }
     await ctx.answerCallbackQuery();
   } else {
-    await ctx.reply(text, {
-      parse_mode: "Markdown",
-      reply_markup: kb,
-    });
+    await ctx.reply(text, { reply_markup: kb });
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// 📞 تماس با ما
-// ═══════════════════════════════════════════════════════════════
 async function handleContactUs(ctx) {
   const text =
-    "📞 *راه‌های ارتباط با ما*\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "📱 *تلگرام:*\n" +
+    "📞 راه های ارتباطی\n\n" +
+    "📱 تلگرام:\n" +
     "@candidatory_support\n\n" +
-    "📧 *ایمیل:*\n" +
+    "📧 ایمیل:\n" +
     "support@candidatory.ir\n\n" +
-    "📞 *تلفن:*\n" +
-    "021-12345678\n\n" +
-    "⏰ *ساعات پاسخگویی:*\n" +
-    "شنبه تا پنج‌شنبه: 9:00 - 18:00\n\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "💬 *سؤالات متداول:*\n\n" +
-    "• چگونه ثبت‌نام کنم؟\n" +
-    "→ /start کلیک کنید\n\n" +
-    "• قیمت پلن‌ها چقدر است؟\n" +
-    "→ /start > بسته‌های خدماتی\n\n" +
-    "• چگونه پرداخت کنم؟\n" +
-    "→ 
+    "⏰ ساعات پاسخگویی:\n" +
+    "شنبه تا پنج شنبه: 9 - 18\n\n" +
+    "همین الان پیام خود را ارسال کنید.";
+
+  const kb = new InlineKeyboard()
+    .url("📱 پشتیبانی", "https://t.me/candidatory_support")
+    .row()
+    .text("« بازگشت", "menu");
+
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.editMessageText(text, { reply_markup: kb });
+    } catch {
+      await ctx.reply(text, { reply_markup: kb });
+    }
+    await ctx.answerCallbackQuery();
+  } else {
+    await ctx.reply(text, { reply_markup: kb });
+  }
+}
+
+async function handleSampleReports(ctx) {
+  const text =
+    "📊 نمونه تحلیل ها\n\n" +
+    "🟢 نمونه 1: شورای شهر اصفهان\n" +
+    "امتیاز: 105/125\n" +
+    "نتیجه: برنده\n\n" +
+    "🟢 نمونه 2: شورای روستا\n" +
+    "امتیاز: 58/125\n" +
+    "نتیجه: برنده با مشاوره\n\n" +
+    "شما هم می توانید شانس خود را افزایش دهید.\n\n" +
+    "همین حالا شروع کنید!";
+
+  const kb = new InlineKeyboard()
+    .text("🎯 شروع", "start_consultation")
+    .row()
+    .text("« بازگشت", "menu");
+
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.editMessageText(text, { reply_markup: kb });
+    } catch {
+      await ctx.reply(text, { reply_markup: kb });
+    }
+    await ctx.answerCallbackQuery();
+  } else {
+    await ctx.reply(text, { reply_markup: kb });
+  }
+}
+
+module.exports = {
+  handleAboutUs,
+  handleContactUs,
+  handleSampleReports,
+};
