@@ -1,6 +1,6 @@
 // src/main.js — نسخه نهایی ۱۴۰۴/۱۲/۰۸
 // ═══════════════════════════════════════════════════════════════
-// ✅ فیکس: حذف dotenv (در Appwrite لازم نیست)
+// ✅ فیکس: حذف dotenv + فیکس JSON.parse
 // ═══════════════════════════════════════════════════════════════
 
 const { Bot, session } = require("grammy");
@@ -160,11 +160,20 @@ bot.catch((err) => {
 module.exports = async ({ req, res, log, error }) => {
   try {
     if (req.method === "POST") {
-      const update = JSON.parse(req.body || "{}");
+      // ✅ فیکس: req.body در Appwrite قبلاً object است
+      const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      
+      log("Received update:", JSON.stringify(update));
+      
       await bot.handleUpdate(update);
       return res.json({ ok: true });
     }
-    return res.json({ status: "Bot is running" });
+    
+    // برای GET requests
+    return res.json({ 
+      status: "Bot is running", 
+      timestamp: new Date().toISOString() 
+    });
   } catch (e) {
     error("Function error:", e);
     return res.json({ ok: false, error: e.message }, 500);
