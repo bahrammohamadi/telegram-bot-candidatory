@@ -38,7 +38,6 @@ const {
 
 // ==================== تنظیمات ====================
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const BOT_INFO_RAW = process.env.BOT_INFO;
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN تنظیم نشده است!");
@@ -47,13 +46,13 @@ if (!BOT_TOKEN) {
 
 // لود BOT_INFO
 let botInfo = null;
-if (BOT_INFO_RAW) {
-  try {
-    botInfo = JSON.parse(BOT_INFO_RAW);
-    console.log("✅ BOT_INFO لود شد.");
-  } catch (e) {
-    console.warn("⚠️ BOT_INFO نامعتبر است.");
+try {
+  if (process.env.BOT_INFO) {
+    botInfo = JSON.parse(process.env.BOT_INFO);
+    console.log("✅ BOT_INFO با موفقیت لود شد.");
   }
+} catch (e) {
+  console.warn("⚠️ BOT_INFO نامعتبر است. از اطلاعات پیش‌فرض استفاده می‌شود.");
 }
 
 // ساخت بات
@@ -89,7 +88,7 @@ bot.callbackQuery("main_menu", async (ctx) => {
   await ctx.answerCallbackQuery();
 });
 
-// Consultation Flow
+// Consultation
 bot.callbackQuery("start_consultation", handleStartConsultation);
 bot.callbackQuery(/^answer:/, handleAnswer);
 bot.callbackQuery(/^edit:/, handleEdit);
@@ -113,7 +112,7 @@ bot.callbackQuery("sample_reports", handleSampleReports);
 bot.callbackQuery("show_history", handleShowHistory);
 bot.callbackQuery(/^history:/, handleHistoryDetail);
 
-// Education
+// Education & Assessment
 bot.callbackQuery("education_list", handleShowEducationList);
 bot.callbackQuery(/^edu_card:/, handleShowEducationCard);
 bot.callbackQuery(/^edu_view:/, handleEducationView);
@@ -122,14 +121,12 @@ bot.callbackQuery("assessments", handleShowAssessments);
 bot.callbackQuery(/^start_test:/, handleStartAssessmentTest);
 bot.callbackQuery(/^assess:/, handleAssessmentAnswer);
 
-// Text Messages
+// Text input
 bot.on("message:text", handleTextInput);
 
-// ==================== Entry Point Appwrite ====================
+// ==================== Entry Point برای Appwrite ====================
 module.exports = async (req, res) => {
   try {
-    console.log("📥 Execution started");
-
     if (req.method === "POST" && req.body) {
       await bot.handleUpdate(req.body);
       return res.status(200).json({ status: "ok" });
@@ -146,18 +143,16 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ status: "ready" });
   } catch (error) {
-    console.error("❌ Error in execution:", error.message);
+    console.error("❌ Execution Error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 };
 
-// Local Run (اختیاری)
+// اجرای محلی (اختیاری)
 if (require.main === module) {
-  console.log("🚀 Running in local mode...");
+  console.log("🚀 Bot running locally...");
   bot.start().then(() => {
-    console.log("✅ Bot started successfully");
+    console.log("✅ Bot started");
     startCleanup();
-  }).catch(err => {
-    console.error("❌ Bot start failed:", err);
-  });
+  }).catch(console.error);
 }
