@@ -1,4 +1,4 @@
-// src/main.js — نسخه نهایی حرفه‌ای
+// src/main.js — نسخه نهایی کامل
 const { Bot, session } = require("grammy");
 const { getOrCreateUser } = require("./utils/db.js");
 const { mainMenuKB } = require("./utils/keyboard.js");
@@ -17,7 +17,6 @@ const { handleShowPlans, handleSelectPlan } = require("./flows/plans.js");
 const { handleAdminPanel, handleAdminLeads } = require("./flows/admin.js");
 const { handleAboutUs, handleContactUs, handleSampleReports } = require("./flows/contact.js");
 const { handleShowHistory, handleHistoryDetail } = require("./flows/history.js");
-
 const {
   handleShowEducationList,
   handleShowEducationCard,
@@ -34,7 +33,7 @@ const {
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
 const HARDCODED_BOT_INFO = {
-  id: 8478705530,
+  id: 847870553,
   is_bot: true,
   first_name: "کاندیداتوری هوشمند",
   username: "candidatoryiran_bot",
@@ -45,14 +44,27 @@ const HARDCODED_BOT_INFO = {
 
 let botInfo;
 try {
-  botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : HARDCODED_BOT_INFO;
+  botInfo = process.env.BOT_INFO
+    ? JSON.parse(process.env.BOT_INFO)
+    : HARDCODED_BOT_INFO;
 } catch (e) {
   botInfo = HARDCODED_BOT_INFO;
 }
 
 const bot = new Bot(BOT_TOKEN, { botInfo });
 
-bot.use(session({ initial: () => ({ step: 0, answers: {}, currentTest: null, testStep: 0, testAnswers: {} }) }));
+bot.use(
+  session({
+    initial: () => ({
+      step: 0,
+      answers: {},
+      currentTest: null,
+      testStep: 0,
+      testAnswers: {},
+    }),
+  })
+);
+
 bot.use(rateLimitMiddleware());
 startCleanup();
 
@@ -73,23 +85,23 @@ bot.use(async (ctx, next) => {
 });
 
 // ═══════════════════════════════════════════════════
-// متن خوشامدگویی جذاب
+// پیام خوشامدگویی
 // ═══════════════════════════════════════════════════
 const WELCOME_MESSAGE =
-  `🏛️ *به کاندیداتوری هوشمند خوش آمدید!*\n\n` +
+  `🎯 *به کاندیداتوری هوشمند خوش آمدید!*\n\n` +
   `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-  `🎯 *اولین و تنها دستیار هوشمند کمپین انتخاباتی در ایران*\n\n` +
+  `🏆 *اولین و تنها دستیار هوشمند کمپین انتخاباتی در ایران*\n\n` +
   `با استفاده از هوش مصنوعی پیشرفته، شانس موفقیت خود را\n` +
   `در انتخابات به طور علمی و دقیق ارزیابی کنید.\n\n` +
   `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
   `✨ *امکانات ویژه:*\n` +
-  `🚀 تحلیل آمادگی کاندیداتوری\n` +
-  `📊 گزارش تحلیلی هوشمند\n` +
+  `📊 تحلیل آمادگی کاندیداتوری\n` +
+  `🤖 گزارش تحلیلی هوشمند\n` +
   `📚 آموزش‌های تخصصی\n` +
-  `🧪 تست‌های حرفه‌ای\n` +
+  `✅ تست‌های حرفه‌ای\n` +
   `📋 تاریخچه تحلیل‌ها\n\n` +
   `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-  `👇 *از منوی زیر شروع کنید:*`;
+  `🚀 *از منوی زیر شروع کنید:*`;
 
 // ═══════════════════════════════════════════════════
 // دستورات
@@ -170,7 +182,7 @@ bot.on("message:text", async (ctx) => {
     return await handleTextInput(ctx);
   }
   await ctx.reply(
-    "💡 لطفاً از منوی زیر استفاده کنید یا /start بزنید.",
+    "🏠 لطفاً از منوی زیر استفاده کنید یا /start بزنید.",
     { reply_markup: mainMenuKB() }
   );
 });
@@ -184,17 +196,21 @@ bot.catch((err) => {
 });
 
 // ═══════════════════════════════════════════════════
-// Export
+// Export for Appwrite Function
 // ═══════════════════════════════════════════════════
 module.exports = async ({ req, res, log, error }) => {
   try {
     if (req.method === "POST") {
-      const update = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      const update =
+        typeof req.body === "string" ? JSON.parse(req.body) : req.body;
       log("Received update");
       await bot.handleUpdate(update);
       return res.json({ ok: true });
     }
-    return res.json({ status: "running", timestamp: new Date().toISOString() });
+    return res.json({
+      status: "running",
+      timestamp: new Date().toISOString(),
+    });
   } catch (e) {
     error("Error:", e);
     return res.json({ ok: false, error: e.message }, 500);
