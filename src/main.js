@@ -1,7 +1,7 @@
 // src/main.js
 const { Bot, session } = require("grammy");
 
-// ==================== Utility & Flows ====================
+// Utility & Flows
 const { getOrCreateUser } = require("./utils/db.js");
 const { mainMenuKB } = require("./utils/keyboard.js");
 const { rateLimitMiddleware, startCleanup } = require("./middleware/rate-limit.js");
@@ -17,6 +17,7 @@ const {
 
 const { handleShowPlans, handleSelectPlan } = require("./flows/plans.js");
 const { handleAdminPanel, handleAdminLeads } = require("./flows/admin.js");
+
 const {
   handleAboutUs,
   handleContactUs,
@@ -35,30 +36,29 @@ const {
   handleAssessmentAnswer,
 } = require("./flows/educational.js");
 
-// ==================== تنظیمات Appwrite ====================
+// ==================== تنظیمات ====================
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_INFO_RAW = process.env.BOT_INFO;
 
 if (!BOT_TOKEN) {
-  console.error("❌ BOT_TOKEN در Environment Variables تنظیم نشده است!");
+  console.error("❌ BOT_TOKEN تنظیم نشده است!");
   process.exit(1);
 }
 
-// تنظیم botInfo برای جلوگیری از خطای "Bot not initialized"
+// لود BOT_INFO
 let botInfo = null;
 if (BOT_INFO_RAW) {
   try {
     botInfo = JSON.parse(BOT_INFO_RAW);
-    console.log("✅ BOT_INFO از Environment Variables لود شد.");
+    console.log("✅ BOT_INFO لود شد.");
   } catch (e) {
-    console.warn("⚠️ BOT_INFO معتبر نیست، از حالت fallback استفاده می‌شود.");
+    console.warn("⚠️ BOT_INFO نامعتبر است.");
   }
 }
 
-// ==================== ساخت بات ====================
+// ساخت بات
 const bot = new Bot(BOT_TOKEN);
 
-// تنظیم botInfo (خیلی مهم برای Appwrite)
 if (botInfo) {
   bot.botInfo = botInfo;
 }
@@ -67,7 +67,7 @@ if (botInfo) {
 bot.use(session({ initial: () => ({ step: null, data: {} }) }));
 bot.use(rateLimitMiddleware);
 
-// ==================== Command & Callback Handlers ====================
+// ==================== هندلرها ====================
 
 bot.command("start", async (ctx) => {
   await getOrCreateUser(ctx.from.id, {
@@ -104,7 +104,7 @@ bot.callbackQuery(/^select_plan:/, handleSelectPlan);
 bot.callbackQuery("admin_panel", handleAdminPanel);
 bot.callbackQuery("admin_leads", handleAdminLeads);
 
-// Static Pages
+// Static
 bot.callbackQuery("about_us", handleAboutUs);
 bot.callbackQuery("contact_us", handleContactUs);
 bot.callbackQuery("sample_reports", handleSampleReports);
@@ -113,7 +113,7 @@ bot.callbackQuery("sample_reports", handleSampleReports);
 bot.callbackQuery("show_history", handleShowHistory);
 bot.callbackQuery(/^history:/, handleHistoryDetail);
 
-// Education & Assessment
+// Education
 bot.callbackQuery("education_list", handleShowEducationList);
 bot.callbackQuery(/^edu_card:/, handleShowEducationCard);
 bot.callbackQuery(/^edu_view:/, handleEducationView);
@@ -122,21 +122,19 @@ bot.callbackQuery("assessments", handleShowAssessments);
 bot.callbackQuery(/^start_test:/, handleStartAssessmentTest);
 bot.callbackQuery(/^assess:/, handleAssessmentAnswer);
 
-// پیام‌های متنی کاربر
+// Text Messages
 bot.on("message:text", handleTextInput);
 
-// ==================== Entry Point برای Appwrite ====================
+// ==================== Entry Point Appwrite ====================
 module.exports = async (req, res) => {
   try {
     console.log("📥 Execution started");
 
-    // برای webhook mode (توصیه‌شده در Appwrite)
     if (req.method === "POST" && req.body) {
       await bot.handleUpdate(req.body);
       return res.status(200).json({ status: "ok" });
     }
 
-    // تست اولیه
     if (req.method === "GET") {
       const me = await bot.api.getMe();
       return res.status(200).json({
@@ -148,16 +146,18 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ status: "ready" });
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error("❌ Error in execution:", error.message);
     return res.status(500).json({ error: error.message });
   }
 };
 
-// فقط برای اجرای محلی (اختیاری)
+// Local Run (اختیاری)
 if (require.main === module) {
-  console.log("🚀 Running locally...");
+  console.log("🚀 Running in local mode...");
   bot.start().then(() => {
-    console.log("✅ Bot started locally");
+    console.log("✅ Bot started successfully");
     startCleanup();
+  }).catch(err => {
+    console.error("❌ Bot start failed:", err);
   });
 }
