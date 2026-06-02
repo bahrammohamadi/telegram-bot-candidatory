@@ -88,7 +88,7 @@ bot.callbackQuery("main_menu", async (ctx) => {
   await ctx.answerCallbackQuery();
 });
 
-// Consultation
+// Consultation Flow
 bot.callbackQuery("start_consultation", handleStartConsultation);
 bot.callbackQuery(/^answer:/, handleAnswer);
 bot.callbackQuery(/^edit:/, handleEdit);
@@ -103,7 +103,7 @@ bot.callbackQuery(/^select_plan:/, handleSelectPlan);
 bot.callbackQuery("admin_panel", handleAdminPanel);
 bot.callbackQuery("admin_leads", handleAdminLeads);
 
-// Static
+// Static Pages
 bot.callbackQuery("about_us", handleAboutUs);
 bot.callbackQuery("contact_us", handleContactUs);
 bot.callbackQuery("sample_reports", handleSampleReports);
@@ -121,10 +121,10 @@ bot.callbackQuery("assessments", handleShowAssessments);
 bot.callbackQuery(/^start_test:/, handleStartAssessmentTest);
 bot.callbackQuery(/^assess:/, handleAssessmentAnswer);
 
-// Text input
+// Text Messages
 bot.on("message:text", handleTextInput);
 
-// ==================== Entry Point برای Appwrite ====================
+// ==================== Entry Point Appwrite ====================
 module.exports = async (req, res) => {
   try {
     if (req.method === "POST" && req.body) {
@@ -148,7 +148,7 @@ module.exports = async (req, res) => {
   }
 };
 
-// اجرای محلی (اختیاری)
+// اجرای محلی
 if (require.main === module) {
   console.log("🚀 Bot running locally...");
   bot.start().then(() => {
