@@ -1,4 +1,3 @@
-"use strict";
 const { Bot, session } = require("grammy");
 const { getOrCreateUser } = require("./utils/db.js");
 const { mainMenuKB } = require("./utils/keyboard.js");
@@ -11,9 +10,9 @@ const { handleShowHistory, handleHistoryDetail } = require("./flows/history.js")
 const { handleShowEducationList, handleShowEducationCard, handleEducationView, handleRelatedCards, handleShowAssessments, handleStartAssessmentTest, handleAssessmentAnswer } = require("./flows/educational.js");
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
-const HARDCODED = { id: 847870553, is_bot: true, first_name: "کاندیداتوری", username: "candidatoryiran_bot", can_join_groups: true, can_read_all_group_messages: false, supports_inline_queries: false };
+const HB = { id: 847870553, is_bot: true, first_name: "کاندیداتوری", username: "candidatoryiran_bot", can_join_groups: true, can_read_all_group_messages: false, supports_inline_queries: false };
 let botInfo;
-try { botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : HARDCODED; } catch (e) { botInfo = HARDCODED; }
+try { botInfo = process.env.BOT_INFO ? JSON.parse(process.env.BOT_INFO) : HB; } catch(e) { botInfo = HB; }
 
 const bot = new Bot(BOT_TOKEN, { botInfo });
 bot.use(session({ initial: () => ({ step: 0, answers: {}, currentTest: null, testStep: 0, testAnswers: {} }) }));
@@ -22,20 +21,24 @@ startCleanup();
 
 bot.use(async (ctx, next) => {
   if (ctx.from) {
-    try { await getOrCreateUser(ctx.from.id, { username: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null }); } catch (e) { console.error("err:", e.message); }
+    try { await getOrCreateUser(ctx.from.id, { username: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null }); } catch(e) {}
   }
   await next();
 });
 
-const WELCOME = "🎯 *به کاندیداتوری هوشمند خوش آمدید!*\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏆 *اولین دستیار هوشمند کمپین انتخاباتی*\n\n✨ *امکانات:*\n📊 تحلیل آمادگی\n🤖 گزارش هوشمند\n📚 آموزش تخصصی\n✅ تست‌های حرفه‌ای\n\n🚀 *از منو شروع کنید:*";
+bot.command("start", async (ctx) => {
+  await ctx.reply("🎯 *به کاندیداتوری هوشمند خوش آمدید!*\n\nاز منوی زیر شروع کنید:", { parse_mode: "Markdown", reply_markup: mainMenuKB() });
+});
 
-bot.command("start", async (ctx) => { await ctx.reply(WELCOME, { parse_mode: "Markdown", reply_markup: mainMenuKB() }); });
-bot.command("menu", async (ctx) => { await ctx.reply("🏠 *منوی اصلی:*", { parse_mode: "Markdown", reply_markup: mainMenuKB() }); });
+bot.command("menu", async (ctx) => {
+  await ctx.reply("🏠 منوی اصلی:", { reply_markup: mainMenuKB() });
+});
+
 bot.command("admin", handleAdminPanel);
 
 bot.callbackQuery("menu", async (ctx) => {
-  try { await ctx.editMessageText("🏠 *منوی اصلی:*", { parse_mode: "Markdown", reply_markup: mainMenuKB() }); }
-  catch { await ctx.reply("🏠 *منوی اصلی:*", { parse_mode: "Markdown", reply_markup: mainMenuKB() }); }
+  try { await ctx.editMessageText("🏠 منوی اصلی:", { reply_markup: mainMenuKB() }); }
+  catch { await ctx.reply("🏠 منوی اصلی:", { reply_markup: mainMenuKB() }); }
   await ctx.answerCallbackQuery();
 });
 
@@ -62,7 +65,7 @@ bot.callbackQuery("admin_leads", handleAdminLeads);
 
 bot.on("message:text", async (ctx) => {
   if (ctx.session.step > 0) return await handleTextInput(ctx);
-  await ctx.reply("🏠 لطفاً از منوی زیر استفاده کنید یا /start بزنید.", { reply_markup: mainMenuKB() });
+  await ctx.reply("🏠 از منوی زیر استفاده کنید یا /start بزنید.", { reply_markup: mainMenuKB() });
 });
 
 bot.catch((err) => { console.error("Bot error:", err.error); });
@@ -76,7 +79,7 @@ module.exports = async ({ req, res, log, error }) => {
       return res.json({ ok: true });
     }
     return res.json({ status: "running", timestamp: new Date().toISOString() });
-  } catch (e) {
+  } catch(e) {
     error("Error:", e);
     return res.json({ ok: false, error: e.message }, 500);
   }
