@@ -52,7 +52,7 @@ try {
     console.log("✅ BOT_INFO با موفقیت لود شد.");
   }
 } catch (e) {
-  console.warn("⚠️ BOT_INFO نامعتبر است. از اطلاعات پیش‌فرض استفاده می‌شود.");
+  console.warn("⚠️ BOT_INFO نامعتبر است.");
 }
 
 // ساخت بات
@@ -88,7 +88,7 @@ bot.callbackQuery("main_menu", async (ctx) => {
   await ctx.answerCallbackQuery();
 });
 
-// Consultation Flow
+// Consultation
 bot.callbackQuery("start_consultation", handleStartConsultation);
 bot.callbackQuery(/^answer:/, handleAnswer);
 bot.callbackQuery(/^edit:/, handleEdit);
@@ -103,7 +103,7 @@ bot.callbackQuery(/^select_plan:/, handleSelectPlan);
 bot.callbackQuery("admin_panel", handleAdminPanel);
 bot.callbackQuery("admin_leads", handleAdminLeads);
 
-// Static Pages
+// Static
 bot.callbackQuery("about_us", handleAboutUs);
 bot.callbackQuery("contact_us", handleContactUs);
 bot.callbackQuery("sample_reports", handleSampleReports);
@@ -112,7 +112,7 @@ bot.callbackQuery("sample_reports", handleSampleReports);
 bot.callbackQuery("show_history", handleShowHistory);
 bot.callbackQuery(/^history:/, handleHistoryDetail);
 
-// Education & Assessment
+// Education
 bot.callbackQuery("education_list", handleShowEducationList);
 bot.callbackQuery(/^edu_card:/, handleShowEducationCard);
 bot.callbackQuery(/^edu_view:/, handleEducationView);
@@ -121,7 +121,7 @@ bot.callbackQuery("assessments", handleShowAssessments);
 bot.callbackQuery(/^start_test:/, handleStartAssessmentTest);
 bot.callbackQuery(/^assess:/, handleAssessmentAnswer);
 
-// Text Messages
+// Text input
 bot.on("message:text", handleTextInput);
 
 // ==================== Entry Point Appwrite ====================
@@ -148,9 +148,9 @@ module.exports = async (req, res) => {
   }
 };
 
-// اجرای محلی
+// Local run
 if (require.main === module) {
-  console.log("🚀 Bot running locally...");
+  console.log("🚀 Running locally...");
   bot.start().then(() => {
     console.log("✅ Bot started");
     startCleanup();
