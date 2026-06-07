@@ -18,6 +18,7 @@ const { Bot, InlineKeyboard, webhookCallback } = require("grammy");
 const { getOrCreateUser, updateUser, initDB } = require("./utils/db.js");
 const { requireAccess } = require("./utils/access.js");
 const { mainMenuKB, analysisMenuKB } = require("./utils/keyboard.js");
+const { isAdminUserSync } = require("./utils/admin-auth.js");
 
 // ─── بارگذاری امن فلوها ─────────────────────────────────────────
 // اگر فایلی هنوز در پروژه نباشد، crash نمی‌کنیم؛ یک stub قرار می‌دهیم
@@ -133,12 +134,12 @@ bot.use(async (ctx, next) => {
 // ۳) دستورات اصلی
 // ═══════════════════════════════════════════════════════════════
 
-// /start — منوی اصلی
+// /start — راهنمای ورود اول (برای کاربر جدید) یا منوی اصلی
 bot.command("start", async (ctx) => {
   const userId = String(ctx.from.id);
 
   // ساخت/بازیابی کاربر
-  await getOrCreateUser(userId, {
+  const user = await getOrCreateUser(userId, {
     firstName: ctx.from.first_name || null,
     lastName: ctx.from.last_name || null,
     username: ctx.from.username || null,
@@ -148,7 +149,31 @@ bot.command("start", async (ctx) => {
   // پاک کردن state در حال انجام (در صورت وجود)
   await updateUser(userId, { currentStep: null, tempAnswers: "{}" });
 
+  // ─── راهنمای ورود اول ───
+  // اگر کاربر تا به حال راهنما را ندیده (onboardingSeen تنظیم نشده)،
+  // به جای منوی اصلی، صفحه‌ی خوش‌آمد + شمای کلی ربات را نشان می‌دهیم.
+  if (!user.onboardingSeen) {
+    return showWelcomeGuide(ctx);
+  }
+
   await showMainMenu(ctx);
+});
+
+// دکمه‌ی «شروع» در صفحه‌ی خوش‌آمد → علامت‌گذاری دیده‌شدن راهنما و ورود به منو
+bot.callbackQuery("welcome_start", async (ctx) => {
+  const userId = String(ctx.from.id);
+  try {
+    await updateUser(userId, { onboardingSeen: true });
+  } catch (e) {
+    // اگر فیلد onboardingSeen در دیتابیس نباشد، باز هم منو را نشان می‌دهیم
+    console.warn("[welcome] onboardingSeen warn:", e?.message || e);
+  }
+  await showMainMenu(ctx);
+});
+
+// نمایش مجدد راهنما با دکمه/دستور
+bot.callbackQuery("show_guide", async (ctx) => {
+  await showWelcomeGuide(ctx);
 });
 
 // /menu — همان منوی اصلی
@@ -212,6 +237,39 @@ bot.command("admin", async (ctx) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// ۴‑الف) صفحه‌ی خوش‌آمد و راهنمای ورود اول
+// ═══════════════════════════════════════════════════════════════
+async function showWelcomeGuide(ctx) {
+  const name = ctx.from.first_name || "هم‌میهن";
+
+  const text =
+    `🏛️ *به «کاندیداتوری هوشمند» خوش آمدید، ${name} عزیز!*\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `این ربات، *دستیار جامع کمپین انتخاباتی* شماست؛ از سنجش آمادگی تا مدیریت رقبا، تولید محتوا و آموزش تخصصی.\n\n` +
+    `🗺️ *شمای کلی کار ربات:*\n\n` +
+    `1️⃣ *ارزیابی آمادگی* — با پاسخ به ۹ پرسش علمی، امتیاز آمادگی و نقاط قوت/ضعف خود را بگیرید.\n` +
+    `2️⃣ *تحلیل و داشبورد* — تحلیل SWOT و داشبورد سلامت کمپین.\n` +
+    `3️⃣ *مدیریت کمپین* — رقبا، وعده‌ها، تیم و مدیریت بحران.\n` +
+    `4️⃣ *تولید محتوا* — پست، بیانیه، سخنرانی و پاسخ به انتقاد.\n` +
+    `5️⃣ *آموزش تخصصی* — کارت‌های آموزشی کاربردی برای کمپین.\n\n` +
+    `🎁 *به‌صورت رایگان می‌توانید* همین حالا ارزیابی آمادگی کامل را انجام دهید و امتیاز کلی‌تان را ببینید.\n\n` +
+    `💡 *نکته:* هر وقت گم شدید، کافیست /menu را بزنید یا /help را ببینید.\n\n` +
+    `👇 برای شروع، دکمه‌ی زیر را بزنید:`;
+
+  const kb = new InlineKeyboard()
+    .text("🚀 شروع کار با ربات", "welcome_start").row()
+    .text("🆘 راهنمای کامل", "show_guide").row();
+
+  if (ctx.callbackQuery) {
+    try { await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb }); }
+    catch { await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb }); }
+    try { await ctx.answerCallbackQuery(); } catch {}
+  } else {
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ۴) نمایش منوی اصلی
 // ═══════════════════════════════════════════════════════════════
 async function showMainMenu(ctx) {
@@ -219,13 +277,16 @@ async function showMainMenu(ctx) {
   const user = await getOrCreateUser(userId, {});
 
   const greetingName = user.firstName || ctx.from.first_name || "هم‌میهن";
-  const planLabel = {
-    none: "🆓 رایگان",
-    free: "🆓 رایگان",
-    starter: "🚀 راه‌اندازی",
-    professional: "⭐ حرفه‌ای",
-    vip: "👑 VIP",
-  }[user.purchasedPlan || "free"] || "🆓 رایگان";
+  const isAdmin = isAdminUserSync(user);
+  const planLabel = isAdmin
+    ? "🛠 ادمین (دسترسی کامل)"
+    : ({
+        none: "🆓 رایگان",
+        free: "🆓 رایگان",
+        starter: "🚀 راه‌اندازی",
+        professional: "⭐ حرفه‌ای",
+        vip: "👑 VIP",
+      }[user.purchasedPlan || "free"] || "🆓 رایگان");
 
   const text =
     `👋 *سلام ${greetingName} عزیز!*\n` +
@@ -789,3 +850,4 @@ if (require.main === module) {
 // برای دسترسی به bot از خارج (مثلاً تست)
 module.exports.bot = bot;
 module.exports.showMainMenu = showMainMenu;
+module.exports.showWelcomeGuide = showWelcomeGuide;
