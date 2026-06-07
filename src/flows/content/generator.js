@@ -375,31 +375,37 @@ function buildAfterFinalKB(typeId) {
 // نمایش منوی اصلی تولید محتوا
 // ───────────────────────────────────────────────────────────────
 async function handleContentMenu(ctx) {
-  const access = await requireAccess(ctx, "content_generator");
-  if (!access) return;
+  // منو همیشه نمایش داده می‌شود؛ آیتم‌های قفل با برچسب پلنِ لازم مشخص می‌شوند
+  // تا کاربر بداند هر مورد به کدام بسته نیاز دارد و چرا قفل است.
+  const { featureLockInfo } = require("../../utils/access.js");
+
+  const items = [
+    { feature: "content_post",      label: "📱 پست شبکه اجتماعی" },
+    { feature: "content_speech",    label: "🎤 متن سخنرانی" },
+    { feature: "content_slogan",    label: "💬 شعار انتخاباتی" },
+    { feature: "content_sms",       label: "📨 پیامک تبلیغاتی" },
+    { feature: "content_statement", label: "📜 بیانیه رسمی" },
+    { feature: "content_banner",    label: "🖼 متن بنر و پوستر" },
+  ];
+  const typeOf = {
+    content_post: "post", content_speech: "speech", content_slogan: "slogan",
+    content_sms: "sms", content_statement: "statement", content_banner: "banner",
+  };
 
   const text =
     "✍️ *تولید محتوای انتخاباتی*\n" +
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    "با کمک هوش مصنوعی، محتوای حرفه‌ای برای کمپین خود بسازید:\n\n" +
-    "📱 پست شبکه‌های اجتماعی\n" +
-    "🎤 متن سخنرانی\n" +
-    "💬 شعار انتخاباتی\n" +
-    "📨 پیامک تبلیغاتی\n" +
-    "📜 بیانیه رسمی\n" +
-    "🖼 متن بنر و پوستر\n\n" +
-    "_یکی از موارد زیر را انتخاب کنید:_";
+    "با کمک هوش مصنوعی، محتوای حرفه‌ای برای کمپین خود بسازید.\n\n" +
+    "_موارد دارای 🔒 با ارتقای بسته فعال می‌شوند._\n\n" +
+    "یکی را انتخاب کنید:";
 
-  const kb = contentMenuKB
-    ? contentMenuKB()
-    : new InlineKeyboard()
-        .text("📱 پست شبکه اجتماعی", "content:start:post").row()
-        .text("🎤 متن سخنرانی",       "content:start:speech").row()
-        .text("💬 شعار انتخاباتی",     "content:start:slogan").row()
-        .text("📨 پیامک تبلیغاتی",     "content:start:sms").row()
-        .text("📜 بیانیه رسمی",        "content:start:statement").row()
-        .text("🖼 متن بنر و پوستر",    "content:start:banner").row()
-        .text("🏠 منوی اصلی",          "menu");
+  const kb = new InlineKeyboard();
+  for (const it of items) {
+    const lock = await featureLockInfo(ctx, it.feature);
+    kb.text(`${it.label}${lock.badge}`, `content:start:${typeOf[it.feature]}`).row();
+  }
+  kb.text("💼 مشاهده بسته‌ها", "show_plans").row();
+  kb.text("🏠 منوی اصلی", "menu");
 
   if (ctx.callbackQuery) {
     try {
