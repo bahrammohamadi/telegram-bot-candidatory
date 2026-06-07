@@ -21,6 +21,21 @@ const { InlineKeyboard } = require("grammy");
 const { getOrCreateUser, updateUser } = require("../../utils/db.js");
 const { requireAccess } = require("../../utils/access.js");
 const { contentMenuKB } = require("../../utils/keyboard.js");
+const { generateAI, isAIConfigured } = require("../../utils/ai.js");
+const {
+  postPrompt, speechPrompt, sloganPrompt,
+  smsPrompt, statementPrompt, bannerPrompt,
+} = require("../../utils/ai-prompts.js");
+
+// نگاشت نوع محتوا → سازنده‌ی prompt
+const AI_PROMPT_BUILDERS = {
+  post:      postPrompt,
+  speech:    speechPrompt,
+  slogan:    sloganPrompt,
+  sms:       smsPrompt,
+  statement: statementPrompt,
+  banner:    bannerPrompt,
+};
 
 // ───────────────────────────────────────────────────────────────
 // محدوده‌ی State
@@ -861,29 +876,95 @@ function generateBanner(a, profile) {
 // ───────────────────────────────────────────────────────────────
 // تولید نهایی و نمایش
 // ───────────────────────────────────────────────────────────────
+// نمایش پیام خطای تولید + دکمه‌ی تلاش مجدد (state حفظ می‌شود تا دوباره امتحان شود)
+async function showContentError(ctx, typeId, reason) {
+  const cfg = CONTENT_TYPES[typeId] || { emoji: "✍️", title: "محتوا" };
+  const text =
+    `⚠️ *تولید ${cfg.emoji} ${cfg.title} ناموفق بود*\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `${reason}\n\n` +
+    `_می‌توانید دوباره تلاش کنید._`;
+
+  const kb = new InlineKeyboard()
+    .text("🔁 تلاش مجدد", `content:retry:${typeId}`).row()
+    .text("📝 نوع دیگر محتوا", "content:menu").row()
+    .text("🏠 منوی اصلی", "menu");
+
+  try {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb });
+      } catch {
+        await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+      }
+      try { await ctx.answerCallbackQuery(); } catch {}
+    } else {
+      await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+    }
+  } catch (e) {
+    console.error("[content] showContentError:", e?.message || e);
+  }
+}
+
 async function finalizeContent(ctx, typeId) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, {});
   const answers = parseAnswers(user.tempAnswers);
 
   // پروفایل کاندیدا برای شخصی‌سازی متن
-  const profile = user.profile || user; // سازگار با هر دو ساختار
-
-  let out;
-  switch (typeId) {
-    case "post":      out = generatePost(answers, profile); break;
-    case "speech":    out = generateSpeech(answers, profile); break;
-    case "slogan":    out = generateSlogan(answers); break;
-    case "sms":       out = generateSms(answers, profile); break;
-    case "statement": out = generateStatement(answers, profile); break;
-    case "banner":    out = generateBanner(answers, profile); break;
-    default:          out = { body: "خطا: نوع نامعتبر." };
+  let profile = user.profile || user; // سازگار با هر دو ساختار
+  if (typeof profile === "string") {
+    try { profile = JSON.parse(profile); } catch { profile = user; }
   }
 
-  // پاک کردن state
+  const cfg = CONTENT_TYPES[typeId];
+
+  // ───────────────────────────────────────────────────────────
+  // تولید با هوش مصنوعی (AI-first)
+  // اگر AI پیکربندی نشده یا خطا داد → پیام خطا + دکمه‌ی تلاش مجدد
+  // ───────────────────────────────────────────────────────────
+  const promptBuilder = AI_PROMPT_BUILDERS[typeId];
+
+  if (!isAIConfigured() || !promptBuilder) {
+    return showContentError(
+      ctx, typeId,
+      !promptBuilder ? "نوع محتوای نامعتبر." :
+        "سرویس هوش مصنوعی هنوز پیکربندی نشده است. لطفاً بعداً تلاش کنید."
+    );
+  }
+
+  // نشان دادن حالت «در حال تولید...» تا کاربر منتظر بماند
+  try {
+    if (ctx.callbackQuery) {
+      await ctx.answerCallbackQuery({ text: "🤖 در حال تولید با هوش مصنوعی…" });
+      try {
+        await ctx.editMessageText(
+          `🤖 *در حال تولید ${cfg.emoji} ${cfg.title} با هوش مصنوعی…*\n\n_چند لحظه صبر کنید…_`,
+          { parse_mode: "Markdown" }
+        );
+      } catch {}
+    } else {
+      await ctx.reply("🤖 در حال تولید با هوش مصنوعی…");
+    }
+  } catch {}
+
+  let aiText;
+  try {
+    const { system, prompt } = promptBuilder(answers, profile);
+    aiText = await generateAI({ system, prompt });
+  } catch (e) {
+    console.error("[content][AI] error:", e?.message || e);
+    return showContentError(
+      ctx, typeId,
+      "تولید با هوش مصنوعی موقتاً ناموفق بود. لطفاً دوباره تلاش کنید."
+    );
+  }
+
+  const out = { body: aiText, note: "✨ تولیدشده با هوش مصنوعی — قبل از انتشار بازبینی کنید." };
+
+  // پاک کردن state (فقط پس از موفقیت)
   await updateUser(userId, { currentStep: null, tempAnswers: "{}" });
 
-  const cfg = CONTENT_TYPES[typeId];
   const header =
     `✅ *${cfg.emoji} ${cfg.title} — آماده شد*\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -944,6 +1025,17 @@ async function handleContentCallback(ctx) {
     }
     if (action === "start") {
       const typeId = parts[2];
+      return handleStartType(ctx, typeId);
+    }
+    if (action === "retry") {
+      // تلاش مجدد تولید: اگر پاسخ‌های فرم هنوز موجودند مستقیماً تولید کن،
+      // در غیر این صورت فرم را از نو شروع کن.
+      const typeId = parts[2];
+      const u = await getOrCreateUser(String(ctx.from.id), {});
+      const ans = parseAnswers(u.tempAnswers);
+      if (ans && Object.keys(ans).length > 0) {
+        return finalizeContent(ctx, typeId);
+      }
       return handleStartType(ctx, typeId);
     }
     if (action === "ans") {
