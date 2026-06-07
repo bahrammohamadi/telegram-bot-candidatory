@@ -555,11 +555,25 @@ bot.callbackQuery(/^readiness:/, async (ctx) => {
   if (typeof readiness.handleReadinessCallback === "function") {
     return readiness.handleReadinessCallback(ctx);
   }
+  const data = ctx.callbackQuery?.data || "";
+  // تحلیل هوشمند (AI) روی نتیجه‌ی ارزیابی
+  if (data === "readiness:ai_insight" && typeof readiness.handleAiInsight === "function") {
+    return readiness.handleAiInsight(ctx);
+  }
+  // readiness:start → شروع ارزیابی
+  if (typeof readiness.handleStartConsultation === "function") {
+    return readiness.handleStartConsultation(ctx);
+  }
 });
 
 bot.callbackQuery(/^swot:/, async (ctx) => {
   if (typeof swot.handleSwotCallback === "function") {
     return swot.handleSwotCallback(ctx);
+  }
+  const data = ctx.callbackQuery?.data || "";
+  // استراتژی هوشمند (AI) روی نتیجه SWOT
+  if (data === "swot:ai_insight" && typeof swot.handleSwotInsight === "function") {
+    return swot.handleSwotInsight(ctx);
   }
   // fallback: swot:start / swot:menu → شروع تحلیل SWOT
   if (typeof swot.handleSwotAnalysis === "function") return swot.handleSwotAnalysis(ctx);
