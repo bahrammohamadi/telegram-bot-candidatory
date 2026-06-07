@@ -11,7 +11,7 @@
 // متغیرهای محیطی:
 //   ─ Gemini:
 //       GEMINI_API_KEY           کلید (از https://aistudio.google.com/apikey)
-//       GEMINI_MODEL             پیش‌فرض: gemini-2.0-flash
+//       GEMINI_MODEL             پیش‌فرض: gemini-2.5-flash-lite (۱۰۰۰ درخواست/روز رایگان)
 //   ─ OpenAI / سازگار:
 //       OPENAI_API_KEY           کلید
 //       OPENAI_BASE_URL          پیش‌فرض: https://api.openai.com/v1
@@ -38,12 +38,24 @@ function isAIConfigured() {
 
 // خطای اختصاصی تا فراخوان‌ها بتوانند تشخیص دهند مشکل از AI بوده
 class AIError extends Error {
-  constructor(message, code = "ai_error") {
+  constructor(message, code = "ai_error", status = 0) {
     super(message);
     this.name = "AIError";
     this.code = code;
+    this.status = status; // کد HTTP (در صورت وجود) برای تشخیص خطای موقت/دائمی
   }
 }
+
+// آیا این خطا «موقت» است و ارزش تلاش مجدد دارد؟
+// 429 (سقف نرخ)، 500/502/503/504 (خطای سرور)، timeout → موقت
+function isRetryable(err) {
+  if (!err) return false;
+  if (err.code === "timeout") return true;
+  const s = err.status || 0;
+  return s === 429 || s === 500 || s === 502 || s === 503 || s === 504;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ───────────────────────────────────────────────────────────────
 // کمکی: fetch با timeout
@@ -66,7 +78,7 @@ async function callGemini({ system, prompt, temperature }) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new AIError("GEMINI_API_KEY تنظیم نشده", "no_key");
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
@@ -87,7 +99,7 @@ async function callGemini({ system, prompt, temperature }) {
 
   if (!res.ok) {
     const t = await res.text().catch(() => "");
-    throw new AIError(`Gemini HTTP ${res.status}: ${t.slice(0, 200)}`, "http");
+    throw new AIError(`Gemini HTTP ${res.status}: ${t.slice(0, 200)}`, "http", res.status);
   }
 
   const data = await res.json();
@@ -127,7 +139,7 @@ async function callOpenAI({ system, prompt, temperature }) {
 
   if (!res.ok) {
     const t = await res.text().catch(() => "");
-    throw new AIError(`OpenAI HTTP ${res.status}: ${t.slice(0, 200)}`, "http");
+    throw new AIError(`OpenAI HTTP ${res.status}: ${t.slice(0, 200)}`, "http", res.status);
   }
 
   const data = await res.json();
@@ -145,24 +157,44 @@ async function generateAI({ system, prompt, temperature } = {}) {
   if (!prompt || !prompt.trim()) throw new AIError("prompt خالی است", "no_prompt");
 
   const provider = getProvider();
-  const t0 = Date.now();
-  try {
-    let out;
-    if (provider === "gemini") {
-      out = await callGemini({ system, prompt, temperature });
-    } else if (provider === "openai" || provider === "openai-compatible") {
-      out = await callOpenAI({ system, prompt, temperature });
-    } else {
-      throw new AIError(`AI_PROVIDER ناشناخته: ${provider}`, "bad_provider");
+
+  // تعداد تلاش مجدد برای خطاهای موقت (429/5xx/timeout). پیش‌فرض ۲ تلاش اضافه.
+  const maxRetries = parseInt(process.env.AI_MAX_RETRIES || "2", 10);
+  const baseDelay = parseInt(process.env.AI_RETRY_DELAY_MS || "1500", 10);
+
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const t0 = Date.now();
+    try {
+      let out;
+      if (provider === "gemini") {
+        out = await callGemini({ system, prompt, temperature });
+      } else if (provider === "openai" || provider === "openai-compatible") {
+        out = await callOpenAI({ system, prompt, temperature });
+      } else {
+        throw new AIError(`AI_PROVIDER ناشناخته: ${provider}`, "bad_provider");
+      }
+      const dt = Date.now() - t0;
+      if (dt > 8000) console.warn(`[ai] کند: ${provider} ${dt}ms`);
+      return out;
+    } catch (e) {
+      // نرمال‌سازی خطا
+      if (e.name === "AbortError") e = new AIError("درخواست AI به مهلت رسید (timeout)", "timeout");
+      else if (!(e instanceof AIError)) e = new AIError(`خطای AI: ${e.message}`, "unknown");
+      lastErr = e;
+
+      // اگر خطا موقت است و هنوز تلاش باقی مانده → صبر و تلاش مجدد (backoff تصاعدی)
+      if (isRetryable(e) && attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt); // 1500ms, 3000ms, ...
+        console.warn(`[ai] خطای موقت (${e.code}/${e.status}) — تلاش مجدد ${attempt + 1}/${maxRetries} پس از ${delay}ms`);
+        await sleep(delay);
+        continue;
+      }
+      // خطای دائمی یا اتمام تلاش‌ها
+      throw e;
     }
-    const dt = Date.now() - t0;
-    if (dt > 8000) console.warn(`[ai] کند: ${provider} ${dt}ms`);
-    return out;
-  } catch (e) {
-    if (e.name === "AbortError") throw new AIError("درخواست AI به مهلت رسید (timeout)", "timeout");
-    if (e instanceof AIError) throw e;
-    throw new AIError(`خطای AI: ${e.message}`, "unknown");
   }
+  throw lastErr || new AIError("خطای ناشناخته AI", "unknown");
 }
 
 module.exports = {
