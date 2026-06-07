@@ -113,6 +113,7 @@ function summaryKB(answers) {
 
 function afterReportKB() {
   return new InlineKeyboard()
+    .text("🤖 تحلیل هوشمند (AI)", "readiness:ai_insight").row()
     .text("📊 داشبورد کمپین", "dashboard").row()
     .text("🗂️ مدیریت کمپین", "campaign_menu").row()
     .text("📚 آموزش‌های تخصصی", "edu_list").row()
