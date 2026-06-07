@@ -4,6 +4,7 @@
 
 const { InlineKeyboard } = require("grammy");
 const { STEPS, TOTAL_STEPS, STEP_EMOJIS } = require("../constants/questions.js");
+const { isAdminUserSync } = require("./admin-auth.js");
 
 // ═══════════════════════════════════════════
 // منوی اصلی
@@ -11,7 +12,8 @@ const { STEPS, TOTAL_STEPS, STEP_EMOJIS } = require("../constants/questions.js")
 function mainMenuKB(user) {
   // user می‌تواند آبجکت کاربر یا رشته پلن باشد (سازگاری با نسخه‌های مختلف)
   const userPlan = typeof user === 'object' ? (user.purchasedPlan || user.role || 'free') : (user || 'free');
-  const isAdmin = typeof user === 'object' && user.role === 'admin';
+  // ادمین = role === "admin" در دیتابیس یا حضور در ADMIN_IDS (env)
+  const isAdmin = typeof user === 'object' && isAdminUserSync(user);
 
   const kb = new InlineKeyboard()
     .text("🚀 ارزیابی آمادگی", "start_consultation").row()
