@@ -509,6 +509,7 @@ async function generateSwotReport(ctx, userId, answers) {
   }
 
   const kb = new InlineKeyboard()
+    .text("🤖 استراتژی هوشمند (AI)", "swot:ai_insight").row()
     .text("⚔️ تحلیل رقبا", "rivals_menu").row()
     .text("📋 وعده‌های انتخاباتی", "promises_menu").row()
     .text("🗂️ مدیریت کمپین", "campaign_menu").row()
@@ -543,12 +544,64 @@ async function generateSwotReport(ctx, userId, answers) {
   }
 }
 
+// ═══════════════════════════════════════════
+// استراتژی هوشمند (AI) بر اساس نتیجه‌ی SWOT
+// ═══════════════════════════════════════════
+async function handleSwotInsight(ctx) {
+  const userId = String(ctx.from.id);
+  const { generateAI, isAIConfigured } = require("../../utils/ai.js");
+  const { swotInsightPrompt } = require("../../utils/ai-prompts.js");
+
+  const backKb = new InlineKeyboard()
+    .text("🔁 تلاش مجدد", "swot:ai_insight").row()
+    .text("🔙 منوی اصلی", "menu");
+
+  if (!isAIConfigured()) {
+    try { await ctx.answerCallbackQuery({ text: "هوش مصنوعی پیکربندی نشده", show_alert: true }); } catch {}
+    return;
+  }
+
+  let user, answers = {};
+  try {
+    user = await getOrCreateUser(userId, {});
+    answers = JSON.parse(user.tempAnswers || "{}");
+  } catch {}
+
+  if (!answers || Object.keys(answers).length === 0) {
+    try { await ctx.answerCallbackQuery({ text: "ابتدا تحلیل SWOT را کامل کنید", show_alert: true }); } catch {}
+    return;
+  }
+
+  let profile = user.profile || user;
+  if (typeof profile === "string") { try { profile = JSON.parse(profile); } catch {} }
+
+  try {
+    await ctx.answerCallbackQuery({ text: "🤖 در حال تدوین استراتژی…" });
+    await ctx.reply("🤖 *در حال تدوین استراتژی هوشمند…*", { parse_mode: "Markdown" });
+  } catch {}
+
+  try {
+    const { system, prompt } = swotInsightPrompt({ answers, profile });
+    const aiText = await generateAI({ system, prompt });
+    const text =
+      "🤖 *استراتژی هوشمند کمپین (بر پایه SWOT)*\n" +
+      "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+      aiText +
+      "\n\n_✨ تولیدشده با هوش مصنوعی_";
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: backKb });
+  } catch (e) {
+    console.error("[swot][AI] error:", e?.message || e);
+    await ctx.reply("⚠️ تدوین استراتژی موقتاً ناموفق بود. دوباره تلاش کنید.", { reply_markup: backKb });
+  }
+}
+
 module.exports = {
   handleSwotAnalysis,
   handleSwotAnswer,
   handleSwotTextInput,
   handleSwotSkip,
   handleSwotBack,
+  handleSwotInsight,
   SWOT_STEP_BASE,
   TOTAL_SWOT,
 };
