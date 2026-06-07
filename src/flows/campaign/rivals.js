@@ -3,7 +3,7 @@
 
 const { InlineKeyboard } = require("grammy");
 const { getOrCreateUser, updateUser } = require("../../utils/db.js");
-const { requireAccess } = require("../../utils/access.js");
+const { requireAccess, requireLimit } = require("../../utils/access.js");
 
 const RIVAL_STEP_BASE  = 800;
 
@@ -158,6 +158,12 @@ async function handleRivalAdd(ctx) {
   if (!ok) return;
 
   const user = await getOrCreateUser(userId, ctx.from);
+
+  // اعمال محدودیت تعداد رقبا بر اساس پلن (رایگان: ۱، راه‌اندازی: ۳، ...)
+  let currentRivals = [];
+  try { currentRivals = JSON.parse(user.tempAnswers || "{}")._rivals || []; } catch {}
+  if (!(await requireLimit(ctx, "rivals", currentRivals.length))) return;
+
   const temp = _getCurrentTemp(user);
   temp._rivalForm = {};
 
