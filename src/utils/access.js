@@ -3,6 +3,7 @@
 
 const { PLAN_LEVELS, hasAccess, getPlan } = require("../constants/plans.js");
 const { getOrCreateUser, updateUser } = require("./db.js");
+const { isAdminUserSync } = require("./admin-auth.js");
 
 // ═══════════════════════════════════════════
 // تعریف دسترسی‌های هر فیچر
@@ -56,7 +57,7 @@ const FEATURE_ACCESS = {
 async function getUserPlanLevel(userId) {
   try {
     const user = await getOrCreateUser(String(userId), {});
-    if (user.role === "admin") return 99; // ادمین دسترسی کامل
+    if (isAdminUserSync(user)) return 99; // ادمین دسترسی کامل
     const plan = user.purchasedPlan || "free";
     return PLAN_LEVELS[plan] ?? 0;
   } catch {
@@ -70,14 +71,15 @@ async function getUserPlanLevel(userId) {
 async function checkAccess(userId, featureId) {
   try {
     const user        = await getOrCreateUser(String(userId), {});
-    const userPlan    = user.role === "admin" ? "vip" : (user.purchasedPlan || "free");
+    const admin       = isAdminUserSync(user);
+    const userPlan    = admin ? "vip" : (user.purchasedPlan || "free");
     const requiredPlan = FEATURE_ACCESS[featureId] || "free";
 
     return {
       hasAccess:     hasAccess(userPlan, requiredPlan),
       userPlan,
       requiredPlan,
-      isAdmin:       user.role === "admin",
+      isAdmin:       admin,
     };
   } catch {
     return {
