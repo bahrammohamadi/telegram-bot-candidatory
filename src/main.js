@@ -19,6 +19,7 @@ const { getOrCreateUser, updateUser, initDB } = require("./utils/db.js");
 const { requireAccess } = require("./utils/access.js");
 const { mainMenuKB, analysisMenuKB } = require("./utils/keyboard.js");
 const { isAdminUserSync } = require("./utils/admin-auth.js");
+const { registerCompatRoutes } = require("./flows/router-compat.js");
 
 // ─── بارگذاری امن فلوها ─────────────────────────────────────────
 // اگر فایلی هنوز در پروژه نباشد، crash نمی‌کنیم؛ یک stub قرار می‌دهیم
@@ -408,9 +409,12 @@ const CAMPAIGN_MENU_HANDLER = async (ctx) => {
     "بخش مورد نظر را انتخاب کنید:";
 
   const kb = new InlineKeyboard()
-    .text("⚔️ رقبا", "rivals:menu").row()
-    .text("📋 وعده‌ها", "promises:menu").row()
-    .text("🚨 مدیریت بحران", "crisis:menu").row()
+    .text("👤 پروفایل کاندیدا", "candidate_profile").row()
+    .text("🧭 تحلیل SWOT", "swot_analysis").row()
+    .text("⚔️ رقبا", "rivals_menu")
+    .text("📋 وعده‌ها", "promises_menu").row()
+    .text("🚨 مدیریت بحران", "crisis_menu").row()
+    .text("✍️ تولید محتوا", "content:menu").row()
     .text("🏠 منوی اصلی", "menu");
 
   if (ctx.callbackQuery) {
@@ -520,6 +524,7 @@ bot.callbackQuery(/^onboarding:/, async (ctx) => {
   if (typeof onboarding.handleOnboardingCallback === "function") {
     return onboarding.handleOnboardingCallback(ctx);
   }
+  if (typeof onboarding.handleProfileMenu === "function") return onboarding.handleProfileMenu(ctx);
 });
 
 bot.callbackQuery(/^readiness:/, async (ctx) => {
@@ -532,30 +537,37 @@ bot.callbackQuery(/^swot:/, async (ctx) => {
   if (typeof swot.handleSwotCallback === "function") {
     return swot.handleSwotCallback(ctx);
   }
+  // fallback: swot:start / swot:menu → شروع تحلیل SWOT
+  if (typeof swot.handleSwotAnalysis === "function") return swot.handleSwotAnalysis(ctx);
 });
 
 bot.callbackQuery(/^dashboard:/, async (ctx) => {
   if (typeof dashboard.handleDashboardCallback === "function") {
     return dashboard.handleDashboardCallback(ctx);
   }
+  if (typeof dashboard.handleDashboard === "function") return dashboard.handleDashboard(ctx);
 });
 
 bot.callbackQuery(/^rivals:/, async (ctx) => {
   if (typeof rivals.handleRivalsCallback === "function") {
     return rivals.handleRivalsCallback(ctx);
   }
+  // fallback: rivals:menu → منوی رقبا (نام تابع واقعی متفاوت است)
+  if (typeof rivals.handleRivalsMenu === "function") return rivals.handleRivalsMenu(ctx);
 });
 
 bot.callbackQuery(/^promises:/, async (ctx) => {
   if (typeof promises.handlePromisesCallback === "function") {
     return promises.handlePromisesCallback(ctx);
   }
+  if (typeof promises.handlePromisesMenu === "function") return promises.handlePromisesMenu(ctx);
 });
 
 bot.callbackQuery(/^crisis:/, async (ctx) => {
   if (typeof crisis.handleCrisisCallback === "function") {
     return crisis.handleCrisisCallback(ctx);
   }
+  if (typeof crisis.handleCrisisMenu === "function") return crisis.handleCrisisMenu(ctx);
 });
 
 bot.callbackQuery(/^content:/, content.handleContentCallback);
@@ -564,6 +576,16 @@ bot.callbackQuery(/^plans:/,   plans.handlePlansCallback);
 bot.callbackQuery(/^history:/, history.handleHistoryCallback);
 bot.callbackQuery(/^contact:/, contact.handleContactCallback);
 bot.callbackQuery(/^admin:/,   admin.handleAdminCallback);
+
+// ═══════════════════════════════════════════════════════════════
+// ۶‑الف) روتر سازگاری: وصل کردن callbackهای legacy فلوها
+// (rival_add, swot_ans:.., prf:.., profile_create, edu_list, ...)
+// به توابع واقعیِ هر فلو. بدون این، این دکمه‌ها به fallback
+// «در حال توسعه» می‌رسیدند و بخش‌های کمپین/پروفایل/SWOT خالی به‌نظر می‌رسید.
+// ═══════════════════════════════════════════════════════════════
+registerCompatRoutes(bot, {
+  onboarding, swot, rivals, promises, crisis, dashboard, educational,
+});
 
 // ═══════════════════════════════════════════════════════════════
 // ۷) ورودی پیام متنی — اولویت‌بندی فلوها
@@ -580,45 +602,28 @@ bot.on("message:text", async (ctx) => {
   }
 
   // ترتیب اولویت: ادمین → فلوهای state-محور
+  // نکته: هر فلو نام تابع ورودی متنی خودش را دارد؛ برای مقاومت در برابر
+  // ناهماهنگی نام‌ها، هم نام عمومی (handleTextInput) و هم نام اختصاصی را
+  // امتحان می‌کنیم. اولین فلویی که true برگرداند، پیام را «خورده» است.
   try {
-    // 1. ادمین (جستجو، broadcast)
-    if (typeof admin.handleTextInput === "function") {
-      if (await admin.handleTextInput(ctx)) return;
-    }
+    const textHandlers = [
+      [admin,       ["handleTextInput"]],
+      [content,     ["handleTextInput"]],
+      [onboarding,  ["handleTextInput", "handleProfileTextInput"]],
+      [readiness,   ["handleTextInput"]],
+      [swot,        ["handleTextInput", "handleSwotTextInput"]],
+      [rivals,      ["handleTextInput", "handleRivalTextInput"]],
+      [promises,    ["handleTextInput", "handlePromiseTextInput"]],
+      [crisis,      ["handleTextInput", "handleCrisisTextInput"]],
+    ];
 
-    // 2. تولید محتوا
-    if (typeof content.handleTextInput === "function") {
-      if (await content.handleTextInput(ctx)) return;
-    }
-
-    // 3. onboarding (پروفایل کاندیدا)
-    if (typeof onboarding.handleTextInput === "function") {
-      if (await onboarding.handleTextInput(ctx)) return;
-    }
-
-    // 4. readiness (ارزیابی آمادگی)
-    if (typeof readiness.handleTextInput === "function") {
-      if (await readiness.handleTextInput(ctx)) return;
-    }
-
-    // 5. swot
-    if (typeof swot.handleTextInput === "function") {
-      if (await swot.handleTextInput(ctx)) return;
-    }
-
-    // 6. rivals
-    if (typeof rivals.handleTextInput === "function") {
-      if (await rivals.handleTextInput(ctx)) return;
-    }
-
-    // 7. promises
-    if (typeof promises.handleTextInput === "function") {
-      if (await promises.handleTextInput(ctx)) return;
-    }
-
-    // 8. crisis
-    if (typeof crisis.handleTextInput === "function") {
-      if (await crisis.handleTextInput(ctx)) return;
+    for (const [mod, fnNames] of textHandlers) {
+      for (const name of fnNames) {
+        if (mod && typeof mod[name] === "function") {
+          if (await mod[name](ctx)) return;
+          break; // فقط اولین تابع موجود هر فلو را صدا بزن
+        }
+      }
     }
   } catch (e) {
     console.error("[message:text] error:", e);
