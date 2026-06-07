@@ -110,6 +110,75 @@ async function checkAccess(userId, featureId) {
 }
 
 // ═══════════════════════════════════════════
+// نام فارسی هر فیچر (برای پیام شفافِ قفل)
+// ═══════════════════════════════════════════
+const FEATURE_NAMES = {
+  basic_assessment:  "ارزیابی آمادگی",
+  swot_analysis:     "تحلیل SWOT",
+  health_analysis:   "تحلیل سلامت کمپین",
+  full_profile:      "پروفایل کامل کاندیدا",
+  rivals_basic:      "مدیریت رقبا",
+  rivals_full:       "مدیریت رقبا",
+  promises_basic:    "مدیریت وعده‌ها",
+  promises_full:     "مدیریت وعده‌ها",
+  team_management:   "مدیریت تیم",
+  crisis_management: "مدیریت بحران",
+  content_generator: "تولید محتوا",
+  content_post:      "پست شبکه اجتماعی",
+  content_slogan:    "شعار انتخاباتی",
+  content_sms:       "پیامک تبلیغاتی",
+  content_speech:    "متن سخنرانی",
+  content_statement: "بیانیه رسمی",
+  content_banner:    "متن بنر و پوستر",
+  edu_summary:       "خلاصه‌ی آموزشی",
+  edu_keypoints:     "نکات کلیدی آموزشی",
+  edu_content:       "محتوای کامل آموزشی",
+  edu_tips:          "نکات کاربردی آموزشی",
+  edu_mistakes:      "اشتباهات رایج",
+  edu_exercises:     "تمرین‌های آموزشی",
+  dashboard:         "داشبورد کمپین",
+  campaign_health:   "سلامت کمپین",
+  detailed_report:   "گزارش تفصیلی",
+  pdf_report:        "گزارش PDF",
+};
+
+// ═══════════════════════════════════════════
+// برچسب فارسی + ایموجی هر پلن (برای نمایش روی دکمه‌های قفل)
+// ═══════════════════════════════════════════
+const PLAN_LABELS = {
+  free:         "🆓 رایگان",
+  starter:      "🌱 راه‌اندازی",
+  professional: "⭐ حرفه‌ای",
+  vip:          "💎 VIP",
+};
+
+function planLabelOf(planId) {
+  return PLAN_LABELS[planId] || planId || "—";
+}
+
+// برچسب کوتاهِ قفل برای کنار دکمه‌ها، مثل: « 🔒 حرفه‌ای»
+function lockBadge(requiredPlan) {
+  const short = {
+    starter:      "راه‌اندازی",
+    professional: "حرفه‌ای",
+    vip:          "VIP",
+  }[requiredPlan];
+  return short ? ` 🔒 ${short}` : "";
+}
+
+// برای ساخت دکمه‌های منو: می‌گوید این feature برای کاربر قفل است یا نه،
+// و برچسب پلن لازم را برمی‌گرداند. (سنکرون نیست چون به DB نیاز دارد.)
+async function featureLockInfo(ctx, featureId) {
+  const info = await checkAccess(String(ctx.from.id), featureId);
+  return {
+    locked: !info.hasAccess,
+    requiredPlan: info.requiredPlan,
+    badge: info.hasAccess ? "" : lockBadge(info.requiredPlan),
+    requiredLabel: planLabelOf(info.requiredPlan),
+  };
+}
+
+// ═══════════════════════════════════════════
 // Middleware: بررسی دسترسی و پیام قفل
 // ═══════════════════════════════════════════
 async function requireAccess(ctx, featureId) {
@@ -118,20 +187,28 @@ async function requireAccess(ctx, featureId) {
 
   if (!result.hasAccess) {
     const { InlineKeyboard } = require("grammy");
+    const { getPlan } = require("../constants/plans.js");
     const planNames = {
       starter:      "🌱 بسته راه‌اندازی",
       professional: "⭐ بسته حرفه‌ای",
       vip:          "💎 بسته VIP",
     };
     const planName = planNames[result.requiredPlan] || "بسته بالاتر";
+    const featureName = FEATURE_NAMES[featureId] || "این قابلیت";
+    const reqPlanObj  = getPlan(result.requiredPlan);
+    const priceLine   = reqPlanObj?.priceLabel ? `\n💰 *قیمت بسته:* ${reqPlanObj.priceLabel}` : "";
+    const yourPlan    = planLabelOf(result.userPlan);
 
     const t =
-      "🔒 *دسترسی محدود*\n\n" +
-      `این بخش نیاز به *${planName}* دارد.\n\n` +
-      "💼 برای ارتقای پلن از منوی بسته‌ها اقدام کنید.";
+      "🔒 *دسترسی محدود*\n" +
+      "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+      `بخش «*${featureName}*» در بسته‌ی فعلی شما (*${yourPlan}*) فعال نیست.\n\n` +
+      `✅ این قابلیت با *${planName}* فعال می‌شود.${priceLine}\n\n` +
+      "💡 با ارتقای بسته، این بخش و امکانات بیشتری برایتان باز می‌شود.";
 
     const kb = new InlineKeyboard()
-      .text("💼 مشاهده بسته‌ها", "show_plans").row()
+      .text(`💼 ارتقا به ${planName.replace(/^[^ ]+ بسته /, "").trim() || "بسته بالاتر"}`, `plans:view:${result.requiredPlan}`).row()
+      .text("📋 مشاهده همه بسته‌ها", "show_plans").row()
       .text("🔙 منوی اصلی", "menu").row();
 
     try {
@@ -230,10 +307,15 @@ async function setUserPlan(userId, planId) {
 
 module.exports = {
   FEATURE_ACCESS,
+  FEATURE_NAMES,
+  PLAN_LABELS,
   getUserPlanLevel,
   checkAccess,
   requireAccess,
   requireLimit,
+  featureLockInfo,
+  planLabelOf,
+  lockBadge,
   isAdmin,
   setUserPlan,
 };
