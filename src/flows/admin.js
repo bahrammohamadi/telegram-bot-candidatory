@@ -29,6 +29,16 @@ const {
   listRecentUsers,
 } = require("../utils/db.js");
 const { setUserPlan, PLAN_LEVELS } = require("../utils/access.js");
+const {
+  ADMIN_AWAITING_PASSWORD,
+  SESSION_MINUTES,
+  isAdminUser,
+  isPasswordEnabled,
+  checkPassword,
+  isSessionUnlocked,
+  unlockSession,
+  lockSession,
+} = require("../utils/admin-auth.js");
 
 // ───────────────────────────────────────────────────────────────
 // State برای ورودی متنی ادمین (جستجو، broadcast)
@@ -53,7 +63,10 @@ async function ensureAdmin(ctx) {
   const userId = String(ctx.from.id);
   const user = await getOrCreateUser(userId, {});
 
-  if (user.role !== "admin") {
+  // ادمین = role === "admin" در دیتابیس یا حضور userId در ADMIN_IDS (env)
+  const admin = await isAdminUser(user);
+
+  if (!admin) {
     if (ctx.callbackQuery) {
       try {
         await ctx.answerCallbackQuery({
@@ -67,6 +80,61 @@ async function ensureAdmin(ctx) {
     return null;
   }
   return user;
+}
+
+// ───────────────────────────────────────────────────────────────
+// محافظ کامل: ادمین بودن + باز بودن جلسه (رمز)
+// اگر جلسه قفل باشد، صفحه‌ی درخواست رمز نمایش داده می‌شود و null برمی‌گردد.
+// ───────────────────────────────────────────────────────────────
+async function ensureAdminUnlocked(ctx) {
+  const user = await ensureAdmin(ctx);
+  if (!user) return null;
+
+  // اگر رمز فعال نیست یا جلسه باز است → اجازه عبور
+  if (!isPasswordEnabled() || (await isSessionUnlocked(ctx.from.id))) {
+    return user;
+  }
+
+  // در غیر این صورت، درخواست رمز
+  await promptPassword(ctx);
+  return null;
+}
+
+// ───────────────────────────────────────────────────────────────
+// نمایش صفحه‌ی درخواست رمز و قرار دادن کاربر در state انتظار رمز
+// ───────────────────────────────────────────────────────────────
+async function promptPassword(ctx) {
+  const adminId = String(ctx.from.id);
+  await updateUser(adminId, {
+    currentStep: ADMIN_AWAITING_PASSWORD,
+    tempAnswers: "{}",
+  });
+
+  const text =
+    "🔐 *ورود به پنل ادمین*\n" +
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+    "برای دسترسی به پنل مدیریت، رمز عبور را وارد کنید:\n\n" +
+    "_رمز را به صورت یک پیام متنی ارسال کنید._\n" +
+    `_پس از ورود موفق، تا ${SESSION_MINUTES} دقیقه نیازی به رمز مجدد نیست._`;
+
+  const kb = new InlineKeyboard().text("🏠 منوی اصلی", "menu");
+  await sendOrEdit(ctx, text, kb);
+}
+
+// ───────────────────────────────────────────────────────────────
+// قفل کردن دستی جلسه (خروج از پنل)
+// ───────────────────────────────────────────────────────────────
+async function handleLock(ctx) {
+  if (!(await ensureAdmin(ctx))) return;
+  await lockSession(ctx.from.id);
+  try {
+    await ctx.answerCallbackQuery({ text: "🔒 از پنل خارج شدید", show_alert: false });
+  } catch {}
+  const text =
+    "🔒 *از پنل ادمین خارج شدید*\n\n" +
+    "برای ورود مجدد، دوباره /admin را بزنید و رمز را وارد کنید.";
+  const kb = new InlineKeyboard().text("🏠 منوی اصلی", "menu");
+  await sendOrEdit(ctx, text, kb);
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -118,7 +186,7 @@ function planLabel(planId) {
 // ۱) داشبورد اصلی ادمین
 // ═══════════════════════════════════════════════════════════════
 async function handleAdminPanel(ctx) {
-  const user = await ensureAdmin(ctx);
+  const user = await ensureAdminUnlocked(ctx);
   if (!user) return;
 
   let stats = {};
@@ -147,6 +215,7 @@ async function handleAdminPanel(ctx) {
     .text("👥 کاربران اخیر", "admin:users:0").row()
     .text("🔍 جستجوی کاربر", "admin:search").row()
     .text("📢 ارسال پیام انبوه", "admin:broadcast").row()
+    .text("🔒 خروج از پنل", "admin:lock").row()
     .text("🏠 منوی اصلی", "menu");
 
   await sendOrEdit(ctx, text, kb);
@@ -156,7 +225,7 @@ async function handleAdminPanel(ctx) {
 // ۲) آمار تفصیلی
 // ═══════════════════════════════════════════════════════════════
 async function handleStats(ctx) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   let s = {};
   try {
@@ -201,7 +270,7 @@ async function handleStats(ctx) {
 // ۳) مدیریت لیدها
 // ═══════════════════════════════════════════════════════════════
 async function handleLeadsList(ctx, page = 0, status = "pending") {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   const PER_PAGE = 5;
   let leads = [];
@@ -292,7 +361,7 @@ function leadsFilterKB(page, status, totalPages) {
 // ۴) مشاهده‌ی جزئیات یک لید
 // ═══════════════════════════════════════════════════════════════
 async function handleLeadView(ctx, leadId) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   let leads = [];
   try {
@@ -349,7 +418,7 @@ async function handleLeadView(ctx, leadId) {
 // ۵) اقدامات روی لید (تأیید/رد/بازگشت)
 // ═══════════════════════════════════════════════════════════════
 async function handleLeadAction(ctx, action, leadId) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   let leads = [];
   try {
@@ -400,7 +469,7 @@ async function handleLeadAction(ctx, action, leadId) {
 // ۶) کاربران اخیر
 // ═══════════════════════════════════════════════════════════════
 async function handleUsersList(ctx, page = 0) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   const PER_PAGE = 5;
   let users = [];
@@ -457,7 +526,7 @@ async function handleUsersList(ctx, page = 0) {
 // ۷) جستجوی کاربر
 // ═══════════════════════════════════════════════════════════════
 async function handleSearchMenu(ctx) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   const text =
     "🔍 *جستجوی کاربر*\n" +
@@ -473,7 +542,7 @@ async function handleSearchMenu(ctx) {
 }
 
 async function handleSearchStart(ctx, kind) {
-  const adminUser = await ensureAdmin(ctx);
+  const adminUser = await ensureAdminUnlocked(ctx);
   if (!adminUser) return;
 
   const adminId = String(ctx.from.id);
@@ -494,7 +563,7 @@ async function handleSearchStart(ctx, kind) {
 // ۸) مشاهده جزئیات کاربر
 // ═══════════════════════════════════════════════════════════════
 async function handleUserView(ctx, targetUserId) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   let user = null;
   try {
@@ -537,7 +606,7 @@ async function handleUserView(ctx, targetUserId) {
 // ۹) تغییر پلن کاربر
 // ═══════════════════════════════════════════════════════════════
 async function handleSetPlanMenu(ctx, targetUserId) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   const text =
     `💎 *تغییر پلن کاربر*\n` +
@@ -556,7 +625,7 @@ async function handleSetPlanMenu(ctx, targetUserId) {
 }
 
 async function handleDoSetPlan(ctx, targetUserId, planId) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   if (!(planId in PLAN_LEVELS)) {
     await ctx.answerCallbackQuery({ text: "پلن نامعتبر", show_alert: true });
@@ -579,7 +648,7 @@ async function handleDoSetPlan(ctx, targetUserId, planId) {
 // ۱۰) تغییر نقش (ادمین/کاربر)
 // ═══════════════════════════════════════════════════════════════
 async function handleToggleRole(ctx, targetUserId) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
 
   let target = null;
   try {
@@ -621,7 +690,7 @@ async function handleToggleRole(ctx, targetUserId) {
 // ۱۱) Broadcast — ارسال پیام انبوه
 // ═══════════════════════════════════════════════════════════════
 async function handleBroadcastStart(ctx) {
-  const adminUser = await ensureAdmin(ctx);
+  const adminUser = await ensureAdminUnlocked(ctx);
   if (!adminUser) return;
 
   const adminId = String(ctx.from.id);
@@ -642,7 +711,7 @@ async function handleBroadcastStart(ctx) {
 }
 
 async function handleBroadcastConfirm(ctx, textToSend) {
-  const adminUser = await ensureAdmin(ctx);
+  const adminUser = await ensureAdminUnlocked(ctx);
   if (!adminUser) return;
 
   const text =
@@ -662,7 +731,7 @@ async function handleBroadcastConfirm(ctx, textToSend) {
 }
 
 async function handleBroadcastExecute(ctx) {
-  const adminUser = await ensureAdmin(ctx);
+  const adminUser = await ensureAdminUnlocked(ctx);
   if (!adminUser) return;
 
   const adminId = String(ctx.from.id);
@@ -728,10 +797,34 @@ async function handleTextInput(ctx) {
   const adminId = String(ctx.from.id);
   const user = await getOrCreateUser(adminId, {});
 
-  if (user.role !== "admin") return false;
+  // فقط ادمین‌ها (role یا ADMIN_IDS)
+  if (!(await isAdminUser(user))) return false;
   if (!isInAdminRange(user.currentStep)) return false;
 
   const text = (ctx.message?.text || "").trim();
+
+  // ───────────────────────────────────────────────────────────
+  // حالت ویژه: کاربر در انتظار وارد کردن «رمز ادمین» است
+  // ───────────────────────────────────────────────────────────
+  if (user.currentStep === ADMIN_AWAITING_PASSWORD) {
+    // تلاش برای حذف پیام رمز کاربر (برای امنیت)
+    try { await ctx.deleteMessage(); } catch {}
+
+    if (!checkPassword(text)) {
+      await ctx.reply(
+        "❌ رمز اشتباه است. دوباره تلاش کنید یا /admin را بزنید.",
+        { reply_markup: new InlineKeyboard().text("🏠 منوی اصلی", "menu") }
+      );
+      return true;
+    }
+
+    // رمز درست → باز کردن جلسه و ورود به پنل
+    await unlockSession(adminId);
+    await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
+    await ctx.reply(`✅ رمز تأیید شد. خوش آمدید! (اعتبار جلسه: ${SESSION_MINUTES} دقیقه)`);
+    return handleAdminPanel(ctx);
+  }
+
   if (!text) {
     await ctx.reply("⚠️ متن خالی.");
     return true;
@@ -803,7 +896,7 @@ async function handleTextInput(ctx) {
 // ۱۳) انصراف عمومی
 // ═══════════════════════════════════════════════════════════════
 async function handleCancel(ctx) {
-  if (!(await ensureAdmin(ctx))) return;
+  if (!(await ensureAdminUnlocked(ctx))) return;
   const adminId = String(ctx.from.id);
   await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
   return handleAdminPanel(ctx);
@@ -849,6 +942,8 @@ async function handleAdminCallback(ctx) {
     if (action === "broadcast") return handleBroadcastStart(ctx);
     if (action === "bcyes")     return handleBroadcastExecute(ctx);
 
+    if (action === "lock")      return handleLock(ctx);
+
     if (action === "cancel")    return handleCancel(ctx);
     if (action === "noop") {
       try { await ctx.answerCallbackQuery(); } catch {}
@@ -884,8 +979,12 @@ module.exports = {
   handleAdminCallback,
   handleTextInput,
 
+  handleLock,
+  promptPassword,
+
   // کمکی‌ها
   ensureAdmin,
+  ensureAdminUnlocked,
   isInAdminRange,
   ADMIN_STATE,
   STATE_RANGE,
