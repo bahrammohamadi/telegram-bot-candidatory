@@ -83,6 +83,11 @@ const USERS_SCHEMA = {
     { key: "role",               type: "string",   size: 16,   required: false, default: "user" },
     { key: "purchasedPlan",      type: "string",   size: 32,   required: false, default: null },
 
+    // امنیت پنل ادمین: تا این زمان جلسه‌ی ادمین باز است (پس از زدن رمز)
+    { key: "adminUnlockedUntil", type: "string",   size: 50,   required: false, default: null }, // ISO
+    // آیا کاربر راهنمای ورود اول را دیده؟
+    { key: "onboardingSeen",     type: "boolean",  required: false, default: false },
+
     // اطلاعات هویتی
     { key: "nationalId",         type: "string",   size: 10,   required: false, default: null },
     { key: "phone",              type: "string",   size: 15,   required: false, default: null },
