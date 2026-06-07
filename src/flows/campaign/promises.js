@@ -3,7 +3,7 @@
 
 const { InlineKeyboard } = require("grammy");
 const { getOrCreateUser, updateUser } = require("../../utils/db.js");
-const { requireAccess } = require("../../utils/access.js");
+const { requireAccess, requireLimit } = require("../../utils/access.js");
 
 const PROMISE_STEP_BASE   = 850;
 
@@ -139,6 +139,12 @@ async function handlePromiseAdd(ctx) {
   const ok     = await requireAccess(ctx, "promises_basic");
   if (!ok) return;
   const user   = await getOrCreateUser(userId, ctx.from);
+
+  // اعمال محدودیت تعداد وعده‌ها بر اساس پلن (رایگان: ۳، راه‌اندازی: ۱۰، ...)
+  let currentPromises = [];
+  try { currentPromises = JSON.parse(user.tempAnswers || "{}")._promises || []; } catch {}
+  if (!(await requireLimit(ctx, "promises", currentPromises.length))) return;
+
   const temp   = _getCurrentTemp(user);
   temp._promiseForm = {};
   await updateUser(userId, { currentStep: PROMISE_STEP_BASE, tempAnswers: JSON.stringify(temp) });
