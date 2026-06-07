@@ -823,29 +823,41 @@ function buildCardsListKB(page = 0) {
   return kb;
 }
 
-/** ساخت کیبورد تب‌های یک کارت */
-function buildTabsKB(cardId) {
+/** ساخت کیبورد تب‌های یک کارت — با برچسب قفل روی تب‌های نیازمند ارتقا */
+async function buildTabsKB(cardId, ctx) {
+  const { featureLockInfo } = require("../utils/access.js");
   const kb = new InlineKeyboard();
-  EDU_TABS.forEach((tab, i) => {
-    kb.text(`${tab.emoji} ${tab.label}`, `edu:tab:${cardId}:${tab.id}`);
-    if ((i + 1) % 2 === 0) kb.row();
-  });
+  let count = 0;
+  for (const tab of EDU_TABS) {
+    let badge = "";
+    if (ctx && tab.feature) {
+      try { badge = (await featureLockInfo(ctx, tab.feature)).badge; } catch {}
+    }
+    kb.text(`${tab.emoji} ${tab.label}${badge}`, `edu:tab:${cardId}:${tab.id}`);
+    if ((++count) % 2 === 0) kb.row();
+  }
   if (EDU_TABS.length % 2 !== 0) kb.row();
   kb.text("📚 سایر کارت‌ها", "edu:list").row();
   kb.text("🏠 منوی اصلی", "menu");
   return kb;
 }
 
-/** ساخت کیبورد بعد از مشاهده‌ی تب */
-function buildAfterTabKB(cardId, currentTabId) {
+/** ساخت کیبورد بعد از مشاهده‌ی تب — با برچسب قفل */
+async function buildAfterTabKB(cardId, currentTabId, ctx) {
+  const { featureLockInfo } = require("../utils/access.js");
   const kb = new InlineKeyboard();
 
   // سایر تب‌ها (به جز فعلی) — حداکثر ۴ تا برای شلوغ نشدن
   const others = EDU_TABS.filter((t) => t.id !== currentTabId).slice(0, 4);
-  others.forEach((t, i) => {
-    kb.text(`${t.emoji} ${t.label}`, `edu:tab:${cardId}:${t.id}`);
-    if ((i + 1) % 2 === 0) kb.row();
-  });
+  let oi = 0;
+  for (const t of others) {
+    let badge = "";
+    if (ctx && t.feature) {
+      try { badge = (await featureLockInfo(ctx, t.feature)).badge; } catch {}
+    }
+    kb.text(`${t.emoji} ${t.label}${badge}`, `edu:tab:${cardId}:${t.id}`);
+    if ((++oi) % 2 === 0) kb.row();
+  }
   if (others.length % 2 !== 0) kb.row();
 
   // ناوبری بین کارت‌ها
@@ -923,7 +935,7 @@ async function handleShowEducationCard(ctx, cardId) {
     `🎯 *این کارت شامل ۶ بخش محتوایی است.*\n` +
     `بخشی را که می‌خواهید مطالعه کنید انتخاب کنید:`;
 
-  const kb = buildTabsKB(cardId);
+  const kb = await buildTabsKB(cardId, ctx);
 
   if (ctx.callbackQuery) {
     try {
@@ -958,7 +970,7 @@ async function handleEducationView(ctx, cardId, tabId) {
   if (!access) return;
 
   const text = formatTabContent(card, tab);
-  const kb = buildAfterTabKB(cardId, tabId);
+  const kb = await buildAfterTabKB(cardId, tabId, ctx);
 
   // مدیریت پیام‌های بلند (محدودیت ۴۰۹۶ کاراکتر تلگرام)
   if (text.length > 3900) {
