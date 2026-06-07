@@ -8,8 +8,12 @@ const { STEPS, TOTAL_STEPS, STEP_EMOJIS } = require("../constants/questions.js")
 // ═══════════════════════════════════════════
 // منوی اصلی
 // ═══════════════════════════════════════════
-function mainMenuKB(userPlan = "free") {
-  return new InlineKeyboard()
+function mainMenuKB(user) {
+  // user می‌تواند آبجکت کاربر یا رشته پلن باشد (سازگاری با نسخه‌های مختلف)
+  const userPlan = typeof user === 'object' ? (user.purchasedPlan || user.role || 'free') : (user || 'free');
+  const isAdmin = typeof user === 'object' && user.role === 'admin';
+
+  const kb = new InlineKeyboard()
     .text("🚀 ارزیابی آمادگی", "start_consultation").row()
     .text("📊 داشبورد کمپین", "dashboard").row()
     .text("🗂️ مدیریت کمپین", "campaign_menu").row()
@@ -17,6 +21,23 @@ function mainMenuKB(userPlan = "free") {
     .text("📂 تاریخچه تحلیل‌ها", "show_history").row()
     .text("💼 بسته‌ها و خدمات", "show_plans").row()
     .text("📞 ارتباط با ما", "contact_us").row();
+
+  // دکمه ادمین فقط برای کاربر ادمین
+  if (isAdmin) {
+    kb.text("🛠 پنل ادمین", "admin").row();
+  }
+
+  return kb;
+}
+
+// ═══════════════════════════════════════════
+// منوی ارزیابی و تحلیل
+// ═══════════════════════════════════════════
+function analysisMenuKB() {
+  return new InlineKeyboard()
+    .text("🎯 ارزیابی آمادگی (۹ مرحله)", "analysis_readiness").row()
+    .text("🧭 تحلیل SWOT", "analysis_swot").row()
+    .text("🏠 منوی اصلی", "menu");
 }
 
 // ═══════════════════════════════════════════
@@ -292,6 +313,7 @@ function progressText(currentStep) {
 module.exports = {
   // منوها
   mainMenuKB,
+  analysisMenuKB,
   campaignMenuKB,
   dashboardKB,
 
