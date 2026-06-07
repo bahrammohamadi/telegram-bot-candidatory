@@ -34,6 +34,7 @@ function call(fn, ...args) {
 function registerCompatRoutes(bot, flows) {
   const {
     onboarding = {},
+    readiness = {},
     swot = {},
     rivals = {},
     promises = {},
@@ -41,6 +42,25 @@ function registerCompatRoutes(bot, flows) {
     dashboard = {},
     educational = {},
   } = flows;
+
+  // ─────────────────────────────────────────────────────────────
+  // ارزیابی آمادگی (readiness) — مهم‌ترین فلوی ربات
+  // دکمه‌ها: ans:STEP:VALUE, edit:I, back:STEP, confirm, cancel
+  // این‌ها بدون namespace هستند و قبلاً به هیچ هندلری وصل نبودند،
+  // یعنی کل جریان ارزیابی (پاسخ به سؤال، ویرایش، تایید) کار نمی‌کرد.
+  // ─────────────────────────────────────────────────────────────
+  bot.callbackQuery(/^ans:(\d+):(.+)$/, async (ctx) => {
+    const [, step, value] = ctx.match;
+    return call(readiness.handleAnswer, ctx, num(step), value);
+  });
+  bot.callbackQuery(/^edit:(\d+)$/, async (ctx) =>
+    call(readiness.handleEdit, ctx, num(ctx.match[1]))
+  );
+  bot.callbackQuery(/^back:(-?\d+)$/, async (ctx) =>
+    call(readiness.handleBackStep, ctx, num(ctx.match[1]))
+  );
+  bot.callbackQuery("confirm", async (ctx) => call(readiness.handleConfirm, ctx));
+  bot.callbackQuery("cancel",  async (ctx) => call(readiness.handleCancelConsultation, ctx));
 
   // ─────────────────────────────────────────────────────────────
   // آموزش — منوی اصلی دکمه‌ی "edu_list" می‌زند ولی فلو "edu:list"
