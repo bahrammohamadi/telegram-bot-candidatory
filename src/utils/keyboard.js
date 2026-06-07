@@ -246,11 +246,14 @@ function dashboardKB() {
 // ═══════════════════════════════════════════
 
 function plansListKB() {
+  // قیمت‌ها از منبع حقیقت واحد (constants/plans.js) خوانده می‌شوند
+  const { PLANS } = require("../constants/plans.js");
+  const p = (id) => (PLANS[id] || {}).priceLabel || "—";
   return new InlineKeyboard()
     .text("🆓 رایگان — مشاهده امکانات", "plan:free").row()
-    .text("🌱 راه‌اندازی — ۲,۸۰۰,۰۰۰ تومان", "plan:starter").row()
-    .text("🔥 ⭐ حرفه‌ای — ۸,۵۰۰,۰۰۰ تومان", "plan:professional").row()
-    .text("💎 VIP — ۲۸,۰۰۰,۰۰۰ تومان", "plan:vip").row()
+    .text(`🌱 راه‌اندازی — ${p("starter")}`, "plan:starter").row()
+    .text(`🔥 ⭐ حرفه‌ای — ${p("professional")}`, "plan:professional").row()
+    .text(`💎 VIP — ${p("vip")}`, "plan:vip").row()
     .text("🔙 منوی اصلی", "menu").row();
 }
 
