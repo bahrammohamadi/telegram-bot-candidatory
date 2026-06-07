@@ -382,6 +382,68 @@ async function handleConfirm(ctx) {
 }
 
 // ═══════════════════════════════════════════
+// تحلیل هوشمند (AI) روی نتیجه‌ی ارزیابی
+// ═══════════════════════════════════════════
+async function handleAiInsight(ctx) {
+  const userId = String(ctx.from.id);
+  const { generateAI, isAIConfigured } = require("../../utils/ai.js");
+  const { readinessInsightPrompt } = require("../../utils/ai-prompts.js");
+  const { InlineKeyboard } = require("grammy");
+
+  const backKb = new InlineKeyboard()
+    .text("🔁 تلاش مجدد", "readiness:ai_insight").row()
+    .text("🔙 منوی اصلی", "menu");
+
+  if (!isAIConfigured()) {
+    try {
+      await ctx.answerCallbackQuery({ text: "هوش مصنوعی پیکربندی نشده", show_alert: true });
+    } catch {}
+    return;
+  }
+
+  let user, answers = {};
+  try {
+    user = await getOrCreateUser(userId, {});
+    answers = JSON.parse(user.tempAnswers || "{}");
+  } catch {}
+
+  // اگر پاسخ‌ها در دسترس نیست
+  if (!answers || Object.keys(answers).length === 0) {
+    try {
+      await ctx.answerCallbackQuery({ text: "ابتدا یک ارزیابی کامل انجام دهید", show_alert: true });
+    } catch {}
+    return;
+  }
+
+  const score = calcScore(answers);
+  let profile = user.profile || user;
+  if (typeof profile === "string") { try { profile = JSON.parse(profile); } catch {} }
+
+  // حالت در حال تولید
+  try {
+    await ctx.answerCallbackQuery({ text: "🤖 در حال تحلیل…" });
+    await ctx.reply("🤖 *در حال تحلیل هوشمند نتیجه‌ی شما…*", { parse_mode: "Markdown" });
+  } catch {}
+
+  try {
+    const { system, prompt } = readinessInsightPrompt({ score, answers, profile });
+    const aiText = await generateAI({ system, prompt });
+    const text =
+      "🤖 *تحلیل هوشمند آمادگی شما*\n" +
+      "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+      aiText +
+      "\n\n_✨ تولیدشده با هوش مصنوعی_";
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: backKb });
+  } catch (e) {
+    console.error("[readiness][AI] error:", e?.message || e);
+    await ctx.reply(
+      "⚠️ تحلیل هوشمند موقتاً ناموفق بود. لطفاً دوباره تلاش کنید.",
+      { reply_markup: backKb }
+    );
+  }
+}
+
+// ═══════════════════════════════════════════
 // انصراف از ارزیابی
 // ═══════════════════════════════════════════
 async function handleCancelConsultation(ctx) {
@@ -415,5 +477,6 @@ module.exports = {
   handleBackStep,
   handleConfirm,
   handleCancelConsultation,
+  handleAiInsight,
   handleTextInput,
 };
