@@ -95,6 +95,24 @@ if (process.env.BOT_INFO) {
 
 const bot = new Bot(BOT_TOKEN, botInfo ? { botInfo } : undefined);
 
+// ───────────────────────────────────────────────────────────────
+// پاکسازی چیدمان کیبوردها (رفع «جایگیری بد آیتم‌ها»)
+// بسیاری از کیبوردها به‌خاطر الگوی .text(...).row() در آخرین دکمه،
+// یک ردیف خالی اضافه در انتها داشتند که باعث چیدمان/فاصله‌ی نامرتب
+// می‌شد. این transformer قبل از ارسال، همه‌ی ردیف‌های خالی را حذف می‌کند.
+// ───────────────────────────────────────────────────────────────
+bot.api.config.use(async (prev, method, payload, signal) => {
+  try {
+    const rm = payload && payload.reply_markup;
+    if (rm && Array.isArray(rm.inline_keyboard)) {
+      rm.inline_keyboard = rm.inline_keyboard.filter(
+        (row) => Array.isArray(row) && row.length > 0
+      );
+    }
+  } catch {}
+  return prev(method, payload, signal);
+});
+
 // ═══════════════════════════════════════════════════════════════
 // ۲) Middleware جهانی: خطایابی و log
 // ═══════════════════════════════════════════════════════════════
@@ -228,6 +246,9 @@ bot.command("profile", async (ctx) => {
 bot.command("dashboard", async (ctx) => {
   if (typeof dashboard.handleShowDashboard === "function") {
     return dashboard.handleShowDashboard(ctx);
+  }
+  if (typeof dashboard.handleDashboard === "function") {
+    return dashboard.handleDashboard(ctx);
   }
   await ctx.reply("⚠️ داشبورد در دسترس نیست.");
 });
@@ -396,6 +417,9 @@ const DASHBOARD_HANDLER = async (ctx) => {
     return dashboard.handleShowDashboard(ctx);
   if (typeof dashboard.handleDashboardMenu === "function")
     return dashboard.handleDashboardMenu(ctx);
+  // نام واقعی تابع در فلوی داشبورد: handleDashboard
+  if (typeof dashboard.handleDashboard === "function")
+    return dashboard.handleDashboard(ctx);
   return notReady(ctx, "داشبورد سلامت کمپین");
 };
 ["menu_dashboard", "dashboard", "show_dashboard", "campaign_dashboard"]
@@ -584,7 +608,7 @@ bot.callbackQuery(/^admin:/,   admin.handleAdminCallback);
 // «در حال توسعه» می‌رسیدند و بخش‌های کمپین/پروفایل/SWOT خالی به‌نظر می‌رسید.
 // ═══════════════════════════════════════════════════════════════
 registerCompatRoutes(bot, {
-  onboarding, swot, rivals, promises, crisis, dashboard, educational,
+  onboarding, readiness, swot, rivals, promises, crisis, dashboard, educational,
 });
 
 // ═══════════════════════════════════════════════════════════════
