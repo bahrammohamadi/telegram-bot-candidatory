@@ -19,20 +19,57 @@ const { getOrCreateUser, updateUser, initDB } = require("./utils/db.js");
 const { requireAccess } = require("./utils/access.js");
 const { mainMenuKB, analysisMenuKB } = require("./utils/keyboard.js");
 
-// فلوها
-const onboarding  = require("./flows/onboarding.js");
-const readiness   = require("./flows/analysis/readiness.js");
-const swot        = require("./flows/analysis/swot.js");
-const dashboard   = require("./flows/dashboard.js");
-const rivals      = require("./flows/campaign/rivals.js");
-const promises    = require("./flows/campaign/promises.js");
-const crisis      = require("./flows/campaign/crisis.js");
-const content     = require("./flows/content/generator.js");
-const educational = require("./flows/educational.js");
-const plans       = require("./flows/plans.js");
-const history     = require("./flows/history.js");
-const contact     = require("./flows/contact.js");
-const admin       = require("./flows/admin.js");
+// ─── بارگذاری امن فلوها ─────────────────────────────────────────
+// اگر فایلی هنوز در پروژه نباشد، crash نمی‌کنیم؛ یک stub قرار می‌دهیم
+// تا callbackها به جای fallback مبهم، یک پیام «در حال توسعه» بدهند.
+// ───────────────────────────────────────────────────────────────
+function safeRequire(path, name) {
+  try {
+    return require(path);
+  } catch (e) {
+    console.warn(`⚠️  ماژول ${name} بارگذاری نشد (${path}): ${e.message}`);
+    return null;
+  }
+}
+
+const onboarding  = safeRequire("./flows/onboarding.js",           "onboarding")  || {};
+const readiness   = safeRequire("./flows/analysis/readiness.js",   "readiness")   || {};
+const swot        = safeRequire("./flows/analysis/swot.js",        "swot")        || {};
+const dashboard   = safeRequire("./flows/dashboard.js",            "dashboard")   || {};
+const rivals      = safeRequire("./flows/campaign/rivals.js",      "rivals")      || {};
+const promises    = safeRequire("./flows/campaign/promises.js",    "promises")    || {};
+const crisis      = safeRequire("./flows/campaign/crisis.js",      "crisis")      || {};
+const content     = safeRequire("./flows/content/generator.js",    "content")     || {};
+const educational = safeRequire("./flows/educational.js",          "educational") || {};
+const plans       = safeRequire("./flows/plans.js",                "plans")       || {};
+const history     = safeRequire("./flows/history.js",              "history")     || {};
+const contact     = safeRequire("./flows/contact.js",              "contact")     || {};
+const admin       = safeRequire("./flows/admin.js",                "admin")       || {};
+
+// کمکی: ارسال پیام «در حال توسعه» برای فلوهایی که هنوز کد ندارند
+async function notReady(ctx, featureName) {
+  const text =
+    `🚧 *${featureName}*\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `این بخش در حال توسعه است و به زودی فعال می‌شود.\n\n` +
+    `_لطفاً از بخش‌های فعال دیگر استفاده کنید._`;
+  const kb = new InlineKeyboard().text("🏠 بازگشت به منو", "menu");
+
+  try {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb });
+      } catch {
+        await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+      }
+      try { await ctx.answerCallbackQuery(); } catch {}
+    } else {
+      await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+    }
+  } catch (e) {
+    console.error("[notReady] error:", e);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // ۱) ساخت bot با مدیریت خطای "Bot not initialized"
@@ -225,20 +262,29 @@ async function showMainMenu(ctx) {
 // ═══════════════════════════════════════════════════════════════
 // ۵) callbackهای منوی اصلی
 // ═══════════════════════════════════════════════════════════════
+// نکته مهم: علاوه بر اسامی جدید (menu_xxx) و namespace جدید (rivals:menu)،
+// alias های callback های قدیمی keyboard.js (مثل dashboard, profile,
+// start_consultation, show_history, show_plans, ...) هم پشتیبانی می‌شوند
+// تا با هر نسخه از keyboard.js کار کند.
+// ═══════════════════════════════════════════════════════════════
 
-bot.callbackQuery("menu", showMainMenu);
+// ─── منوی اصلی ─────────────────────────────────────────────────
+const MENU_ALIASES = ["menu", "main_menu", "back_to_menu", "home"];
+MENU_ALIASES.forEach((cb) => bot.callbackQuery(cb, showMainMenu));
 
-bot.callbackQuery("menu_profile", async (ctx) => {
-  if (typeof onboarding.handleProfileMenu === "function") {
+// ─── پروفایل کاندیدا ───────────────────────────────────────────
+const PROFILE_HANDLER = async (ctx) => {
+  if (typeof onboarding.handleProfileMenu === "function")
     return onboarding.handleProfileMenu(ctx);
-  }
-  if (typeof onboarding.handleStartOnboarding === "function") {
+  if (typeof onboarding.handleStartOnboarding === "function")
     return onboarding.handleStartOnboarding(ctx);
-  }
-  await ctx.answerCallbackQuery({ text: "در دسترس نیست", show_alert: true });
-});
+  return notReady(ctx, "پروفایل کاندیدا");
+};
+["menu_profile", "profile", "show_profile", "candidate_profile"]
+  .forEach((cb) => bot.callbackQuery(cb, PROFILE_HANDLER));
 
-bot.callbackQuery("menu_analysis", async (ctx) => {
+// ─── ارزیابی و تحلیل (منوی واسط) ──────────────────────────────
+const ANALYSIS_MENU_HANDLER = async (ctx) => {
   const text =
     "🎯 *ارزیابی و تحلیل*\n" +
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
@@ -252,25 +298,49 @@ bot.callbackQuery("menu_analysis", async (ctx) => {
         .text("🏠 منوی اصلی", "menu");
 
   if (ctx.callbackQuery) {
-    try {
-      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb });
-    } catch {
-      await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
-    }
+    try { await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb }); }
+    catch { await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb }); }
     try { await ctx.answerCallbackQuery(); } catch {}
   } else {
     await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
   }
-});
+};
+["menu_analysis", "show_assessments", "assessments_menu"]
+  .forEach((cb) => bot.callbackQuery(cb, ANALYSIS_MENU_HANDLER));
 
-bot.callbackQuery("menu_dashboard", async (ctx) => {
-  if (typeof dashboard.handleShowDashboard === "function") {
+// ─── شروع ارزیابی آمادگی ──────────────────────────────────────
+const READINESS_HANDLER = async (ctx) => {
+  if (typeof readiness.handleStartReadiness === "function")
+    return readiness.handleStartReadiness(ctx);
+  if (typeof readiness.handleStartConsultation === "function")
+    return readiness.handleStartConsultation(ctx);
+  return notReady(ctx, "ارزیابی آمادگی ۹ مرحله‌ای");
+};
+["analysis_readiness", "start_consultation", "start_assessment", "readiness:start"]
+  .forEach((cb) => bot.callbackQuery(cb, READINESS_HANDLER));
+
+// ─── شروع SWOT ────────────────────────────────────────────────
+const SWOT_HANDLER = async (ctx) => {
+  if (typeof swot.handleStartSwot === "function")
+    return swot.handleStartSwot(ctx);
+  return notReady(ctx, "تحلیل SWOT");
+};
+["analysis_swot", "start_swot", "swot:start"]
+  .forEach((cb) => bot.callbackQuery(cb, SWOT_HANDLER));
+
+// ─── داشبورد ──────────────────────────────────────────────────
+const DASHBOARD_HANDLER = async (ctx) => {
+  if (typeof dashboard.handleShowDashboard === "function")
     return dashboard.handleShowDashboard(ctx);
-  }
-  await ctx.answerCallbackQuery({ text: "در دسترس نیست", show_alert: true });
-});
+  if (typeof dashboard.handleDashboardMenu === "function")
+    return dashboard.handleDashboardMenu(ctx);
+  return notReady(ctx, "داشبورد سلامت کمپین");
+};
+["menu_dashboard", "dashboard", "show_dashboard", "campaign_dashboard"]
+  .forEach((cb) => bot.callbackQuery(cb, DASHBOARD_HANDLER));
 
-bot.callbackQuery("menu_campaign", async (ctx) => {
+// ─── مدیریت کمپین (منوی واسط) ─────────────────────────────────
+const CAMPAIGN_MENU_HANDLER = async (ctx) => {
   const text =
     "🏛 *مدیریت کمپین*\n" +
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
@@ -283,51 +353,102 @@ bot.callbackQuery("menu_campaign", async (ctx) => {
     .text("🏠 منوی اصلی", "menu");
 
   if (ctx.callbackQuery) {
-    try {
-      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb });
-    } catch {
-      await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
-    }
+    try { await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb }); }
+    catch { await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb }); }
     try { await ctx.answerCallbackQuery(); } catch {}
   } else {
     await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
   }
+};
+["menu_campaign", "campaign", "show_campaign", "campaign_menu"]
+  .forEach((cb) => bot.callbackQuery(cb, CAMPAIGN_MENU_HANDLER));
+
+// ─── ورودی‌های مستقیم مدیریت کمپین (alias های قدیمی) ─────────
+["rivals", "show_rivals"].forEach((cb) => bot.callbackQuery(cb, async (ctx) => {
+  if (typeof rivals.handleRivalsMenu === "function") return rivals.handleRivalsMenu(ctx);
+  if (typeof rivals.handleShowRivals === "function") return rivals.handleShowRivals(ctx);
+  return notReady(ctx, "مدیریت رقبا");
+}));
+["promises", "show_promises"].forEach((cb) => bot.callbackQuery(cb, async (ctx) => {
+  if (typeof promises.handlePromisesMenu === "function") return promises.handlePromisesMenu(ctx);
+  if (typeof promises.handleShowPromises === "function") return promises.handleShowPromises(ctx);
+  return notReady(ctx, "مدیریت وعده‌ها");
+}));
+["crisis", "show_crisis"].forEach((cb) => bot.callbackQuery(cb, async (ctx) => {
+  if (typeof crisis.handleCrisisMenu === "function") return crisis.handleCrisisMenu(ctx);
+  if (typeof crisis.handleShowCrisis === "function") return crisis.handleShowCrisis(ctx);
+  return notReady(ctx, "مدیریت بحران");
+}));
+
+// ─── تولید محتوا ──────────────────────────────────────────────
+const CONTENT_HANDLER = async (ctx) => {
+  if (typeof content.handleContentMenu === "function")
+    return content.handleContentMenu(ctx);
+  return notReady(ctx, "تولید محتوا");
+};
+["menu_content", "content", "show_content", "content_menu"]
+  .forEach((cb) => bot.callbackQuery(cb, CONTENT_HANDLER));
+
+// ─── آموزش ────────────────────────────────────────────────────
+const EDUCATION_HANDLER = async (ctx) => {
+  if (typeof educational.handleShowEducationList === "function")
+    return educational.handleShowEducationList(ctx, 0);
+  return notReady(ctx, "مرکز آموزش");
+};
+["menu_education", "show_education", "education", "educational"]
+  .forEach((cb) => bot.callbackQuery(cb, EDUCATION_HANDLER));
+
+// ─── تاریخچه ──────────────────────────────────────────────────
+const HISTORY_HANDLER = async (ctx) => {
+  if (typeof history.handleShowHistory === "function")
+    return history.handleShowHistory(ctx, 0, "all");
+  return notReady(ctx, "تاریخچه تحلیل‌ها");
+};
+["menu_history", "show_history", "history"]
+  .forEach((cb) => bot.callbackQuery(cb, HISTORY_HANDLER));
+
+// ─── بسته‌ها ──────────────────────────────────────────────────
+const PLANS_HANDLER = async (ctx) => {
+  if (typeof plans.handleShowPlans === "function")
+    return plans.handleShowPlans(ctx);
+  return notReady(ctx, "بسته‌های خدماتی");
+};
+["menu_plans", "show_plans", "plans", "buy_plan"]
+  .forEach((cb) => bot.callbackQuery(cb, PLANS_HANDLER));
+
+// ─── درباره / تماس / نمونه‌ها (alias های کامل) ────────────────
+const ABOUT_HANDLER = async (ctx) => {
+  if (typeof contact.handleAboutUs === "function")
+    return contact.handleAboutUs(ctx);
+  return notReady(ctx, "درباره ما");
+};
+["menu_contact", "about_us", "about"]
+  .forEach((cb) => bot.callbackQuery(cb, ABOUT_HANDLER));
+
+bot.callbackQuery("contact_us", async (ctx) => {
+  if (typeof contact.handleContactUs === "function")
+    return contact.handleContactUs(ctx);
+  return notReady(ctx, "ارتباط با ما");
 });
 
-bot.callbackQuery("menu_content", async (ctx) => {
-  return content.handleContentMenu(ctx);
+bot.callbackQuery("sample_reports", async (ctx) => {
+  if (typeof contact.handleSampleReports === "function")
+    return contact.handleSampleReports(ctx);
+  return notReady(ctx, "نمونه گزارش‌ها");
 });
 
-bot.callbackQuery("menu_education", async (ctx) => {
-  return educational.handleShowEducationList(ctx, 0);
+bot.callbackQuery("faq", async (ctx) => {
+  if (typeof contact.handleFAQMenu === "function")
+    return contact.handleFAQMenu(ctx);
+  return notReady(ctx, "سوالات متداول");
 });
 
-bot.callbackQuery("menu_history", async (ctx) => {
-  return history.handleShowHistory(ctx, 0, "all");
-});
-
-bot.callbackQuery("menu_plans", async (ctx) => {
-  return plans.handleShowPlans(ctx);
-});
-
-bot.callbackQuery("menu_contact", async (ctx) => {
-  return contact.handleAboutUs(ctx);
-});
-
-// ورودی‌های مستقیم ارزیابی
-bot.callbackQuery("analysis_readiness", async (ctx) => {
-  if (typeof readiness.handleStartReadiness === "function") {
-    return readiness.handleStartReadiness(ctx);
-  }
-  await ctx.answerCallbackQuery({ text: "در دسترس نیست", show_alert: true });
-});
-
-bot.callbackQuery("analysis_swot", async (ctx) => {
-  if (typeof swot.handleStartSwot === "function") {
-    return swot.handleStartSwot(ctx);
-  }
-  await ctx.answerCallbackQuery({ text: "در دسترس نیست", show_alert: true });
-});
+// ─── ادمین (alias) ────────────────────────────────────────────
+["admin_panel", "admin"].forEach((cb) => bot.callbackQuery(cb, async (ctx) => {
+  if (typeof admin.handleAdminPanel === "function")
+    return admin.handleAdminPanel(ctx);
+  return notReady(ctx, "پنل ادمین");
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // ۶) روترهای callback برای فلوها (با regex)
@@ -487,13 +608,34 @@ bot.on("message:contact", async (ctx) => {
 // ۹) callback پیش‌فرض (فاللبک) برای callbackهای ناشناخته
 // ═══════════════════════════════════════════════════════════════
 bot.on("callback_query:data", async (ctx) => {
-  console.warn("[fallback] unhandled callback:", ctx.callbackQuery.data);
+  const data = ctx.callbackQuery?.data || "";
+  console.warn("[fallback] unhandled callback:", data);
+
+  // toast کوتاه به کاربر
   try {
     await ctx.answerCallbackQuery({
-      text: "⚠️ این دکمه دیگر فعال نیست. /start بزنید.",
+      text: "⚠️ این بخش فعلاً در دسترس نیست",
       show_alert: false,
     });
   } catch {}
+
+  // پیام مفهومی + برگشت به منو
+  try {
+    const text =
+      `🚧 *در حال توسعه*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `این قابلیت (\`${data}\`) هنوز فعال نشده.\n\n` +
+      `لطفاً از منوی اصلی یکی از بخش‌های فعال را انتخاب کنید.`;
+    const kb = new InlineKeyboard().text("🏠 منوی اصلی", "menu");
+
+    try {
+      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb });
+    } catch {
+      await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+    }
+  } catch (e) {
+    console.error("[fallback] reply error:", e);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
