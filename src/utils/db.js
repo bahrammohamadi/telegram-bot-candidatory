@@ -29,6 +29,9 @@ async function getOrCreateUser(userId, defaults = {}) {
 
   try {
     const doc = await databases.getDocument(dbId, usersCol, uid);
+    if (doc.candidateProfile) {
+      try { doc.profile = JSON.parse(doc.candidateProfile); } catch {}
+    }
     return doc;
   } catch (e) {
     if (e.code === 404) {
@@ -48,7 +51,11 @@ async function getOrCreateUser(userId, defaults = {}) {
         lastInteractionNew: new Date().toISOString(),
         ...defaults,
       };
-      return await databases.createDocument(dbId, usersCol, uid, newDoc);
+      const doc = await databases.createDocument(dbId, usersCol, uid, newDoc);
+      if (doc.candidateProfile) {
+        try { doc.profile = JSON.parse(doc.candidateProfile); } catch {}
+      }
+      return doc;
     }
     throw e;
   }
@@ -67,8 +74,14 @@ async function updateUser(userId, updates) {
   return await databases.updateDocument(dbId, usersCol, uid, payload);
 }
 
-async function saveConsultation(data) {
+async function saveConsultation(userIdOrData, dataObj) {
   initDB();
+  let data;
+  if (typeof userIdOrData === "string") {
+    data = { userId: userIdOrData, ...dataObj };
+  } else {
+    data = userIdOrData;
+  }
   return await databases.createDocument(dbId, consultCol, ID.unique(), data);
 }
 
@@ -83,9 +96,32 @@ async function getUserConsultations(userId) {
   return res.documents || [];
 }
 
-async function upsertLead(userId, leadData) {
+async function getConsultationById(consultId) {
   initDB();
-  const uid = String(userId);
+  try {
+    return await databases.getDocument(dbId, consultCol, String(consultId));
+  } catch {
+    return null;
+  }
+}
+
+async function deleteConsultation(consultId) {
+  initDB();
+  return await databases.deleteDocument(dbId, consultCol, String(consultId));
+}
+
+async function upsertLead(userIdOrData, leadDataObj) {
+  initDB();
+  let uid;
+  let leadData;
+
+  if (typeof userIdOrData === "string") {
+    uid = userIdOrData;
+    leadData = leadDataObj || {};
+  } else {
+    uid = String(userIdOrData.userId);
+    leadData = userIdOrData;
+  }
 
   try {
     const existing = await databases.getDocument(dbId, leadsCol, uid);
@@ -108,19 +144,6 @@ async function upsertLead(userId, leadData) {
     }
     throw e;
   }
-}
-
-async function getStats() {
-  initDB();
-  const users = await databases.listDocuments(dbId, usersCol, [Query.limit(1)]);
-  const consultations = await databases.listDocuments(dbId, consultCol, [Query.limit(1)]);
-  const leads = await databases.listDocuments(dbId, leadsCol, [Query.limit(1)]);
-
-  return {
-    totalUsers: users.total || 0,
-    totalConsultations: consultations.total || 0,
-    totalLeads: leads.total || 0,
-  };
 }
 
 async function listLeads(options = {}) {
@@ -150,7 +173,11 @@ async function findByNationalId(nationalId) {
       Query.equal("nationalId", nationalId),
       Query.limit(1),
     ]);
-    return res.documents?.[0] || null;
+    const doc = res.documents?.[0] || null;
+    if (doc && doc.candidateProfile) {
+      try { doc.profile = JSON.parse(doc.candidateProfile); } catch {}
+    }
+    return doc;
   } catch {
     return null;
   }
@@ -163,7 +190,11 @@ async function findByPhone(phone) {
       Query.equal("phone", phone),
       Query.limit(1),
     ]);
-    return res.documents?.[0] || null;
+    const doc = res.documents?.[0] || null;
+    if (doc && doc.candidateProfile) {
+      try { doc.profile = JSON.parse(doc.candidateProfile); } catch {}
+    }
+    return doc;
   } catch {
     return null;
   }
@@ -172,10 +203,18 @@ async function findByPhone(phone) {
 async function getUserById(userId) {
   initDB();
   try {
-    return await databases.getDocument(dbId, usersCol, String(userId));
+    const doc = await databases.getDocument(dbId, usersCol, String(userId));
+    if (doc && doc.candidateProfile) {
+      try { doc.profile = JSON.parse(doc.candidateProfile); } catch {}
+    }
+    return doc;
   } catch {
     return null;
   }
+}
+
+async function getUser(userId) {
+  return await getUserById(userId);
 }
 
 async function listAllUsers(options = {}) {
@@ -185,7 +224,13 @@ async function listAllUsers(options = {}) {
     Query.limit(limit),
     Query.offset(offset),
   ]);
-  return res.documents || [];
+  const docs = res.documents || [];
+  for (const d of docs) {
+    if (d.candidateProfile) {
+      try { d.profile = JSON.parse(d.candidateProfile); } catch {}
+    }
+  }
+  return docs;
 }
 
 async function listRecentUsers(options = {}) {
@@ -195,7 +240,13 @@ async function listRecentUsers(options = {}) {
     Query.orderDesc("lastInteractionNew"),
     Query.limit(limit),
   ]);
-  return res.documents || [];
+  const docs = res.documents || [];
+  for (const d of docs) {
+    if (d.candidateProfile) {
+      try { d.profile = JSON.parse(d.candidateProfile); } catch {}
+    }
+  }
+  return docs;
 }
 
 async function getStats() {
@@ -312,20 +363,14 @@ async function getStats() {
   };
 }
 
-async function getUser(userId) {
-  initDB();
-  try {
-    return await databases.getDocument(dbId, usersCol, String(userId));
-  } catch {
-    return null;
-  }
-}
-
 module.exports = {
+  initDB,
   getOrCreateUser,
   updateUser,
   saveConsultation,
   getUserConsultations,
+  getConsultationById,
+  deleteConsultation,
   upsertLead,
   updateLead,
   getStats,
