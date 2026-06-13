@@ -114,11 +114,12 @@ async function handleCrisisMenu(ctx) {
   let crises   = [];
   try { crises = _getCurrentTemp(user)._crises || []; } catch {}
 
-  let t = "🛡️ *مدیریت بحران*\n━━━━━━━━━━━━━━━━━━━\n\n";
+  let t = "🛡️ *مدیریت بحران انتخاباتی*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+  t += "در این بخش می‌توانید شایعات، حملات تخریبی یا بحران‌های کمپین خود را ثبت کنید تا سیستم بر اساس نوع و فوریت آن، *پروتکل علمی و استراتژی واکنش سریع* را در اختیارتان قرار دهد.\n\n";
 
   if (crises.length === 0) {
-    t += "هیچ بحران فعالی ثبت نشده. ✅\n\n";
-    t += "📌 با ثبت بحران، استراتژی مقابله دریافت می‌کنید.";
+    t += "✅ *هیچ بحران فعالی ثبت نشده است.*\n\n";
+    t += "📌 برای ثبت اولین بحران، روی دکمه‌ی «ثبت بحران جدید» کلیک کنید.";
   } else {
     const active = crises.filter(c => c.status !== "resolved");
     t += active.length > 0
@@ -291,8 +292,9 @@ async function saveCrisis(ctx, userId, temp) {
     t += "🔴 *فوری:* همین الان با تیم خود مشورت کنید و در ۲ ساعت آینده اقدام کنید!\n";
   }
 
+  const newIndex = temp._crises.length - 1;
   const kb = new InlineKeyboard()
-    .text("✅ بحران حل شد", `crisis_resolve:0`).row()
+    .text("✅ بحران حل شد", `crisis_resolve:${newIndex}`).row()
     .text("📋 لیست بحران‌ها", "crisis_menu").row()
     .text("🔙 مدیریت کمپین", "campaign_menu").row();
 
