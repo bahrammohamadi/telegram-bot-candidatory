@@ -811,8 +811,9 @@ async function handleTextInput(ctx) {
     try { await ctx.deleteMessage(); } catch {}
 
     if (!checkPassword(text)) {
+      await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
       await ctx.reply(
-        "❌ رمز اشتباه است. دوباره تلاش کنید یا /admin را بزنید.",
+        "❌ رمز اشتباه است. ورود به پنل مدیریت لغو شد. جهت تلاش مجدد /admin را بزنید.",
         { reply_markup: new InlineKeyboard().text("🏠 منوی اصلی", "menu") }
       );
       return true;
