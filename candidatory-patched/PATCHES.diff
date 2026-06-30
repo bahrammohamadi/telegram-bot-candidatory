@@ -1,0 +1,885 @@
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/.env.example candidatory-patched/.env.example
+--- candidatory-original/.env.example	2026-06-30 08:13:01.431765032 +0000
++++ candidatory-patched/.env.example	2026-06-30 08:33:28.081330480 +0000
+@@ -22,11 +22,35 @@
+ ADMIN_IDS=
+ 
+ # ─── حل خطای "Bot not initialized" در serverless ───
+-# ۱) این دستور را اجرا کنید (با توکن واقعی):
+-#    curl https://api.telegram.org/bot<TOKEN>/getMe
+-# ۲) خروجی "result" را کپی کنید (به صورت یک خط JSON):
++# دو راه برای initialize کردن bot در محیط Appwrite Function:
++#
++# راه (الف) — توصیه‌شده: BOT_INFO استاتیک
++#   ۱) curl https://api.telegram.org/bot<TOKEN>/getMe
++#   ۲) خروجی "result" را به صورت یک خط JSON در BOT_INFO بگذارید.
++#   مزیت: cold start سریع‌تر، یک API call کمتر در هر warm instance.
++#
++# راه (ب) — اگر BOT_INFO ندارید:
++#   این متغیر را خالی بگذارید یا comment کنید.
++#   از Patch C3 به بعد، bot به‌صورت خودکار در اولین فراخوانی init می‌شود
++#   و در warm instance ها cache می‌گذارد. هزینه: فقط یک getMe در cold start.
+ BOT_INFO={"id":0000000000,"is_bot":true,"first_name":"نام بات","username":"your_bot_username","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false}
+ 
++# ─── امنیت webhook (Patch M2 — Turn 2) ───
++# اگر این مقدار تنظیم شود، فقط درخواست‌هایی که هدر
++# X-Telegram-Bot-Api-Secret-Token برابر این مقدار دارند پذیرفته می‌شوند.
++# همین مقدار را هنگام setWebhook به تلگرام بدهید:
++#   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=<URL>&secret_token=<SAME_VALUE>"
++# پیشنهاد: رشته‌ی تصادفی ۳۲+ کاراکتری (مثلاً: openssl rand -hex 32)
++BOT_WEBHOOK_SECRET=
++
++# ─── محافظت brute-force روی رمز ادمین (Patch S3 — Turn 2) ───
++ADMIN_MAX_ATTEMPTS=5
++ADMIN_LOCKOUT_MINUTES=15
++
++# ─── Rate Limiting (Patch C4 — Turn 2) ───
++# RATE_LIMIT_WINDOW_MS=60000
++# RATE_LIMIT_MAX_REQUESTS=30
++
+ # ─── Appwrite ───
+ # ⚠️  endpoint بسته به منطقه‌ی project متفاوت است:
+ #    Frankfurt:  https://fra.cloud.appwrite.io/v1
+Only in candidatory-patched: PATCHES.diff
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/setup-db.js candidatory-patched/setup-db.js
+--- candidatory-original/setup-db.js	2026-06-30 08:13:01.431765032 +0000
++++ candidatory-patched/setup-db.js	2026-06-30 08:27:52.133330480 +0000
+@@ -94,7 +94,14 @@
+     { key: "fullName",           type: "string",   size: 128,  required: false, default: null },
+ 
+     // پروفایل کاندیدا (JSON) — برای ذخیره پروفایل ۱۵+ فیلدی onboarding
+-    { key: "profile",            type: "string",   size: 16384, required: false, default: "{}" },
++    // ⚠️ مهم: کد در src/flows/onboarding.js و src/utils/db.js از کلید
++    //         «candidateProfile» استفاده می‌کند. تا قبل از این patch، این
++    //         فیلد در دیتابیس وجود نداشت و هر تلاش برای ذخیره‌ی پروفایل
++    //         با خطای «Attribute candidateProfile not found» شکست می‌خورد.
++    //         فیلد قدیمی «profile» را نیز برای سازگاری با schemaهای قبلی
++    //         نگه می‌داریم (در آینده می‌توان حذف کرد پس از migration).
++    { key: "candidateProfile",   type: "string",   size: 16384, required: false, default: "{}" },
++    { key: "profile",            type: "string",   size: 16384, required: false, default: "{}" }, // legacy — استفاده نمی‌شود
+ 
+     // داده‌های مدیریت کمپین (JSON)
+     { key: "rivals",             type: "string",   size: 32768, required: false, default: "[]" },
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/src/flows/admin.js candidatory-patched/src/flows/admin.js
+--- candidatory-original/src/flows/admin.js	2026-06-30 08:13:01.431765032 +0000
++++ candidatory-patched/src/flows/admin.js	2026-06-30 08:31:13.205330480 +0000
+@@ -21,12 +21,14 @@
+   updateUser,
+   getStats,
+   listLeads,
++  getLeadById,         // ← اضافه: جایگزین گردش روی کل لیست
+   updateLead,
+   findByNationalId,
+   findByPhone,
+   getUserById,
+   listAllUsers,
+   listRecentUsers,
++  iterateAllUsers,     // ← اضافه: pagination واقعی برای broadcast
+ } = require("../utils/db.js");
+ const { setUserPlan, PLAN_LEVELS } = require("../utils/access.js");
+ const {
+@@ -35,10 +37,12 @@
+   isAdminUser,
+   isPasswordEnabled,
+   checkPassword,
++  attemptLogin,
+   isSessionUnlocked,
+   unlockSession,
+   lockSession,
+ } = require("../utils/admin-auth.js");
++const { escapeMd, plain, truncate } = require("../utils/safe-text.js");
+ 
+ // ───────────────────────────────────────────────────────────────
+ // State برای ورودی متنی ادمین (جستجو، broadcast)
+@@ -302,8 +306,10 @@
+ 
+   slice.forEach((lead, i) => {
+     const num = start + i + 1;
+-    const name = lead.firstName || lead.username || "بی‌نام";
+-    const planName = lead.planName || lead.planId || "—";
++    // داده‌ی کاربر را escape می‌کنیم تا کاراکترهای markdown او parse را نشکنند
++    // یا لینک جعلی تزریق نکنند
++    const name = escapeMd(lead.firstName || lead.username || "بی‌نام");
++    const planName = escapeMd(lead.planName || lead.planId || "—");
+     const date = fmtDate(lead.createdAt);
+     text +=
+       `*${num}.* ${name}\n` +
+@@ -363,13 +369,14 @@
+ async function handleLeadView(ctx, leadId) {
+   if (!(await ensureAdminUnlocked(ctx))) return;
+ 
+-  let leads = [];
++  // قبلاً ۵۰۰ سند را می‌خواند و local search می‌کرد (هزینه‌بر و کند).
++  // حالا یک getDocument مستقیم — O(1) به جای O(n).
++  let lead = null;
+   try {
+-    leads = (await listLeads({ status: "all", limit: 500 })) || [];
++    lead = await getLeadById(leadId);
+   } catch (e) {
+-    console.error("[admin] leadView error:", e);
++    console.error("[admin] getLeadById error:", e);
+   }
+-  const lead = leads.find((l) => (l.id || l.$id) === leadId);
+ 
+   if (!lead) {
+     await ctx.answerCallbackQuery({ text: "لید یافت نشد", show_alert: true });
+@@ -382,17 +389,17 @@
+     `🔖 *کد:* \`${(lead.id || lead.$id || "").toString().slice(-12)}\`\n` +
+     `📊 *وضعیت:* ${statusLabel(lead.status)}\n\n` +
+     `👤 *کاربر*\n` +
+-    `   • نام: ${lead.firstName || "—"} ${lead.lastName || ""}\n` +
+-    `   • یوزرنیم: ${lead.username ? "@" + lead.username : "—"}\n` +
++    `   • نام: ${escapeMd(lead.firstName || "—")} ${escapeMd(lead.lastName || "")}\n` +
++    `   • یوزرنیم: ${lead.username ? "@" + escapeMd(lead.username) : "—"}\n` +
+     `   • تلگرام ID: \`${lead.userId || "—"}\`\n` +
+-    `   • شماره: ${lead.phone || "—"}\n` +
+-    `   • کد ملی: ${lead.nationalId || "—"}\n\n` +
++    `   • شماره: ${escapeMd(lead.phone || "—")}\n` +
++    `   • کد ملی: ${escapeMd(lead.nationalId || "—")}\n\n` +
+     `📦 *خرید*\n` +
+-    `   • بسته: ${lead.planName || lead.planId || "—"}\n` +
++    `   • بسته: ${escapeMd(lead.planName || lead.planId || "—")}\n` +
+     `   • مبلغ: ${(lead.priceNumeric ?? 0).toLocaleString("fa-IR")} تومان\n` +
+     `   • تاریخ ثبت: ${fmtDate(lead.createdAt)}\n` +
+     (lead.confirmedAt ? `   • تاریخ تأیید: ${fmtDate(lead.confirmedAt)}\n` : "") +
+-    (lead.note ? `\n📝 *یادداشت:* ${lead.note}` : "");
++    (lead.note ? `\n📝 *یادداشت:* ${escapeMd(truncate(lead.note, 500))}` : "");
+ 
+   const kb = new InlineKeyboard();
+ 
+@@ -420,13 +427,12 @@
+ async function handleLeadAction(ctx, action, leadId) {
+   if (!(await ensureAdminUnlocked(ctx))) return;
+ 
+-  let leads = [];
++  let lead = null;
+   try {
+-    leads = (await listLeads({ status: "all", limit: 500 })) || [];
++    lead = await getLeadById(leadId);
+   } catch (e) {
+-    console.error("[admin] leadAction error:", e);
++    console.error("[admin] getLeadById error:", e);
+   }
+-  const lead = leads.find((l) => (l.id || l.$id) === leadId);
+ 
+   if (!lead) {
+     await ctx.answerCallbackQuery({ text: "لید یافت نشد", show_alert: true });
+@@ -501,14 +507,16 @@
+   const kb = new InlineKeyboard();
+   slice.forEach((u, i) => {
+     const num = start + i + 1;
+-    const name = u.firstName || u.username || `User-${(u.userId || "").slice(-6)}`;
++    const rawName = u.firstName || u.username || `User-${(u.userId || "").slice(-6)}`;
++    const safeName = escapeMd(rawName);             // برای متن Markdown
++    const buttonName = plain(rawName, 30);          // برای دکمه (بدون markdown)
+     const plan = planLabel(u.purchasedPlan || u.role);
+     const lastSeen = fmtDate(u.lastInteractionNew || u.lastInteraction);
+     text +=
+-      `*${num}.* ${name}\n` +
++      `*${num}.* ${safeName}\n` +
+       `   ${plan}\n` +
+       `   🕒 ${lastSeen}\n\n`;
+-    kb.text(`👁 ${name}`, `admin:user:${u.userId}`).row();
++    kb.text(`👁 ${buttonName}`, `admin:user:${u.userId}`).row();
+   });
+ 
+   if (totalPages > 1) {
+@@ -581,10 +589,10 @@
+     `👤 *جزئیات کاربر*\n` +
+     `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+     `🆔 *تلگرام ID:* \`${user.userId || targetUserId}\`\n` +
+-    `📛 *نام:* ${user.firstName || "—"} ${user.lastName || ""}\n` +
+-    `🔖 *یوزرنیم:* ${user.username ? "@" + user.username : "—"}\n` +
+-    `📞 *شماره:* ${user.phone || "—"}\n` +
+-    `🆔 *کد ملی:* ${user.nationalId || "—"}\n\n` +
++    `📛 *نام:* ${escapeMd(user.firstName || "—")} ${escapeMd(user.lastName || "")}\n` +
++    `🔖 *یوزرنیم:* ${user.username ? "@" + escapeMd(user.username) : "—"}\n` +
++    `📞 *شماره:* ${escapeMd(user.phone || "—")}\n` +
++    `🆔 *کد ملی:* ${escapeMd(user.nationalId || "—")}\n\n` +
+     `💎 *پلن:* ${planLabel(user.purchasedPlan)}\n` +
+     `🎭 *نقش:* ${user.role === "admin" ? "🛠 ادمین" : "👤 کاربر عادی"}\n\n` +
+     `📅 *ثبت‌نام:* ${fmtDate(user.createdAt)}\n` +
+@@ -747,31 +755,54 @@
+     return;
+   }
+ 
+-  let users = [];
+-  try {
+-    users = (await listAllUsers({ limit: 10000 })) || [];
+-  } catch (e) {
+-    console.error("[admin] broadcast listAllUsers error:", e);
++  // ────────────────────────────────────────────────────────────────
++  // قبلاً listAllUsers({ limit: 10000 }) → در Appwrite Cloud به‌خاطر
++  // سقف 100 در request واقعاً فقط ۱۰۰ تای اول broadcast می‌گرفتند.
++  // الان از iterateAllUsers (cursor pagination) استفاده می‌کنیم تا
++  // واقعاً همه‌ی کاربران را بپیماید. همچنین قبل از ارسال انبوه،
++  // پیام را با خود ادمین test می‌کنیم تا اشتباه markdown زود کشف شود.
++  // ────────────────────────────────────────────────────────────────
++
++  // (1) Test send به ادمین — اگر parse fail شود، broadcast کنسل می‌شود
++  try {
++    await ctx.api.sendMessage(adminId, message, { parse_mode: "Markdown" });
++  } catch (e) {
++    await ctx.reply(
++      `⚠️ پیام شما به دلیل خطای قالب‌بندی قابل ارسال نیست:\n\n\`${(e?.description || e?.message || "خطای نامشخص").slice(0, 200)}\`\n\n` +
++      `لطفاً متن را اصلاح کنید (احتمالاً یک \\_ یا \\* بدون جفت دارید).`,
++      { parse_mode: "Markdown" }
++    );
++    await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
++    return;
+   }
+ 
+-  let success = 0;
+-  let failed = 0;
+-
+-  // پاسخ اولیه به کاربر
++  // (2) پاسخ اولیه — هنوز total را نمی‌دانیم چون pagination است
+   await sendOrEdit(
+     ctx,
+-    `📤 *ارسال آغاز شد...*\n\n_در حال ارسال به ${users.length} کاربر..._`,
++    `📤 *ارسال آغاز شد...*\n\n_در حال پردازش..._`,
+     new InlineKeyboard().text("⏳ صبر کنید", "admin:noop")
+   );
+ 
+-  for (const u of users) {
++  let success = 0;
++  let failed = 0;
++  let total = 0;
++
++  for await (const u of iterateAllUsers(100)) {
++    total++;
++    // به خود ادمین دوباره نفرست (قبلاً test سند شد)
++    if (String(u.userId) === String(adminId)) {
++      success++;
++      continue;
++    }
+     try {
+       await ctx.api.sendMessage(u.userId, message, { parse_mode: "Markdown" });
+       success++;
+     } catch (e) {
+       failed++;
++      // فقط چند خطای اول را لاگ کن تا CloudWatch/Appwrite log منفجر نشه
++      if (failed <= 3) console.warn("[broadcast] failed:", u.userId, e?.description || e?.message);
+     }
+-    // وقفه‌ی کوتاه برای جلوگیری از rate limit تلگرام
++    // وقفه‌ی کوتاه برای جلوگیری از rate limit تلگرام (سقف ~30/sec)
+     await new Promise((r) => setTimeout(r, 50));
+   }
+ 
+@@ -781,7 +812,7 @@
+   const result =
+     "✅ *ارسال پیام انبوه پایان یافت*\n" +
+     "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+-    `📊 مجموع کاربران: ${users.length}\n` +
++    `📊 مجموع کاربران: ${total}\n` +
+     `✅ ارسال موفق: ${success}\n` +
+     `❌ ارسال ناموفق: ${failed}`;
+ 
+@@ -810,20 +841,37 @@
+     // تلاش برای حذف پیام رمز کاربر (برای امنیت)
+     try { await ctx.deleteMessage(); } catch {}
+ 
+-    if (!checkPassword(text)) {
++    // attemptLogin شامل: timing-safe compare + brute-force lockout
++    const result = attemptLogin(adminId, text);
++
++    if (result.ok) {
++      // رمز درست → باز کردن جلسه و ورود به پنل
++      await unlockSession(adminId);
++      await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
++      await ctx.reply(`✅ رمز تأیید شد. خوش آمدید! (اعتبار جلسه: ${SESSION_MINUTES} دقیقه)`);
++      return handleAdminPanel(ctx);
++    }
++
++    // قفل → خروج کامل از فاز رمز و اعلام به کاربر
++    if (result.reason === "locked") {
+       await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
+       await ctx.reply(
+-        "❌ رمز اشتباه است. ورود به پنل مدیریت لغو شد. جهت تلاش مجدد /admin را بزنید.",
+-        { reply_markup: new InlineKeyboard().text("🏠 منوی اصلی", "menu") }
++        `⛔ به دلیل تلاش‌های ناموفق، ورود به پنل مدیریت تا *${result.remainingMinutes} دقیقه* قفل شد.`,
++        {
++          parse_mode: "Markdown",
++          reply_markup: new InlineKeyboard().text("🏠 منوی اصلی", "menu"),
++        }
+       );
+       return true;
+     }
+ 
+-    // رمز درست → باز کردن جلسه و ورود به پنل
+-    await unlockSession(adminId);
+-    await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
+-    await ctx.reply(`✅ رمز تأیید شد. خوش آمدید! (اعتبار جلسه: ${SESSION_MINUTES} دقیقه)`);
+-    return handleAdminPanel(ctx);
++    // رمز اشتباه ولی هنوز قفل نشده → اجازه‌ی تلاش مجدد
++    await ctx.reply(
++      `❌ رمز اشتباه است. *${result.attemptsLeft} تلاش* باقی مانده.\n\n` +
++      `_رمز را دوباره ارسال کنید یا /cancel بزنید._`,
++      { parse_mode: "Markdown" }
++    );
++    return true;
+   }
+ 
+   if (!text) {
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/src/main.js candidatory-patched/src/main.js
+--- candidatory-original/src/main.js	2026-06-30 08:13:01.435765032 +0000
++++ candidatory-patched/src/main.js	2026-06-30 08:32:40.185330480 +0000
+@@ -13,13 +13,14 @@
+ const { Bot, InlineKeyboard, webhookCallback } = require("grammy");
+ 
+ // ───────────────────────────────────────────────────────────────
+-// ماژول‌ها (ترتیب: utils → flows)
++// ماژول‌ها (ترتیب: utils → middleware → flows)
+ // ───────────────────────────────────────────────────────────────
+ const { getOrCreateUser, updateUser, initDB } = require("./utils/db.js");
+ const { requireAccess } = require("./utils/access.js");
+ const { mainMenuKB, analysisMenuKB } = require("./utils/keyboard.js");
+ const { isAdminUserSync } = require("./utils/admin-auth.js");
+ const { registerCompatRoutes } = require("./flows/router-compat.js");
++const { rateLimitMiddleware, startCleanup } = require("./middleware/rate-limit.js");
+ 
+ // ─── بارگذاری امن فلوها ─────────────────────────────────────────
+ // اگر فایلی هنوز در پروژه نباشد، crash نمی‌کنیم؛ یک stub قرار می‌دهیم
+@@ -114,8 +115,12 @@
+ });
+ 
+ // ═══════════════════════════════════════════════════════════════
+-// ۲) Middleware جهانی: خطایابی و log
++// ۲) Middleware جهانی: rate-limit → خطایابی → log
+ // ═══════════════════════════════════════════════════════════════
++// Rate-limit در ابتدای زنجیره تا قبل از هر کار دیگر اعمال شود
++// (قبلاً ساخته شده بود ولی نصب نشده بود → عملاً غیرفعال — رفع باگ C4)
++bot.use(rateLimitMiddleware());
++
+ bot.use(async (ctx, next) => {
+   const t0 = Date.now();
+   try {
+@@ -767,16 +772,30 @@
+ // ═══════════════════════════════════════════════════════════════
+ // Appwrite این تابع را با ({req, res, log, error}) صدا می‌زند.
+ // تلگرام POSTهای webhook را به این endpoint ارسال می‌کند.
+-// ═══════════════════════════════════════════════════════════════
+-
+-let webhookHandler = null;
+-
+-function getWebhookHandler() {
+-  if (!webhookHandler) {
+-    // grammy یک adapter سفارشی برای Appwrite ندارد، پس از adapter استاندارد استفاده می‌کنیم
+-    webhookHandler = webhookCallback(bot, "http");
++//
++// ─── تغییرات Patch 1 (Turn 2) ─────────────────────────────────
++//   C2: کد مرده‌ی fakeRequest/fakeResponse/webhookCallback حذف شد
++//       — به‌جایش مستقیم bot.handleUpdate صدا زده می‌شود (روش رسمی).
++//   C3: bot.init() ⇐ اگر BOT_INFO استاتیک نداشته باشیم، در اولین
++//       فراخوانی یک‌بار با تلگرام sync می‌کنیم و در همان فرایند cache
++//       می‌گذاریم تا call های بعدی (warm) سریع باشند.
++//   M2: webhook با X-Telegram-Bot-Api-Secret-Token header محافظت
++//       می‌شود (در صورت تنظیم BOT_WEBHOOK_SECRET).
++// ═══════════════════════════════════════════════════════════════
++
++// (C3) سیگنال یک‌بار-init برای bot در سرورhای serverless که bot.botInfo
++// ندارند. در warm instance ها این متغیر باقی می‌ماند و دوباره init نمی‌کنیم.
++let _botInitPromise = null;
++async function ensureBotInitialized() {
++  if (bot.botInfo) return;
++  if (!_botInitPromise) {
++    _botInitPromise = bot.init().catch((e) => {
++      // در صورت شکست، promise را پاک کن تا تلاش بعدی دوباره امتحان کند
++      _botInitPromise = null;
++      throw e;
++    });
+   }
+-  return webhookHandler;
++  await _botInitPromise;
+ }
+ 
+ /**
+@@ -785,7 +804,7 @@
+  */
+ module.exports = async function ({ req, res, log, error }) {
+   try {
+-    // health check
++    // ─── (1) Health check ───────────────────────────────────────
+     if (req.method === "GET") {
+       log && log("[health] GET request");
+       return res.json({
+@@ -793,6 +812,7 @@
+         bot: "candidatory-bot",
+         version: "2.0.0",
+         runtime: "appwrite-function",
++        botInitialized: !!bot.botInfo,
+         timestamp: new Date().toISOString(),
+       });
+     }
+@@ -801,16 +821,43 @@
+       return res.json({ error: "Method not allowed" }, 405);
+     }
+ 
+-    // اطمینان از init دیتابیس (idempotent)
+-    try {
+-      if (typeof initDB === "function") {
+-        await initDB();
++    // ─── (2) Webhook secret verification (M2) ──────────────────
++    // اگر BOT_WEBHOOK_SECRET تنظیم شده باشد، فقط درخواست‌هایی که
++    // header مشابه را دارند پذیرفته می‌شوند. این جلوی update جعلی
++    // از کسانی که URL endpoint را می‌دانند را می‌گیرد.
++    const expectedSecret = process.env.BOT_WEBHOOK_SECRET || "";
++    if (expectedSecret) {
++      const headerSecret =
++        (req.headers && (req.headers["x-telegram-bot-api-secret-token"] ||
++                         req.headers["X-Telegram-Bot-Api-Secret-Token"])) || "";
++      if (headerSecret !== expectedSecret) {
++        error && error("[webhook] secret token mismatch — rejected");
++        // 401 ولی همچنان 200 برمی‌گردانیم تا تلگرام retry نکند
++        // (اگر این یک حمله بود، ربات خودش تشخیص داده و log کرده)
++        return res.json({ ok: false, error: "unauthorized" });
+       }
++    }
++
++    // ─── (3) Init DB (idempotent) ──────────────────────────────
++    try {
++      if (typeof initDB === "function") initDB();
+     } catch (e) {
+       error && error("[initDB] " + (e?.message || e));
++      // اگر DB init شکست بخورد، فلوها به‌هرحال شکست می‌خورند ولی
++      // ما به update پاسخ می‌دهیم تا تلگرام retry storm نکند
++    }
++
++    // ─── (4) Ensure bot is initialized (C3) ────────────────────
++    // اگر BOT_INFO استاتیک تنظیم شده، bot از همان ابتدا botInfo دارد.
++    // در غیر این صورت، اولین فراخوانی یک getMe می‌زند و cache می‌کند.
++    try {
++      await ensureBotInitialized();
++    } catch (e) {
++      error && error("[bot.init] " + (e?.message || e));
++      return res.json({ ok: false, error: "bot_init_failed" });
+     }
+ 
+-    // بدنه‌ی request (Appwrite ممکن است body را به صورت آبجکت یا string بدهد)
++    // ─── (5) Parse body ────────────────────────────────────────
+     let body = req.body;
+     if (typeof body === "string") {
+       try { body = JSON.parse(body); } catch {}
+@@ -820,25 +867,11 @@
+       return res.json({ ok: true });
+     }
+ 
+-    // ساخت یک Request شبیه‌سازی‌شده برای grammy webhookCallback
+-    const fakeRequest = {
+-      method: "POST",
+-      headers: req.headers || {},
+-      body: () => Promise.resolve(body),
+-      json: () => Promise.resolve(body),
+-    };
+-
+-    let responseBody = null;
+-    let responseStatus = 200;
+-    const fakeResponse = {
+-      end: (data) => { responseBody = data; },
+-      status: (s) => { responseStatus = s; return fakeResponse; },
+-      send: (data) => { responseBody = data; },
+-      json: (data) => { responseBody = JSON.stringify(data); },
+-      setHeader: () => {},
+-    };
+-
+-    // پردازش مستقیم با bot.handleUpdate (روش ساده‌تر و قابل اعتماد در serverless)
++    // ─── (6) Handle update ─────────────────────────────────────
++    // مستقیماً bot.handleUpdate استفاده می‌کنیم — این روش رسمی grammY
++    // برای محیط‌هایی است که web framework خودشان را دارند.
++    // (قبلاً اینجا fakeRequest/fakeResponse ساخته می‌شد اما هرگز استفاده
++    // نمی‌شد — کد مرده. حذف شد.)
+     await bot.handleUpdate(body);
+ 
+     return res.json({ ok: true });
+@@ -861,7 +894,7 @@
+ 
+     try {
+       if (typeof initDB === "function") {
+-        await initDB();
++        initDB();
+         console.log("✅ دیتابیس راه‌اندازی شد");
+       }
+     } catch (e) {
+@@ -876,6 +909,9 @@
+       process.exit(1);
+     }
+ 
++    // فعال‌سازی cleanup حافظه‌ی rate-limit (فقط برای polling/long-running)
++    startCleanup();
++
+     bot.start({
+       onStart: (info) => {
+         console.log(`✅ ربات در حال گوش‌دادن... (@${info.username})`);
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/src/middleware/rate-limit.js candidatory-patched/src/middleware/rate-limit.js
+--- candidatory-original/src/middleware/rate-limit.js	2026-06-30 08:13:01.435765032 +0000
++++ candidatory-patched/src/middleware/rate-limit.js	2026-06-30 08:31:35.309330480 +0000
+@@ -1,65 +1,87 @@
+-const rateLimit = new Map();
++// src/middleware/rate-limit.js — CommonJS
++// ═══════════════════════════════════════════════════════════════
++// Rate Limiting per-user (in-memory)
++// ═══════════════════════════════════════════════════════════════
++// قبلاً این middleware ساخته شده بود اما در main.js نصب نشده بود (dead code).
++// همچنین setInterval cleanup هرگز start نمی‌شد → memory leak تدریجی.
++//
++// رفتار جدید:
++//   • سقف پیش‌فرض: ۳۰ پیام در دقیقه per user (قابل تنظیم با ENV)
++//   • پیام اخطار فقط یک بار در دوره ارسال می‌شود (نه هر پیام)
++//   • cleanup خودکار فعال (با unref برای polling/long-running)
++//   • در serverless ایده‌آل نیست (cold start حافظه را پاک می‌کند)
++//     اما Appwrite Function quota طبیعی هم محافظت می‌کند.
++//
++// ENV:
++//   RATE_LIMIT_WINDOW_MS         پنجره (پیش‌فرض ۶۰۰۰۰ یعنی ۱ دقیقه)
++//   RATE_LIMIT_MAX_REQUESTS      حداکثر در پنجره (پیش‌فرض ۳۰)
++// ═══════════════════════════════════════════════════════════════
++
++const WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10);
++const MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "30", 10);
++const CLEANUP_INTERVAL = 5 * 60_000; // ۵ دقیقه
+ 
+-const RATE_LIMIT_WINDOW = 1000;
+-const MAX_REQUESTS_PER_WINDOW = 3;
+-const CLEANUP_INTERVAL = 60000;
++const _bucket = new Map(); // userId → { count, windowStart, warned }
+ 
+ function rateLimitMiddleware() {
+   return async (ctx, next) => {
+     const userId = ctx.from?.id;
++    if (!userId) return next();
+ 
+-    if (!userId) {
+-      return await next();
+-    }
+-
++    const key = String(userId);
+     const now = Date.now();
+-    const userKey = String(userId);
+-
+-    const userLimit = rateLimit.get(userKey);
++    let b = _bucket.get(key);
+ 
+-    if (userLimit) {
+-      const timeDiff = now - userLimit.lastRequest;
+-
+-      if (timeDiff < RATE_LIMIT_WINDOW) {
+-        userLimit.count += 1;
++    if (!b || now - b.windowStart >= WINDOW_MS) {
++      _bucket.set(key, { count: 1, windowStart: now, warned: false });
++      return next();
++    }
+ 
+-        if (userLimit.count > MAX_REQUESTS_PER_WINDOW) {
+-          if (userLimit.count === MAX_REQUESTS_PER_WINDOW + 1) {
+-            try {
+-              await ctx.reply("لطفا کمی صبر کنید.");
+-            } catch (e) {}
++    b.count += 1;
++    if (b.count > MAX_REQUESTS) {
++      // فقط بار اول اخطار بفرست تا اسپم نکنیم
++      if (!b.warned) {
++        b.warned = true;
++        try {
++          if (ctx.callbackQuery) {
++            await ctx.answerCallbackQuery({
++              text: "⏳ لطفاً کمی صبر کنید. درخواست‌ها بیش از حد است.",
++              show_alert: false,
++            });
++          } else {
++            await ctx.reply("⏳ تعداد درخواست‌های شما زیاد است. لطفاً یک دقیقه صبر کنید.");
+           }
+-          return;
+-        }
+-      } else {
+-        userLimit.lastRequest = now;
+-        userLimit.count = 1;
++        } catch {}
+       }
+-    } else {
+-      rateLimit.set(userKey, {
+-        lastRequest: now,
+-        count: 1,
+-      });
++      return; // drop
+     }
+ 
+-    await next();
++    return next();
+   };
+ }
+ 
++let _cleanupHandle = null;
+ function startCleanup() {
+-  setInterval(() => {
++  if (_cleanupHandle) return _cleanupHandle;
++  _cleanupHandle = setInterval(() => {
+     const now = Date.now();
+-    const threshold = now - 60000;
+-
+-    for (const [userId, data] of rateLimit.entries()) {
+-      if (data.lastRequest < threshold) {
+-        rateLimit.delete(userId);
+-      }
++    for (const [k, v] of _bucket) {
++      if (now - v.windowStart > WINDOW_MS * 2) _bucket.delete(k);
+     }
+   }, CLEANUP_INTERVAL);
++  if (_cleanupHandle.unref) _cleanupHandle.unref();
++  return _cleanupHandle;
++}
++
++function stopCleanup() {
++  if (_cleanupHandle) {
++    clearInterval(_cleanupHandle);
++    _cleanupHandle = null;
++  }
+ }
+ 
+ module.exports = {
+   rateLimitMiddleware,
+   startCleanup,
++  stopCleanup,
+ };
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/src/utils/admin-auth.js candidatory-patched/src/utils/admin-auth.js
+--- candidatory-original/src/utils/admin-auth.js	2026-06-30 08:13:01.435765032 +0000
++++ candidatory-patched/src/utils/admin-auth.js	2026-06-30 08:28:59.053330480 +0000
+@@ -17,11 +17,25 @@
+ //       در دیتابیس ذخیره می‌کنیم تا جلسه بین فراخوانی‌ها حفظ شود.
+ // ═══════════════════════════════════════════════════════════════
+ 
++const crypto = require("crypto");
+ const { getOrCreateUser, updateUser } = require("./db.js");
+ 
+ // مدت اعتبار جلسه‌ی ادمین پس از زدن رمز (به دقیقه)
+ const SESSION_MINUTES = parseInt(process.env.ADMIN_SESSION_MINUTES || "30", 10);
+ 
++// ───────────────────────────────────────────────────────────────
++// Brute-force protection
++// ───────────────────────────────────────────────────────────────
++// تعداد تلاش‌های مجاز قبل از قفل شدن موقت (پیش‌فرض ۵)
++const MAX_PIN_ATTEMPTS = parseInt(process.env.ADMIN_MAX_ATTEMPTS || "5", 10);
++// مدت قفل پس از رسیدن به سقف (پیش‌فرض ۱۵ دقیقه)
++const LOCKOUT_MINUTES = parseInt(process.env.ADMIN_LOCKOUT_MINUTES || "15", 10);
++
++// شمارنده‌ی in-memory برای تلاش‌های ناموفق per-user.
++// (در serverless ایده‌آل نیست، اما warm instance ها مزاحم می‌شوند.
++// در turn بعدی می‌توان به Appwrite منتقل کرد.)
++const _failedAttempts = new Map(); // userId → { count, lockedUntil }
++
+ // State موقت برای فلوی «در انتظار دریافت رمز»
+ // از همان بازه‌ی state ادمین استفاده می‌کنیم تا با بقیه تداخل نکند.
+ const ADMIN_AWAITING_PASSWORD = 1099;
+@@ -85,9 +99,74 @@
+   return !!(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length > 0);
+ }
+ 
++// مقایسه‌ی امن در برابر timing attack
++// قبلاً از === استفاده می‌شد که بر اساس اولین کاراکتر متفاوت زمان متفاوتی می‌گیرد
++// و در تئوری امکان حدس کاراکتر-به-کاراکتر را می‌دهد. crypto.timingSafeEqual
++// همیشه زمان ثابت برای buffers هم‌سایز برمی‌گرداند.
++function _safeEqual(a, b) {
++  const ba = Buffer.from(String(a || ""), "utf8");
++  const bb = Buffer.from(String(b || ""), "utf8");
++  if (ba.length !== bb.length) {
++    // برای جلوگیری از leak طول، یک مقایسه‌ی dummy انجام بده
++    crypto.timingSafeEqual(ba, ba);
++    return false;
++  }
++  return crypto.timingSafeEqual(ba, bb);
++}
++
+ function checkPassword(input) {
+   if (!isPasswordEnabled()) return true;
+-  return String(input || "").trim() === String(process.env.ADMIN_PASSWORD);
++  return _safeEqual(String(input || "").trim(), String(process.env.ADMIN_PASSWORD));
++}
++
++// ───────────────────────────────────────────────────────────────
++// Brute-force protection helpers
++// خروجی attemptLogin:
++//   { ok: true } — اجازه عبور
++//   { ok: false, reason: "locked", remainingMinutes } — قفل
++//   { ok: false, reason: "bad", attemptsLeft } — رمز اشتباه
++// ───────────────────────────────────────────────────────────────
++function attemptLogin(userId, input) {
++  const key = String(userId);
++  const now = Date.now();
++  const state = _failedAttempts.get(key) || { count: 0, lockedUntil: 0 };
++
++  // اگر هنوز در قفل است
++  if (state.lockedUntil > now) {
++    return {
++      ok: false,
++      reason: "locked",
++      remainingMinutes: Math.ceil((state.lockedUntil - now) / 60_000),
++    };
++  }
++
++  if (checkPassword(input)) {
++    _failedAttempts.delete(key); // reset
++    return { ok: true };
++  }
++
++  state.count += 1;
++  if (state.count >= MAX_PIN_ATTEMPTS) {
++    state.lockedUntil = now + LOCKOUT_MINUTES * 60_000;
++    state.count = 0;
++    _failedAttempts.set(key, state);
++    return { ok: false, reason: "locked", remainingMinutes: LOCKOUT_MINUTES };
++  }
++
++  _failedAttempts.set(key, state);
++  return { ok: false, reason: "bad", attemptsLeft: MAX_PIN_ATTEMPTS - state.count };
++}
++
++// پاکسازی periodic از حافظه (برای محیط‌های long-running)
++function _cleanupAttempts() {
++  const now = Date.now();
++  for (const [k, v] of _failedAttempts) {
++    if (v.lockedUntil < now && v.count === 0) _failedAttempts.delete(k);
++  }
++}
++if (typeof setInterval === "function") {
++  const t = setInterval(_cleanupAttempts, 5 * 60_000);
++  if (t.unref) t.unref();
+ }
+ 
+ // ───────────────────────────────────────────────────────────────
+@@ -129,11 +208,14 @@
+ module.exports = {
+   ADMIN_AWAITING_PASSWORD,
+   SESSION_MINUTES,
++  MAX_PIN_ATTEMPTS,
++  LOCKOUT_MINUTES,
+   getAdminIdsFromEnv,
+   isAdminUser,
+   isAdminUserSync,
+   isPasswordEnabled,
+   checkPassword,
++  attemptLogin,
+   isSessionUnlocked,
+   unlockSession,
+   lockSession,
+diff -ur '--exclude=node_modules' '--exclude=package-lock.json' '--exclude=.git' candidatory-original/src/utils/db.js candidatory-patched/src/utils/db.js
+--- candidatory-original/src/utils/db.js	2026-06-30 08:13:01.435765032 +0000
++++ candidatory-patched/src/utils/db.js	2026-06-30 08:32:49.737330480 +0000
+@@ -10,11 +10,28 @@
+ function initDB() {
+   if (client) return;
+ 
+-  const endpoint = process.env.APPWRITE_ENDPOINT || "https://fra.cloud.appwrite.io/v1";
+-  const projectId = process.env.APPWRITE_PROJECT_ID || "fra-699d6797003d63f0fd8c";
+-  const apiKey = process.env.APPWRITE_API_KEY || "";
++  // ⚠️ امنیتی: قبلاً مقادیر واقعی project/db ID به‌صورت hardcoded fallback
++  // در کد بودند. این یعنی اگر ENV درست تنظیم نمی‌شد، ربات به دیتابیس
++  // اشتباهی متصل می‌شد یا اطلاعات production در repo public لو می‌رفت.
++  // اکنون fail-fast: اگر هر مقدار حیاتی نباشد، با پیام واضح خطا می‌دهیم.
++
++  const endpoint = process.env.APPWRITE_ENDPOINT || "https://fra.cloud.appwrite.io/v1"; // public — اوکی
++  const projectId = process.env.APPWRITE_PROJECT_ID;
++  const apiKey = process.env.APPWRITE_API_KEY;
+ 
+-  dbId = process.env.DATABASE_ID || process.env.APPWRITE_DB_ID || "699d6d5a0038857d3279";
++  if (!projectId) {
++    throw new Error("APPWRITE_PROJECT_ID در Environment Variables تنظیم نشده است.");
++  }
++  if (!apiKey) {
++    throw new Error("APPWRITE_API_KEY در Environment Variables تنظیم نشده است.");
++  }
++
++  dbId = process.env.DATABASE_ID || process.env.APPWRITE_DB_ID;
++  if (!dbId) {
++    throw new Error("DATABASE_ID در Environment Variables تنظیم نشده است.");
++  }
++
++  // اسامی collection ها پیش‌فرض منطقی دارند (هیچ secret نیستند)
+   usersCol = process.env.COLLECTION_USERS || process.env.APPWRITE_USERS_COLLECTION || "users";
+   consultCol = process.env.COLLECTION_CONSULT || process.env.APPWRITE_CONSULTATIONS_COLLECTION || "consultations";
+   leadsCol = process.env.COLLECTION_LEADS || process.env.APPWRITE_LEADS_COLLECTION || "leads_status";
+@@ -65,9 +82,12 @@
+   initDB();
+   const uid = String(userId);
+ 
++  // قبلاً هر update هم lastInteraction (datetime) و هم lastInteractionNew
++  // (string) را پر می‌کرد — duplicate data. در setup-db.js کامنت
++  // "legacy" روی lastInteraction خورده بود. حالا فقط جدید را پر می‌کنیم.
++  // (فیلد قدیمی در schema باقی می‌ماند برای داده‌های موجود.)
+   const payload = {
+     ...updates,
+-    lastInteraction: new Date().toISOString(),
+     lastInteractionNew: new Date().toISOString(),
+   };
+ 
+@@ -146,6 +166,28 @@
+   }
+ }
+ 
++// گرفتن یک lead با ID — جایگزین گردش روی کل لیست در admin.js
++// قبلاً برای دیدن جزئیات یک لید، کل ۵۰۰ سند بارگذاری می‌شد (هزینه‌بر و کند)
++async function getLeadById(leadId) {
++  initDB();
++  try {
++    return await databases.getDocument(dbId, leadsCol, String(leadId));
++  } catch (e) {
++    if (e.code === 404) return null;
++    // در نگارش قدیمی برخی leadها ممکن است با ID متفاوت ذخیره شده باشند
++    // → fallback: جستجو در فیلد userId
++    try {
++      const res = await databases.listDocuments(dbId, leadsCol, [
++        Query.equal("userId", String(leadId)),
++        Query.limit(1),
++      ]);
++      return res.documents?.[0] || null;
++    } catch {
++      return null;
++    }
++  }
++}
++
+ async function listLeads(options = {}) {
+   initDB();
+   const { status, limit = 20, offset = 0 } = options;
+@@ -363,6 +405,29 @@
+   };
+ }
+ 
++// Pagination-aware iterator روی همه‌ی کاربران (برای broadcast).
++// به جای limit:10000 (که در Appwrite Cloud به‌خاطر سقف 100 در request
++// واقعاً فقط ۱۰۰ تای اول را برمی‌گرداند)، با cursor صفحه به صفحه می‌خوانیم.
++async function* iterateAllUsers(batchSize = 100) {
++  initDB();
++  let lastId = null;
++  for (;;) {
++    const queries = [Query.limit(batchSize), Query.orderAsc("$id")];
++    if (lastId) queries.push(Query.cursorAfter(lastId));
++    const res = await databases.listDocuments(dbId, usersCol, queries);
++    const docs = res.documents || [];
++    if (docs.length === 0) break;
++    for (const d of docs) {
++      if (d.candidateProfile) {
++        try { d.profile = JSON.parse(d.candidateProfile); } catch {}
++      }
++      yield d;
++    }
++    if (docs.length < batchSize) break;
++    lastId = docs[docs.length - 1].$id;
++  }
++}
++
+ module.exports = {
+   initDB,
+   getOrCreateUser,
+@@ -375,10 +440,12 @@
+   updateLead,
+   getStats,
+   listLeads,
++  getLeadById,
+   getUser,
+   getUserById,
+   findByNationalId,
+   findByPhone,
+   listAllUsers,
+   listRecentUsers,
++  iterateAllUsers,
+ };
+Only in candidatory-patched/src/utils: safe-text.js

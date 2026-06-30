@@ -1,0 +1,19 @@
+{
+  "name": "kandidatory-bot",
+  "version": "2.0.0",
+  "description": "ربات تلگرامی کاندیداتوری هوشمند",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "keywords": ["telegram", "bot", "grammy", "appwrite"],
+  "author": "Candidatory Team",
+  "license": "MIT",
+  "dependencies": {
+    "grammy": "^1.21.1",
+    "node-appwrite": "^12.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
