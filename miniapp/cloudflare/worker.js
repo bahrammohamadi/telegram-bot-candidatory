@@ -193,6 +193,17 @@ async function handleOps(action,payload,db,user,env){
    const r=await db.prepare("SELECT id,name,jurisdiction,status,created_at FROM workspaces ORDER BY created_at DESC LIMIT 200").all();
    return {workspaces:r.results};
  }
+ if(action==="adminSystemHealth"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const today=new Date().toISOString().slice(0,10);
+   const [lessons,quizzes,workspaces,aiUsage]=await Promise.all([
+     db.prepare("SELECT COUNT(*) AS n FROM lessons WHERE published=1").first(),
+     db.prepare("SELECT COUNT(*) AS n FROM quizzes WHERE published=1").first(),
+     db.prepare("SELECT COUNT(*) AS n FROM workspaces").first(),
+     db.prepare("SELECT requests FROM ai_global_usage WHERE day=?").bind(today).first()
+   ]);
+   return {status:"online",date:today,checks:{database:true,aiBound:!!env.AI,telegramTokenConfigured:!!env.TELEGRAM_BOT_TOKEN,adminSecretConfigured:!!env.ADMIN_TELEGRAM_IDS},counts:{lessons:lessons.n,quizzes:quizzes.n,workspaces:workspaces.n,aiRequestsToday:aiUsage?.requests||0},dailyAiCallLimit:40};
+ }
  if(action==="platformSummary"){
    if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
    const [a,b,c,d]=await Promise.all([
@@ -213,6 +224,9 @@ async function handleOps(action,payload,db,user,env){
    if(!item)return {error:"Invitation not found or expired",status:404};
    const owner=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=?").bind(item.workspace_id,uid).first();
    if(owner?.role==="owner")return {error:"Already owner",status:409};
+   const ent=await db.prepare("SELECT p.max_members FROM workspace_entitlements e JOIN service_plans p ON p.id=e.plan_id WHERE e.workspace_id=? AND (e.expires_at IS NULL OR datetime(e.expires_at)>datetime('now'))").bind(item.workspace_id).first();
+   const count=await db.prepare("SELECT COUNT(*) AS n FROM workspace_members WHERE workspace_id=? AND status='active'").bind(item.workspace_id).first();
+   if(count.n>=(ent?.max_members||3))return {error:"Member limit reached",status:409};
    await db.batch([
     db.prepare("UPDATE workspace_invitations SET status='accepted' WHERE id=? AND invited_telegram_id=? AND status='pending'").bind(item.id,uid),
     db.prepare("INSERT INTO workspace_members(workspace_id,telegram_id,role) VALUES(?,?,?) ON CONFLICT(workspace_id,telegram_id) DO UPDATE SET role=excluded.role,status='active'").bind(item.workspace_id,uid,item.role)
@@ -401,7 +415,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan","adminSystemHealth"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
