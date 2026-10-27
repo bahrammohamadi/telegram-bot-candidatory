@@ -56,3 +56,13 @@ Bot: @candidatoryiran_bot — secret remains in Cloudflare, not repository
 [ ] Backup/export and data deletion requests fully tested prior to public production.
 
 Notes: this platform can assist with neutral educational and administrative duties; no demographic persuasion targeting or profiling is implemented.
+
+## 2026-10-27 continuation release
+Latest Worker deployment verified via Cloudflare API: `11519130e5824a659aa528ad455b4a88`.
+- Tenant-scoped JSON operational report and permissions-filtered expense totals.
+- Workspace invitation acceptance required for team membership; expires after seven days.
+- Admin lesson CMS: create/edit/publish/unpublish; admin quiz bank: create/add question/publish/unpublish; both require `ADMIN_TELEGRAM_IDS`.
+- Regression fix to Telegram bot-token HMAC: **exclude only hash**; keep third-party `signature` in HMAC data-check string, as Telegram documentation requires. Regression test: `miniapp/tests/telegram-hmac.test.mjs`.
+- Verified Cloudflare D1 remains connected; Telegram token is `secret_text`, old lessons/quizzes unchanged.
+- Operator must configure numeric `ADMIN_TELEGRAM_IDS` Secret and test login from Telegram. No owner identity inferred automatically.
+- Browser/network E2E testing remains unverified due to sandbox restrictions. Do not claim all original bot capabilities are migrated.
