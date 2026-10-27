@@ -455,6 +455,26 @@ export default {
     await env.DB.prepare("INSERT INTO user_preferences(telegram_id,daily_goal) VALUES(?,?) ON CONFLICT(telegram_id) DO UPDATE SET daily_goal=excluded.daily_goal,updated_at=CURRENT_TIMESTAMP").bind(id,goal).run();
     return reply({dailyGoal:goal});
    }
+   if(action==="readinessQuestions"){
+     const questions=await env.DB.prepare("SELECT id,title,question,options_json,position FROM readiness_questions ORDER BY position,id LIMIT 30").all();
+     return reply({questions:questions.results.map(({options_json,...q})=>({...q,options:JSON.parse(options_json).map(x=>x.label)})),notice:"این پرسشنامه یک خودارزیابی آموزشی است و اعتبار پیش‌بینی نتیجه انتخابات را ندارد."});
+   }
+   if(action==="submitReadiness"){
+     const answers=payload.answers;
+     if(!Array.isArray(answers)||answers.length>30||!answers.every(x=>Number.isInteger(x)&&x>=0&&x<4))return reply({error:"Invalid answers"},400);
+     const rows=await env.DB.prepare("SELECT id,title,options_json FROM readiness_questions ORDER BY position,id LIMIT 30").all();
+     if(!rows.results.length||answers.length!==rows.results.length)return reply({error:"Incomplete answers"},400);
+     const maximum=rows.results.reduce((sum,q)=>sum+Math.max(...JSON.parse(q.options_json).map(o=>o.score)),0);
+     const sections=rows.results.map((q,i)=>({category:q.title,score:JSON.parse(q.options_json)[answers[i]]?.score||0}));
+     const score=sections.reduce((sum,x)=>sum+x.score,0);
+     if(!Number.isSafeInteger(score)||maximum<=0)return reply({error:"Invalid scoring configuration"},503);
+     await env.DB.prepare("INSERT INTO readiness_attempts(id,telegram_id,answers_json,score,max_score) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),id,JSON.stringify(answers),score,maximum).run();
+     return reply({score,maximum,sections,notice:"امتیاز بر اساس پاسخ‌های شخص شما محاسبه شده و سنجش علمی یا پیش‌بینی انتخاباتی نیست."});
+   }
+   if(action==="myReadiness"){
+     const results=await env.DB.prepare("SELECT id,score,max_score,submitted_at FROM readiness_attempts WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 15").bind(id).all();
+     return reply({results:results.results});
+   }
    if(action==="quiz"){
     if(!validId(payload.id))return reply({error:"Invalid ID"},400);
     const q=await env.DB.prepare("SELECT id,title FROM quizzes WHERE published=1 AND id=?").bind(Number(payload.id)).first();
