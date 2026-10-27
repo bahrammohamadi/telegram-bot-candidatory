@@ -24,6 +24,13 @@ const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0&&String(Number(v))
 export default {
  async fetch(request,env){
   if(request.method==="OPTIONS")return reply({});
+  if(request.method==="GET" && new URL(request.url).pathname==="/api/catalog"){
+    try{
+      const lessons=await env.DB.prepare("SELECT id,title,summary,position FROM lessons WHERE published=1 ORDER BY position,id").all();
+      const quizzes=await env.DB.prepare("SELECT id,title,description FROM quizzes WHERE published=1 ORDER BY id").all();
+      return reply({lessons:lessons.results,quizzes:quizzes.results});
+    }catch{return reply({error:"Catalog unavailable"},503)}
+  }
   if(request.method!=="POST")return reply({error:"Method not allowed"},405);
   if(Number(request.headers.get("content-length")||0)>16384)return reply({error:"Too large"},413);
   if(!env.DB)return reply({error:"Service not configured"},503);
