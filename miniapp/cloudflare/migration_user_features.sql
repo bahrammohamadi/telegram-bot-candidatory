@@ -1,0 +1,5 @@
+-- Non-destructive user learning enhancements. Applied to Cloudflare D1 on 2026-10-27.
+CREATE TABLE IF NOT EXISTS lesson_bookmarks(telegram_id INTEGER NOT NULL REFERENCES candidate_users(telegram_id) ON DELETE CASCADE,lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(telegram_id,lesson_id));
+CREATE TABLE IF NOT EXISTS lesson_notes(telegram_id INTEGER NOT NULL REFERENCES candidate_users(telegram_id) ON DELETE CASCADE,lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,note TEXT NOT NULL CHECK(length(note)<=2000),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(telegram_id,lesson_id));
+CREATE TABLE IF NOT EXISTS user_preferences(telegram_id INTEGER PRIMARY KEY REFERENCES candidate_users(telegram_id) ON DELETE CASCADE,daily_goal INTEGER NOT NULL DEFAULT 1 CHECK(daily_goal BETWEEN 1 AND 5),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_quiz_attempt_user ON quiz_attempts(telegram_id,submitted_at DESC);
