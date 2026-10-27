@@ -49,6 +49,37 @@ async function handleOps(action,payload,db,user,env){
    await logChange(db,uid,workspace,"create","workspace",workspace);
    return {workspace:{id:workspace,name,role:"owner"}};
  }
+ if(action==="adminLessons"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const lessons=await db.prepare("SELECT id,title,summary,body,position,published FROM lessons ORDER BY position,id LIMIT 100").all();
+   const quizzes=await db.prepare("SELECT id,title,description,published FROM quizzes ORDER BY id LIMIT 100").all();
+   return {lessons:lessons.results,quizzes:quizzes.results};
+ }
+ if(action==="adminSaveLesson"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const title=clean(payload.title),summary=clean(payload.summary,1000),body=clean(payload.body,12000),position=Number(payload.position)||0;
+   if(title.length<2||body.length<5||!Number.isSafeInteger(position)||position<0||position>10000)return {error:"Invalid lesson",status:400};
+   const lessonId=Number(payload.id);
+   if(payload.id!=null){if(!Number.isSafeInteger(lessonId)||lessonId<=0)return {error:"Invalid ID",status:400};
+     const r=await db.prepare("UPDATE lessons SET title=?,summary=?,body=?,position=? WHERE id=?").bind(title,summary,body,position,lessonId).run();
+     if(!r.meta.changes)return {error:"Not found",status:404};
+     await logChange(db,uid,null,"update","lesson",lessonId);return {saved:true,id:lessonId};
+   }
+   const r=await db.prepare("INSERT INTO lessons(title,summary,body,position,published) VALUES(?,?,?,?,0)").bind(title,summary,body,position).run();
+   await logChange(db,uid,null,"create","lesson",r.meta.last_row_id);return {saved:true,id:r.meta.last_row_id};
+ }
+ if(action==="adminPublishLesson"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const id=Number(payload.id);if(!Number.isSafeInteger(id)||id<=0||typeof payload.published!=="boolean")return {error:"Invalid input",status:400};
+   const r=await db.prepare("UPDATE lessons SET published=? WHERE id=?").bind(payload.published?1:0,id).run();
+   if(!r.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,payload.published?"publish":"unpublish","lesson",id);return {saved:true};
+ }
+ if(action==="adminWorkspaces"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const r=await db.prepare("SELECT id,name,jurisdiction,status,created_at FROM workspaces ORDER BY created_at DESC LIMIT 200").all();
+   return {workspaces:r.results};
+ }
  if(action==="platformSummary"){
    if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
    const [a,b,c,d]=await Promise.all([
@@ -204,7 +235,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
