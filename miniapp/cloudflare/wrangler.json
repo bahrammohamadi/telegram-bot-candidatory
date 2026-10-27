@@ -1,6 +1,6 @@
 {
   "name": "candidatory-miniapp-api",
-  "main": "worker.js",
+  "main": "site-worker.js",
   "compatibility_date": "2026-10-27",
   "workers_dev": true,
   "d1_databases": [
@@ -9,5 +9,11 @@
       "database_name": "candidatory-miniapp",
       "database_id": "48b3c86b-45ea-492b-96e1-334dfafa2097"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true
+  }
 }
