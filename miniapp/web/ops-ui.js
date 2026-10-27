@@ -138,7 +138,20 @@ async function renderWorkspace(){
         sel.addEventListener("change",async()=>{try{await api("commitmentStatus",{workspaceId:opState.id,id:item.id,status:sel.value});await renderWorkspace();notify("وضعیت برنامه ذخیره شد.")}catch(e){notify(e.message,"error")}});
         row.append(sel);
       }
-      if(action==="createTask"&&edit){const change=el("select",null,"op-select");for(const [code,title] of [["todo","انجام‌نشده"],["doing","در جریان"],["done","تکمیل"]]){const o=el("option",title);o.value=code;o.selected=item.status===code;change.append(o)}change.addEventListener("change",async()=>{try{await api("taskStatus",{workspaceId:opState.id,id:item.id,status:change.value});await renderWorkspace()}catch(e){alert(e.message)}});row.append(change)}card.append(row)}
+      if(action==="createTask"&&edit){const change=el("select",null,"op-select");for(const [code,title] of [["todo","انجام‌نشده"],["doing","در جریان"],["done","تکمیل"]]){const o=el("option",title);o.value=code;o.selected=item.status===code;change.append(o)}change.addEventListener("change",async()=>{try{await api("taskStatus",{workspaceId:opState.id,id:item.id,status:change.value});await renderWorkspace()}catch(e){alert(e.message)}});row.append(change)}
+      if(action==="createCommitment"&&edit){
+        const select=el("select",null,"op-select");
+        const choices=[["draft","پیش‌نویس"],["review","در بررسی"],["published","منتشرشده"],["completed","تکمیل‌شده"]];
+        for(const [value,label] of choices){
+          if(value==="published"&&!manager)continue;
+          const option=el("option",label);option.value=value;option.selected=item.status===value;select.append(option);
+        }
+        select.addEventListener("change",async()=>{
+          try{await api("commitmentStatus",{workspaceId:opState.id,id:item.id,status:select.value});await renderWorkspace();notify("وضعیت برنامه ذخیره شد.")}
+          catch(e){notify(e.message,"error");await renderWorkspace()}
+        });row.append(select);
+      }
+      card.append(row)}
     if(edit&&(action!=="createExpense"||manager))card.append(detailsForm("＋ افزودن",fields,async x=>{const input={...x,workspaceId:opState.id};if(action==="createExpense")input.amountMinor=Number(x.amountMinor);await api(action,input);await renderWorkspace()}));
     if(action==="createEvent" && (ws.events||[]).length)card.append(button("افزودن جلسات به تقویم (ICS)",()=>downloadCalendar(ws.events),"action outline"));
     content.append(card);
@@ -166,7 +179,17 @@ async function renderWorkspace(){
   content.append(docs);
   if(manager){
     const members=el("section",null,"card");members.dataset.tool="members";members.append(el("h3","اعضای تیم"));
-    for(const member of ws.members||[])members.append(makeRow(member.display_name||String(member.telegram_id),member.role+" / "+member.status));
+    for(const member of ws.members||[]){
+      const row=makeRow(member.display_name||String(member.telegram_id),member.role+" / "+member.status);
+      if(member.role!=="owner"&&member.status==="active"){
+        row.append(button("غیرفعال‌سازی",async()=>{
+          if(!confirm("دسترسی این عضو به فضای کاری غیرفعال شود؟"))return;
+          try{await api("removeMember",{workspaceId:opState.id,telegramId:member.telegram_id});await renderWorkspace();notify("دسترسی عضو غیرفعال شد.")}
+          catch(e){notify(e.message,"error")}
+        },"action outline"));
+      }
+      members.append(row);
+    }
     members.append(detailsForm("＋ ارسال دعوت برای عضو ثبت‌شده",[["telegramId","شناسه عددی تلگرام","number"],["role","نقش","select",[["member","عضو"],["editor","ویرایشگر"],["admin","مدیر"],["auditor","بازرس"]]]],async x=>{await api("addMember",{workspaceId:opState.id,telegramId:Number(x.telegramId),role:x.role});await renderWorkspace()}));
     content.append(members);
     content.append(button("نمایش گزارش فعالیت‌ها",async()=>{try{const r=await api("auditTrail",{workspaceId:opState.id});const audit=el("article",null,"card");audit.append(el("h3","سوابق تغییرات"));for(const a of r.audit||[])audit.append(makeRow(a.action+" • "+a.record_type,a.created_at));content.append(audit)}catch(e){alert(e.message)}},"action outline"));
