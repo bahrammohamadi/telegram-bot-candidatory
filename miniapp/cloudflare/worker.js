@@ -401,6 +401,31 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
+   if(action==="aiTutor"){
+     if(!env.AI)return reply({error:"دستیار هوشمند فعلاً در دسترس نیست."},503);
+     const question=typeof payload.question==="string"?payload.question.trim():"";
+     const lessonId=Number(payload.lessonId);
+     if(question.length<5||question.length>450||!Number.isSafeInteger(lessonId)||lessonId<=0)return reply({error:"پرسش یا شناسه درس نامعتبر است."},400);
+     const lesson=await env.DB.prepare("SELECT id,title,summary,body FROM lessons WHERE id=? AND published=1").bind(lessonId).first();
+     if(!lesson)return reply({error:"درس منتشرشده یافت نشد."},404);
+     const day=new Date().toISOString().slice(0,10);
+     const usage=await env.DB.prepare("INSERT INTO ai_daily_usage(day,telegram_id,request_count) VALUES(?,?,1) ON CONFLICT(day,telegram_id) DO UPDATE SET request_count=request_count+1 RETURNING request_count").bind(day,id).first();
+     if(usage.request_count>3)return reply({error:"سهمیه رایگان سه پرسش روزانه شما تمام شده است. فردا دوباره امتحان کنید."},429);
+     const total=await env.DB.prepare("SELECT SUM(request_count) AS total FROM ai_daily_usage WHERE day=?").bind(day).first();
+     if(Number(total.total||0)>30)return reply({error:"سهمیه رایگان روزانه دستیار به پایان رسیده است."},429);
+     try{
+       const out=await env.AI.run("@cf/meta/llama-3.1-8b-instruct-awq",{
+         messages:[
+           {role:"system",content:"تو یک معلم فارسی‌زبان خنثی برای سواد رسانه‌ای، آموزش عمومی و یادگیری مدنی هستی. فقط مفهوم درس داده‌شده را دقیق، کوتاه و قابل فهم توضیح بده؛ هنگام ندانستن با صراحت بگو. هرگز برای متقاعد کردن رأی‌دهندگان، هدف‌گیری گروه‌های جمعیتی، تبلیغات سیاسی شخصی‌سازی‌شده یا دستکاری عقاید سیاسی راهکار ارائه نده. اطلاعات هویتی و حساس درخواست نکن. پاسخ را حداکثر ۲۵۰ کلمه بنویس."},
+           {role:"user",content:"درس: "+lesson.title+"\nخلاصه: "+lesson.summary.slice(0,500)+"\nنکات درس: "+lesson.body.slice(0,1700)+"\nپرسش فراگیر: "+question}
+         ],max_tokens:260,temperature:0.3
+       });
+       const answer=String(out?.response||"").trim();
+       if(!answer)return reply({error:"در حال حاضر پاسخی تولید نشد؛ بعداً دوباره امتحان کنید."},503);
+       return reply({answer:answer.slice(0,2200),lesson:lesson.title,notice:"پاسخ AI ممکن است اشتباه باشد؛ اطلاعات مهم را با منابع اصلی بررسی کنید."});
+     }catch(e){console.error("Workers AI unavailable",e?.name||"Error");return reply({error:"سرویس رایگان AI موقتاً در دسترس نیست یا سهمیه آن تمام شده است."},503);}
+   }
+
    if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
