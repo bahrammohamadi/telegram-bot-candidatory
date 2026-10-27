@@ -50,7 +50,7 @@ async function handleOps(action,payload,db,user,env){
     db.prepare("SELECT m.telegram_id,m.role,m.status,u.display_name FROM workspace_members m JOIN candidate_users u ON u.telegram_id=m.telegram_id WHERE m.workspace_id=? ORDER BY m.created_at LIMIT 100").bind(workspace).all()
    ]);
    const drafts=await db.prepare("SELECT id,title,body,status,created_at FROM content_revision_requests WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspace).all();
-   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:expenses.results,members:canManage?members.results:[],drafts:drafts.results};
+   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:canManage?expenses.results:[],members:canManage?members.results:[],drafts:canWrite?drafts.results:[]};
  }
  if(action==="auditTrail"){
    if(!canManage)return {error:"Forbidden",status:403};
