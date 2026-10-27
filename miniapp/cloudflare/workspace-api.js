@@ -9,6 +9,43 @@ async function logChange(db,id,workspace,action,kind,record){
 }
 async function handleOps(action,payload,db,user,env){
  const uid=user.id;
+ if(action==="myPrivacy"){
+   const requests=await db.prepare("SELECT id,request_type,status,created_at FROM privacy_requests WHERE telegram_id=? ORDER BY created_at DESC LIMIT 30").bind(uid).all();
+   return {requests:requests.results};
+ }
+ if(action==="requestPrivacy"){
+   if(!["export","delete","correct"].includes(payload.requestType))return {error:"Invalid request",status:400};
+   const details=clean(payload.details,1000);
+   const recent=await db.prepare("SELECT COUNT(*) AS n FROM privacy_requests WHERE telegram_id=? AND status IN ('pending','reviewing')").bind(uid).first();
+   if(recent.n>=3)return {error:"Maximum 3 pending requests",status:429};
+   const requestId=crypto.randomUUID();
+   await db.prepare("INSERT INTO privacy_requests(id,telegram_id,request_type,details) VALUES(?,?,?,?)").bind(requestId,uid,payload.requestType,details).run();
+   return {saved:true,id:requestId};
+ }
+ if(action==="myDataExport"){
+   const [user,progress,notes,bookmarks,attempts]=await Promise.all([
+    db.prepare("SELECT telegram_id,display_name,username,created_at FROM candidate_users WHERE telegram_id=?").bind(uid).first(),
+    db.prepare("SELECT lesson_id,completed_at FROM lesson_progress WHERE telegram_id=? LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT lesson_id,note,updated_at FROM lesson_notes WHERE telegram_id=? LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT lesson_id,created_at FROM lesson_bookmarks WHERE telegram_id=? LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT quiz_id,score,question_count,submitted_at FROM quiz_attempts WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 500").bind(uid).all()
+   ]);
+   return {data:{user,progress:progress.results,notes:notes.results,bookmarks:bookmarks.results,attempts:attempts.results},limitedTo:500};
+ }
+ if(action==="adminPrivacyQueue"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const q=await db.prepare("SELECT id,telegram_id,request_type,status,created_at FROM privacy_requests ORDER BY created_at DESC LIMIT 100").all();
+   return {requests:q.results};
+ }
+ if(action==="adminPrivacyStatus"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   if(!["pending","reviewing","rejected"].includes(payload.status))return {error:"Invalid status",status:400};
+   const id=clean(payload.requestId,64);
+   const result=await db.prepare("UPDATE privacy_requests SET status=? WHERE id=? AND status!='done'").bind(payload.status,id).run();
+   if(!result.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,"privacy:"+payload.status,"privacy",id);
+   return {saved:true};
+ }
  if(action==="myWorkspaces"){
    const r=await db.prepare("SELECT w.id,w.name,w.jurisdiction,w.status,m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.telegram_id=? AND m.status='active' ORDER BY w.created_at DESC LIMIT 50").bind(uid).all();
    return {workspaces:r.results,platformAdmin:platformAdmin(env,uid)};
@@ -124,7 +161,9 @@ async function handleOps(action,payload,db,user,env){
     db.prepare("SELECT m.telegram_id,m.role,m.status,u.display_name FROM workspace_members m JOIN candidate_users u ON u.telegram_id=m.telegram_id WHERE m.workspace_id=? ORDER BY m.created_at LIMIT 100").bind(workspace).all()
    ]);
    const drafts=await db.prepare("SELECT id,title,body,status,created_at FROM content_revision_requests WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspace).all();
-   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:canManage?expenses.results:[],members:canManage?members.results:[],drafts:canWrite?drafts.results:[]};
+   const documents=await db.prepare("SELECT id,title,category,source_url,visibility,created_at FROM workspace_documents WHERE workspace_id=? AND (visibility='members' OR ?=1) ORDER BY created_at DESC LIMIT 100").bind(workspace,canManage?1:0).all();
+   const notices=await db.prepare("SELECT id,title,body,created_at FROM workspace_notifications WHERE workspace_id=? ORDER BY created_at DESC LIMIT 60").bind(workspace).all();
+   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:canManage?expenses.results:[],members:canManage?members.results:[],drafts:canWrite?drafts.results:[],documents:documents.results,notices:notices.results};
  }
  if(action==="auditTrail"){
    if(!canManage)return {error:"Forbidden",status:403};
@@ -153,6 +192,32 @@ async function handleOps(action,payload,db,user,env){
    await db.prepare("UPDATE workspace_members SET status='disabled' WHERE workspace_id=? AND telegram_id=?").bind(workspace,member).run();
    await logChange(db,uid,workspace,"memberDisable","member",member);
    return {saved:true};
+ }
+ if(action==="createDocument"){
+   if(!canWrite)return {error:"Forbidden",status:403};
+   const title=clean(payload.title,200),category=clean(payload.category,60)||"general",link=clean(payload.sourceUrl,2048);
+   const visibility=payload.visibility==="managers"?"managers":"members";
+   if(visibility==="managers"&&!canManage)return {error:"Forbidden",status:403};
+   let url;try{url=new URL(link)}catch{return {error:"Invalid URL",status:400}}
+   if(url.protocol!=="https:"||url.username||url.password||title.length<2||!link||link.length>2048)return {error:"A valid HTTPS document URL is required",status:400};
+   const docId=crypto.randomUUID();
+   await db.prepare("INSERT INTO workspace_documents(id,workspace_id,title,category,source_url,visibility,created_by) VALUES(?,?,?,?,?,?,?)").bind(docId,workspace,title,category,link,visibility,uid).run();
+   await logChange(db,uid,workspace,"create","document",docId);return {saved:true,id:docId};
+ }
+ if(action==="deleteDocument"){
+   if(!canManage)return {error:"Forbidden",status:403};
+   const docId=clean(payload.id,64);
+   const r=await db.prepare("DELETE FROM workspace_documents WHERE workspace_id=? AND id=?").bind(workspace,docId).run();
+   if(!r.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,workspace,"delete","document",docId);return {saved:true};
+ }
+ if(action==="createNotice"){
+   if(!canManage)return {error:"Forbidden",status:403};
+   const title=clean(payload.title,200),body=clean(payload.body,2000);
+   if(title.length<2||body.length<3)return {error:"Invalid notice",status:400};
+   const noticeId=crypto.randomUUID();
+   await db.prepare("INSERT INTO workspace_notifications(id,workspace_id,title,body,created_by) VALUES(?,?,?,?,?)").bind(noticeId,workspace,title,body,uid).run();
+   await logChange(db,uid,workspace,"create","notice",noticeId);return {saved:true,id:noticeId};
  }
  if(!canWrite)return {error:"Read-only role",status:403};
  if(action==="createDraft"){
