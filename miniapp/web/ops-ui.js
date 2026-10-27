@@ -1,6 +1,6 @@
 "use strict";
 // Operational workspace UI; relies on shared app.js helpers and signed api().
-let opState={list:[],id:null,record:null,focusTool:null};
+let opState={list:[],id:null,record:null,focusTool:null,activeTool:null};
 function makeRow(title,detail){const x=el("div",null,"op-row");x.append(el("strong",title),el("small",detail||""));return x}
 function detailsForm(title,fields,send){const d=el("details",null,"op-details"),summary=el("summary",title),form=el("form",null,"op-form");d.append(summary);
 const inputs={};
@@ -68,10 +68,21 @@ async function renderWorkspace(){
   }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
-  if(!ws){content.append(empty("برای شروع، یک فضای کاری ایجاد کنید."));const d=head.querySelector("details");if(d)d.open=true;opState.focusTool=null;return}
+  if(!ws){const intro=el("section",null,"card workspace-onboarding");
+ intro.append(el("h3","فضای کاری خود را راه‌اندازی کنید"),el("p","برای فعال‌شدن ابزارهای مدیریت، ابتدا یک فضای کاری بسازید. هیچ کار یا هزینه‌ای بدون اقدام شما ثبت نمی‌شود."));
+ const steps=el("ol",null,"onboarding-steps");
+ for(const step of ["نام و حوزه فعالیت را وارد کنید","فضای کاری را بسازید","اولین وظیفه، جلسه یا سند را ثبت کنید","از اعضای تیم دعوت کنید"])steps.append(el("li",step));
+ intro.append(steps);content.append(intro);const d=head.querySelector("details");if(d)d.open=true;opState.focusTool=null;return}
   try{const entitlement=await api("workspacePlan",{workspaceId:opState.id});
     const plan=el("article",null,"card");plan.append(el("h3","بسته خدمات فعلی"),makeRow(entitlement.plan.name,"حداکثر "+entitlement.plan.max_members.toLocaleString("fa-IR")+" عضو فعال"));content.append(plan);
   }catch(e){content.append(el("p","بسته خدمات در دسترس نیست.","meta"))}
+  if(!opState.activeTool && !ws.tasks.length && !ws.events.length && !ws.documents?.length){
+    const guide=el("section",null,"card workspace-onboarding");guide.append(el("h3","شروع مدیریت فضای کاری"),el("p","فضای کاری شما آماده است. برای شروع، یکی از کارهای زیر را انتخاب کنید:"));
+    const actions=el("div",null,"quick-start-actions");
+    for(const [label,key] of [["ثبت اولین وظیفه","tasks"],["برنامه‌ریزی جلسه","events"],["ثبت سند","documents"]]){
+      actions.append(button(label,()=>{opState.activeTool=key;renderWorkspace()},"action outline"))}
+    guide.append(actions);content.append(guide);
+  }
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
   const overview=el("div",null,"admin-metrics");
   for(const [label,val,sym] of [["وظایف",ws.tasks.length,"✓"],["رویدادها",ws.events.length,"▣"],["تعهدات",ws.commitments.length,"▤"]]){const item=el("div",null,"admin-metric");item.append(el("span",sym,"admin-metric-icon"),el("strong",val.toLocaleString("fa-IR")),el("small",label));overview.append(item)}
@@ -108,7 +119,17 @@ async function renderWorkspace(){
     const card=el("section",null,"card");card.dataset.tool=action==="createTask"?"tasks":action==="createEvent"?"events":action==="createCommitment"?"commitments":"expenses";card.append(el("h3",heading));
     if(!rows?.length)card.append(el("p","موردی ثبت نشده است."));
     else for(const item of rows){const label=item.title||item.description||"",detail=item.status||item.starts_at||(item.amount_minor!=null?Number(item.amount_minor).toLocaleString("fa-IR")+" ریال":"");
-      const row=makeRow(label,detail);if(action==="createTask"&&edit){const change=el("select",null,"op-select");for(const [code,title] of [["todo","انجام‌نشده"],["doing","در جریان"],["done","تکمیل"]]){const o=el("option",title);o.value=code;o.selected=item.status===code;change.append(o)}change.addEventListener("change",async()=>{try{await api("taskStatus",{workspaceId:opState.id,id:item.id,status:change.value});await renderWorkspace()}catch(e){alert(e.message)}});row.append(change)}card.append(row)}
+      const row=makeRow(label,detail);
+      if(action==="createCommitment"&&edit){
+        const sel=el("select",null,"op-select");
+        for(const [code,name] of [["draft","پیش‌نویس"],["review","در بررسی"],["published","منتشرشده"],["completed","انجام‌شده"]]){
+          if(code==="published"&&!manager&&item.status!=="published")continue;
+          const opt=el("option",name);opt.value=code;opt.selected=item.status===code;sel.append(opt);
+        }
+        sel.addEventListener("change",async()=>{try{await api("commitmentStatus",{workspaceId:opState.id,id:item.id,status:sel.value});await renderWorkspace();notify("وضعیت برنامه ذخیره شد.")}catch(e){notify(e.message,"error")}});
+        row.append(sel);
+      }
+      if(action==="createTask"&&edit){const change=el("select",null,"op-select");for(const [code,title] of [["todo","انجام‌نشده"],["doing","در جریان"],["done","تکمیل"]]){const o=el("option",title);o.value=code;o.selected=item.status===code;change.append(o)}change.addEventListener("change",async()=>{try{await api("taskStatus",{workspaceId:opState.id,id:item.id,status:change.value});await renderWorkspace()}catch(e){alert(e.message)}});row.append(change)}card.append(row)}
     if(edit&&(action!=="createExpense"||manager))card.append(detailsForm("＋ افزودن",fields,async x=>{const input={...x,workspaceId:opState.id};if(action==="createExpense")input.amountMinor=Number(x.amountMinor);await api(action,input);await renderWorkspace()}));
     if(action==="createEvent" && (ws.events||[]).length)card.append(button("افزودن جلسات به تقویم (ICS)",()=>downloadCalendar(ws.events),"action outline"));
     content.append(card);
@@ -141,8 +162,25 @@ async function renderWorkspace(){
     content.append(members);
     content.append(button("نمایش گزارش فعالیت‌ها",async()=>{try{const r=await api("auditTrail",{workspaceId:opState.id});const audit=el("article",null,"card");audit.append(el("h3","سوابق تغییرات"));for(const a of r.audit||[])audit.append(makeRow(a.action+" • "+a.record_type,a.created_at));content.append(audit)}catch(e){alert(e.message)}},"action outline"));
   }
+  if(opState.activeTool){
+    const focused=opState.activeTool,sections=[...content.querySelectorAll("[data-tool]")];
+    const chosen=sections.find(e=>e.dataset.tool===focused);
+    if(chosen){
+      const back=button("← نمایش داشبورد کامل",()=>{opState.activeTool=null;opState.focusTool=null;renderWorkspace()},"back tool-back");
+      const title=el("h3",({tasks:"مدیریت وظایف",events:"مدیریت جلسات",members:"اعضای تیم",documents:"مدیریت اسناد",expenses:"ثبت هزینه‌ها",commitments:"برنامه‌ها و تعهدات",notices:"اطلاعیه‌ها",reports:"گزارش‌های فضای کاری"})[focused]||"مدیریت","focused-title");
+      for(const item of [...content.children]){
+        if(item!==chosen&&item!==head&&item!==intro&&item!==back&&item!==title)item.hidden=true;
+      }
+      content.prepend(back,title);
+      chosen.classList.add("tool-spotlight");
+      chosen.scrollIntoView({block:"start",behavior:"smooth"});
+    }else{
+      opState.activeTool=null;
+      notify("برای دسترسی به این بخش، مجوز مناسب لازم است.","error");
+    }
+  }
   if(opState.focusTool){
-    const requested=opState.focusTool;opState.focusTool=null;
+    const requested=opState.focusTool;opState.activeTool=requested;opState.focusTool=null;
     const target=[...content.querySelectorAll("[data-tool]")].find(x=>x.dataset.tool===requested);
     if(target){target.classList.add("tool-spotlight");target.scrollIntoView({block:"start",behavior:"smooth"});}
     else notify("برای این بخش ابتدا یک فضای کاری بسازید یا مجوز مربوط را دریافت کنید.","error");
