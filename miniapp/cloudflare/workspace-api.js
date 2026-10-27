@@ -52,6 +52,33 @@ async function handleOps(action,payload,db,user,env){
    if(!r.meta.changes)return {error:"Not found",status:404};
    await logChange(db,uid,null,payload.published?"publish":"unpublish","lesson",id);return {saved:true};
  }
+ if(action==="adminCreateQuiz"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const title=clean(payload.title),description=clean(payload.description,500);
+   if(title.length<2)return {error:"Invalid quiz",status:400};
+   const r=await db.prepare("INSERT INTO quizzes(title,description,published) VALUES(?,?,0)").bind(title,description).run();
+   await logChange(db,uid,null,"create","quiz",r.meta.last_row_id);return {saved:true,id:r.meta.last_row_id};
+ }
+ if(action==="adminAddQuestion"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const quizId=Number(payload.quizId),prompt=clean(payload.prompt,2000),options=payload.options,correct=payload.correctIndex;
+   if(!Number.isSafeInteger(quizId)||quizId<=0||prompt.length<4||!Array.isArray(options)||options.length<2||options.length>8||!options.every(o=>typeof o==="string"&&o.trim().length>0&&o.length<=500)||!Number.isInteger(correct)||correct<0||correct>=options.length)return {error:"Invalid question",status:400};
+   const quiz=await db.prepare("SELECT id,published FROM quizzes WHERE id=?").bind(quizId).first();
+   if(!quiz||quiz.published)return {error:"Quiz unavailable for editing",status:409};
+   const count=await db.prepare("SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id=?").bind(quizId).first();
+   if(count.n>=100)return {error:"Question limit",status:429};
+   const r=await db.prepare("INSERT INTO quiz_questions(quiz_id,prompt,options_json,correct_index,position) VALUES(?,?,?,?,?)").bind(quizId,prompt,JSON.stringify(options),correct,count.n+1).run();
+   await logChange(db,uid,null,"create","quiz_question",r.meta.last_row_id);return {saved:true};
+ }
+ if(action==="adminPublishQuiz"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const quizId=Number(payload.id),published=payload.published;
+   if(!Number.isSafeInteger(quizId)||quizId<=0||typeof published!=="boolean")return {error:"Invalid quiz",status:400};
+   if(published){const c=await db.prepare("SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id=?").bind(quizId).first();if(!c?.n)return {error:"Quiz requires at least one question",status:409}}
+   const result=await db.prepare("UPDATE quizzes SET published=? WHERE id=?").bind(published?1:0,quizId).run();
+   if(!result.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,published?"publish":"unpublish","quiz",quizId);return {saved:true};
+ }
  if(action==="adminWorkspaces"){
    if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
    const r=await db.prepare("SELECT id,name,jurisdiction,status,created_at FROM workspaces ORDER BY created_at DESC LIMIT 200").all();
