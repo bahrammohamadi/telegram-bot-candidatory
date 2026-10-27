@@ -30,3 +30,11 @@
 The static assets (`miniapp/web/`) are bundled with API source (`miniapp/cloudflare/worker.js`) into `site-worker.js`.
 Deploy as a module Worker with the D1 binding and **preserve** the Cloudflare Secret named `TELEGRAM_BOT_TOKEN`.
 Use the existing workers.dev route; never rotate/remove a production secret as part of a source update.
+
+## Enhanced learning release (2026-10-27)
+- Deployed Cloudflare Worker deployment `c2eb3d4f70674eee93b81b61982e0435`.
+- Added user-scoped lesson bookmarks, private notes (max 2000 characters), daily learning goal 1–5, and four progress badges computed from completed lessons.
+- Schema migration: `migration_user_features.sql`; verified four tables including lesson_progress and the two new user resources.
+- Verified D1 and `TELEGRAM_BOT_TOKEN` secret_text bindings after deploy. Existing public content remains 12 lessons and 2 quizzes with 10 questions.
+- Internet smoke-test endpoint was inaccessible from execution environment; do not claim actual authenticated user E2E success until tested from Telegram.
+- This is NOT the entire legacy chatbot functionality; SWOT, AI, payments, privileged editor/admin workflows require independent designs and tests.
