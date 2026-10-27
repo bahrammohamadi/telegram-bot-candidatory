@@ -44,3 +44,16 @@ html[data-theme="dark"] .launcher-app{color:var(--ink)}
 @media(max-width:360px){.home-intro{margin-left:-11px;margin-right:-11px;padding:10px}.home-intro .featured{grid-template-columns:28% 72%}.launcher-app strong{font-size:10px}.launcher-app small{font-size:8px}.launcher-icon{border-radius:15px}}
 @media(min-width:560px){.home-intro{margin-left:-28px;margin-right:-28px;padding:15px 28px 23px}.app-launcher{grid-template-columns:repeat(5,minmax(0,1fr));gap:15px}.home-intro .featured{min-height:148px}.home-intro .feature-visual{min-height:148px}}
 @media(prefers-reduced-motion:reduce){.launcher-app{transition:none}}
+
+/* Motion layer: lightweight GPU transforms, no new dependencies */
+@keyframes candidatory-pop-in{0%{opacity:0;transform:translateY(16px) scale(.76);filter:blur(3px)}65%{opacity:1;transform:translateY(-3px) scale(1.055);filter:blur(0)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes candidatory-screen-in{from{opacity:.25;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes candidatory-glimmer{0%{background-position:130% 0}100%{background-position:-130% 0}}
+.launcher-app{animation:candidatory-pop-in .48s cubic-bezier(.2,.8,.25,1) backwards;animation-delay:calc(var(--launch-index,0)*35ms)}
+.launcher-app.launcher-pressed .launcher-icon{transform:scale(.88) rotate(-5deg);transition:transform .17s ease}
+.launcher-icon{transition:transform .2s ease,box-shadow .2s ease;will-change:transform}
+@media(hover:hover){.launcher-app:hover .launcher-icon{transform:translateY(-5px) scale(1.07);box-shadow:0 14px 22px #0b53582e,inset 0 1px 1px #ffffff66}}
+.page-enter{animation:candidatory-screen-in .27s ease-out both}
+.launcher-skeleton{height:75px;border-radius:18px;background:linear-gradient(100deg,#e5f0ed 15%,#f7fcfb 45%,#e5f0ed 70%);background-size:240% 100%;animation:candidatory-glimmer 1.3s linear infinite}
+html[data-theme="dark"] .launcher-skeleton{background:linear-gradient(100deg,#243a40 15%,#3a5259 45%,#243a40 70%);background-size:240% 100%}
+@media(prefers-reduced-motion:reduce){.launcher-app,.page-enter,.launcher-skeleton{animation:none!important}.launcher-icon{transition:none!important}}
