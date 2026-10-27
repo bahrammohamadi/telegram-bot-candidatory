@@ -242,6 +242,14 @@ async function handleOps(action,payload,db,user,env){
    const ent=await db.prepare("SELECT p.id,p.name,p.description,p.max_members,e.expires_at FROM workspace_entitlements e JOIN service_plans p ON p.id=e.plan_id WHERE e.workspace_id=?").bind(workspace).first();
    return {plan:ent||{id:"basic",name:"آموزشی پایه",description:"دسترسی پایه",max_members:3}};
  }
+ if(action==="eventRsvp"){
+   const eventId=clean(payload.eventId,64),response=clean(payload.response,12);
+   if(!["going","unable"].includes(response))return {error:"Invalid response",status:400};
+   const event=await db.prepare("SELECT id FROM workspace_events WHERE workspace_id=? AND id=?").bind(workspace,eventId).first();
+   if(!event)return {error:"Event not found",status:404};
+   await db.prepare("INSERT INTO event_rsvps(workspace_id,event_id,telegram_id,response) VALUES(?,?,?,?) ON CONFLICT(event_id,telegram_id) DO UPDATE SET response=excluded.response,updated_at=CURRENT_TIMESTAMP").bind(workspace,eventId,uid,response).run();
+   return {saved:true,response};
+ }
  if(action==="workspaceSummary"){
    const [tasks,events,commitments,expenses,members]=await Promise.all([
     db.prepare("SELECT id,title,description,status,priority,due_date,assignee_id,created_at FROM workspace_tasks WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspace).all(),
@@ -251,9 +259,10 @@ async function handleOps(action,payload,db,user,env){
     db.prepare("SELECT m.telegram_id,m.role,m.status,u.display_name FROM workspace_members m JOIN candidate_users u ON u.telegram_id=m.telegram_id WHERE m.workspace_id=? ORDER BY m.created_at LIMIT 100").bind(workspace).all()
    ]);
    const drafts=await db.prepare("SELECT id,title,body,status,created_at FROM content_revision_requests WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspace).all();
+   const rsvps=await db.prepare("SELECT event_id,telegram_id,response FROM event_rsvps WHERE workspace_id=? LIMIT 500").bind(workspace).all();
    const documents=await db.prepare("SELECT id,title,category,source_url,visibility,created_at FROM workspace_documents WHERE workspace_id=? AND (visibility='members' OR ?=1) ORDER BY created_at DESC LIMIT 100").bind(workspace,canManage?1:0).all();
    const notices=await db.prepare("SELECT id,title,body,created_at FROM workspace_notifications WHERE workspace_id=? ORDER BY created_at DESC LIMIT 60").bind(workspace).all();
-   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:canManage?expenses.results:[],members:canManage?members.results:[],drafts:canWrite?drafts.results:[],documents:documents.results,notices:notices.results};
+   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:canManage?expenses.results:[],members:canManage?members.results:[],drafts:canWrite?drafts.results:[],documents:documents.results,notices:notices.results,rsvps:rsvps.results.filter(x=>canManage||x.telegram_id===uid)};
  }
  if(action==="auditTrail"){
    if(!canManage)return {error:"Forbidden",status:403};
@@ -415,7 +424,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan","adminSystemHealth"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan","adminSystemHealth","eventRsvp"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
