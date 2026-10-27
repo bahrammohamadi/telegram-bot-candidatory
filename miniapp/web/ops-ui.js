@@ -84,6 +84,24 @@ async function renderWorkspace(){
     guide.append(actions);content.append(guide);
   }
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
+  if(edit && !ws.tasks.length){
+    const starter=el("article",null,"card starter-kit");
+    starter.append(el("h3","شروع سریع با فضای کاری"),el("p","برای آشنایی با امکانات، می‌توانید سه وظیفه آموزشی نمونه را داخل همین فضای کاری بسازید. این موارد، واقعی و قابل ویرایش هستند و فقط در صورت تأیید شما ثبت می‌شوند."));
+    const start=button("＋ ایجاد ۳ وظیفه نمونه",async()=>{
+      if(!confirm("سه وظیفه نمونه در این فضای کاری ایجاد شود؟"))return;
+      start.disabled=true;
+      const samples=[
+        {title:"مرور اولین درس آموزشی",description:"یک درس را مطالعه و خلاصه نکات آن را ثبت کنید."},
+        {title:"آماده‌سازی دستور جلسه",description:"موضوعات جلسه داخلی تیم را مرتب کنید."},
+        {title:"بررسی دسترسی اعضا",description:"نقش‌ها و دسترسی افراد تیم را بررسی کنید."}
+      ];
+      try{
+        for(const item of samples)await api("createTask",{workspaceId:opState.id,title:item.title,description:item.description,priority:"normal"});
+        opState.focusTool="tasks";opState.activeTool=null;await renderWorkspace();notify("سه وظیفه نمونه به فضای کاری اضافه شد.");
+      }catch(e){notify("ثبت کامل نشد؛ فهرست وظایف را بررسی کنید: "+e.message,"error");await renderWorkspace()}
+    },"action");
+    starter.append(start);content.append(starter);
+  }
   const overview=el("div",null,"admin-metrics");
   for(const [label,val,sym] of [["وظایف",ws.tasks.length,"✓"],["رویدادها",ws.events.length,"▣"],["تعهدات",ws.commitments.length,"▤"]]){const item=el("div",null,"admin-metric");item.append(el("span",sym,"admin-metric-icon"),el("strong",val.toLocaleString("fa-IR")),el("small",label));overview.append(item)}
   content.append(overview);
