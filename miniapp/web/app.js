@@ -62,16 +62,17 @@ async function openQuiz(id){
    content.append(button("← بازگشت به آزمون‌ها",()=>setMain("quizzes"),"back"));
    const track=el("div",null,"progress-track"),bar=el("div");
    bar.style.width=((index+1)/questions.length*100)+"%";track.append(bar);
-   content.append(el("p","سؤال "+(index+1).toLocaleString("fa-IR")+" از "+questions.length.toLocaleString("fa-IR")+" • "+quiz.title,"meta"),track);
-   const q=questions[index],panel=el("article",null,"card");
-   panel.append(el("h3",q.prompt));
+   const qheader=el("div",null,"quiz-header");qheader.append(el("strong","سؤال "+(index+1).toLocaleString("fa-IR")+" از "+questions.length.toLocaleString("fa-IR")),el("span",Math.round((index+1)/questions.length*100).toLocaleString("fa-IR")+"٪"));content.append(qheader,track);content.append(el("p",quiz.title,"meta"));
+   const q=questions[index],panel=el("article",null,"card quiz-question");
+   panel.append(el("div","آزمون آموزشی • پرسش "+(index+1).toLocaleString("fa-IR"),"quiz-topic"),el("h3",q.prompt));
    q.options.forEach((option,idx)=>{
     const label=el("label",null,"option"),radio=el("input");
     radio.type="radio";radio.name="quiz-choice";radio.value=String(idx);radio.checked=answers[index]===idx;
     radio.addEventListener("change",()=>{answers[index]=idx;next.disabled=false;tg?.HapticFeedback?.selectionChanged()});
-    label.append(radio,document.createTextNode(String(option)));panel.append(label);
+    label.append(el("span",String.fromCharCode(65+idx),"option-letter"),radio,document.createTextNode(String(option)));panel.append(label);
    });
    content.append(panel);
+   const hint=el("div",null,"quiz-hint");hint.append(el("span","✦","hint-icon"),el("p","پاسخ خود را انتخاب کنید. پس از پایان آزمون، نتیجه براساس پاسخ‌های ثبت‌شده محاسبه می‌شود."));content.append(hint);
    const row=el("div",null,"quiz-actions");
    if(index>0)row.append(button("قبلی",()=>{index--;draw()},"action outline"));
    const next=button(index===questions.length-1?"ثبت پاسخ‌ها":"سؤال بعدی",async()=>{
