@@ -36,6 +36,28 @@ async function handleOps(action,payload,db,user,env){
    await logChange(db,uid,null,"reply","support",ticket);
    return {saved:true};
  }
+ if(action==="availablePlans"){
+   const plans=await db.prepare("SELECT id,name,description,max_members FROM service_plans WHERE active=1 ORDER BY max_members ASC").all();
+   return {plans:plans.results};
+ }
+ if(action==="adminEntitlements"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const [plans,entitlements]=await Promise.all([
+     db.prepare("SELECT id,name,description,max_members FROM service_plans WHERE active=1").all(),
+     db.prepare("SELECT e.workspace_id,w.name AS workspace_name,e.plan_id,e.expires_at FROM workspace_entitlements e JOIN workspaces w ON w.id=e.workspace_id ORDER BY e.updated_at DESC LIMIT 100").all()
+   ]);
+   return {plans:plans.results,entitlements:entitlements.results};
+ }
+ if(action==="adminAssignPlan"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const workspaceId=clean(payload.workspaceId,64),planId=clean(payload.planId,40);
+   const [ws,plan]=await Promise.all([db.prepare("SELECT id FROM workspaces WHERE id=?").bind(workspaceId).first(),db.prepare("SELECT id FROM service_plans WHERE id=? AND active=1").bind(planId).first()]);
+   if(!ws||!plan)return {error:"Workspace or plan not found",status:404};
+   const expiry=payload.expiresAt||null;
+   if(expiry!==null&&!validDate(expiry))return {error:"Invalid date",status:400};
+   await db.prepare("INSERT INTO workspace_entitlements(workspace_id,plan_id,expires_at,assigned_by) VALUES(?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET plan_id=excluded.plan_id,expires_at=excluded.expires_at,assigned_by=excluded.assigned_by,updated_at=CURRENT_TIMESTAMP").bind(workspaceId,planId,expiry,uid).run();
+   await logChange(db,uid,workspaceId,"assign:"+planId,"entitlement",workspaceId);return {saved:true};
+ }
  if(action==="myPrivacy"){
    const requests=await db.prepare("SELECT id,request_type,status,created_at FROM privacy_requests WHERE telegram_id=? ORDER BY created_at DESC LIMIT 30").bind(uid).all();
    return {requests:requests.results};
@@ -179,6 +201,10 @@ async function handleOps(action,payload,db,user,env){
  const membership=await db.prepare("SELECT w.id,w.name,w.status,m.role FROM workspace_members m JOIN workspaces w ON w.id=m.workspace_id WHERE m.workspace_id=? AND m.telegram_id=? AND m.status='active'").bind(workspace,uid).first();
  if(!membership||membership.status!=="active")return {error:"Forbidden",status:403};
  const role=membership.role,canWrite=roleWrite.has(role),canManage=roleManage.has(role);
+ if(action==="workspacePlan"){
+   const ent=await db.prepare("SELECT p.id,p.name,p.description,p.max_members,e.expires_at FROM workspace_entitlements e JOIN service_plans p ON p.id=e.plan_id WHERE e.workspace_id=?").bind(workspace).first();
+   return {plan:ent||{id:"basic",name:"آموزشی پایه",description:"دسترسی پایه",max_members:3}};
+ }
  if(action==="workspaceSummary"){
    const [tasks,events,commitments,expenses,members]=await Promise.all([
     db.prepare("SELECT id,title,description,status,priority,due_date,assignee_id,created_at FROM workspace_tasks WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspace).all(),
@@ -203,6 +229,10 @@ async function handleOps(action,payload,db,user,env){
    if(!Number.isSafeInteger(member)||member<=0||!["admin","editor","member","auditor"].includes(newRole)||member===uid)return {error:"Invalid member or role",status:400};
    const exists=await db.prepare("SELECT telegram_id FROM candidate_users WHERE telegram_id=?").bind(member).first();
    if(!exists)return {error:"Invitee must first open the mini app",status:404};
+   const entitlement=await db.prepare("SELECT p.max_members FROM workspace_entitlements e JOIN service_plans p ON p.id=e.plan_id WHERE e.workspace_id=? AND (e.expires_at IS NULL OR datetime(e.expires_at)>datetime('now'))").bind(workspace).first();
+   const maxMembers=entitlement?.max_members||3;
+   const memberCount=await db.prepare("SELECT COUNT(*) AS n FROM workspace_members WHERE workspace_id=? AND status='active'").bind(workspace).first();
+   if(memberCount.n>=maxMembers)return {error:"Member limit for current plan reached",status:409};
    const existing=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=? AND status='active'").bind(workspace,member).first();
    if(existing)return {error:"Already an active member",status:409};
    const invId=crypto.randomUUID(),expires=new Date(Date.now()+7*86400000).toISOString();
