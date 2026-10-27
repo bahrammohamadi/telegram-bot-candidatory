@@ -91,12 +91,38 @@ function openLauncher(id){
   }
   setMain(id);
 }
+// Original vector pictograms, bundled into app.js — no CDN, licensing, or image fetch.
+const iconPaths={
+ lessons:'<path d="M24 15c-7-4-13-3-17-1v25c6-2 11-2 17 1 6-3 11-3 17-1V14c-5-2-11-3-17 1Z"/><path d="M24 15v25"/><path d="m11 21 9 2m8 0 9-2M11 28l9 2m8 0 9-2"/>',
+ quizzes:'<rect x="10" y="8" width="28" height="36" rx="5"/><path d="M18 8v-3h12v3M17 20h13m-13 8h8m-8 7h5"/><path d="m29 33 3 3 6-7"/>',
+ readiness:'<circle cx="24" cy="25" r="16"/><circle cx="24" cy="25" r="10"/><circle cx="24" cy="25" r="4"/><path d="m27 22 14-14m-8 1h8v8"/>',
+ ai:'<path d="m24 5 4.2 14.8L43 24l-14.8 4.2L24 43l-4.2-14.8L5 24l14.8-4.2L24 5Z"/><path d="m39 5 1.4 4.5L45 11l-4.6 1.5L39 17l-1.4-4.5L33 11l4.6-1.5L39 5Z"/>',
+ progress:'<path d="M9 41V29h7v12M21 41V19h7v22m5 0V9h7v32"/><path d="M6 43h37"/>',
+ bookmarks:'<path d="M13 7h22a3 3 0 0 1 3 3v34L24 35 10 44V10a3 3 0 0 1 3-3Z"/><path d="m18 21 5 5 9-10"/>',
+ tasks:'<rect x="8" y="9" width="32" height="32" rx="5"/><path d="m15 21 4 4 7-8m1 14h7M15 32h5"/>',
+ events:'<rect x="7" y="12" width="34" height="30" rx="4"/><path d="M7 21h34M15 7v10M33 7v10m-18 12h7v6h-7z"/>',
+ members:'<circle cx="19" cy="19" r="7"/><circle cx="34" cy="17" r="5"/><path d="M6 41v-5a13 13 0 0 1 26 0v5m1-17a12 12 0 0 1 9 12v4"/>',
+ commitments:'<rect x="11" y="8" width="27" height="35" rx="4"/><path d="M18 8V5h13v3m-12 12h12m-12 8h12m-12 8h8"/><path d="m8 22 3 3 5-6"/>',
+ documents:'<path d="M6 16V9a4 4 0 0 1 4-4h13l6 7h10a3 3 0 0 1 3 3v23a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V20Z"/><path d="M6 19h36M23 5v7h6"/>',
+ expenses:'<rect x="5" y="13" width="38" height="28" rx="6"/><path d="M5 22h38m-30 9h9"/><circle cx="34" cy="32" r="4"/>',
+ notices:'<path d="m9 23 26-12v26L9 26H5v-3Zm0 3 4 15h7l-3-12"/><path d="m39 18 5-4m-5 17 5 4"/>',
+ reports:'<path d="M8 41V8m0 33h34"/><path d="m13 32 9-10 7 5 10-15"/><path d="M32 12h7v7"/>',
+ support:'<path d="M8 11h32a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H21L11 45v-6H8a4 4 0 0 1-4-4V15a4 4 0 0 1 4-4Z"/><path d="M16 23h20m-20 8h13"/>',
+ profile:'<circle cx="24" cy="17" r="9"/><path d="M8 44v-5c0-9 7-14 16-14s16 5 16 14v5"/>'
+};
+function makeVectorIcon(id){
+ const ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");
+ svg.setAttribute("viewBox","0 0 48 48");svg.setAttribute("class","launcher-pictogram");
+ svg.setAttribute("aria-hidden","true");svg.setAttribute("focusable","false");
+ svg.innerHTML='<g fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">'+(iconPaths[id]||iconPaths.lessons)+'</g>';
+ return svg;
+}
 function renderLauncher(){
   const root=document.getElementById("app-launcher");if(!root)return;
   root.replaceChildren();
   for(const [index,app] of launcherApps.entries()){
     const tile=el("button",null,"launcher-app");tile.style.setProperty("--launch-index",String(index));tile.type="button";tile.dataset.tool=app.id;
-    const icon=el("span",app.icon,"launcher-icon theme-"+app.theme);
+    const icon=el("span",null,"launcher-icon theme-"+app.theme);icon.append(makeVectorIcon(app.id));
     const label=el("strong",app.label),hint=el("small",app.hint);
     tile.append(icon,label,hint);
     tile.addEventListener("click",()=>{tile.classList.add("launcher-pressed");openLauncher(app.id)});root.append(tile);
