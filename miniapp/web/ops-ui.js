@@ -88,6 +88,14 @@ async function renderWorkspace(){
     const blob=new Blob([JSON.stringify(safe,null,2)],{type:"application/json;charset=utf-8"});
     const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="candidatory-report.json";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
   },"action outline"));
+  const csvButton=button("خروجی CSV وظایف",()=>{
+    const rows=[["شناسه","عنوان","وضعیت","اولویت","مهلت","تاریخ ایجاد"],...(ws.tasks||[]).map(t=>[t.id,t.title,t.status,t.priority,t.due_date||"",t.created_at||""])];
+    saveCSV(rows,"candidatory-tasks.csv");
+  },"action outline");report.append(csvButton);
+  if(["owner","admin"].includes(ws.workspace.role))report.append(button("خروجی CSV هزینه‌ها",()=>{
+    const rows=[["شرح","مبلغ ریال","دسته","تاریخ"],...(ws.expenses||[]).map(e=>[e.description,e.amount_minor,e.category,e.spent_at])];
+    saveCSV(rows,"candidatory-expenses.csv");
+  },"action outline"));
   content.append(report);
   const blocks=[["وظایف",ws.tasks,"createTask",[["title","عنوان","text"],["description","توضیح","text"],["priority","اولویت","select",[["normal","عادی"],["high","بالا"],["low","پایین"]]]]],
   ["جلسات",ws.events,"createEvent",[["title","عنوان","text"],["startsAt","زمان","datetime-local"],["location","مکان","text"]]],
@@ -193,4 +201,11 @@ async function showPrivacyAdmin(){
     }
     content.append(card);
   }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+function saveCSV(rows,filename){
+  const escape=value=>{let s=String(value??"");if(/^[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+  const csv="\uFEFF"+rows.map(row=>row.map(escape).join(",")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
