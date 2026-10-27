@@ -21,7 +21,46 @@ if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.n
 }
 async function home(){try{const data=await api("home");state={lessons:data.lessons||[],quizzes:data.quizzes||[],attempts:data.attempts||[],completed:data.completed||[],user:data.user};document.getElementById("hello").textContent="سلام"+(data.user?.name?"، "+data.user.name:"")+" 👋";setMain(tab)}catch(e){homepage.hidden=true;inner.hidden=false;fail(e)}}
 async function openLesson(id){setMain("lessons");clear();content.append(el("div","در حال بارگذاری…","loading"));try{const {lesson}=await api("lesson",{id});if(!lesson)throw Error("درس پیدا نشد.");clear();content.append(button("← بازگشت به آموزش‌ها",()=>setMain("lessons"),"back"));const c=el("article",null,"card");c.append(el("h3",lesson.title),el("p",lesson.summary),el("div",lesson.body,"body-text"));const done=state.completed.includes(id),mark=button(done?"✓ این درس تکمیل شده":"✓ پایان مطالعه و ثبت پیشرفت",async()=>{mark.disabled=true;try{await api("completeLesson",{id});if(!state.completed.includes(id))state.completed.push(id);mark.textContent="✓ این درس تکمیل شده";tg?.HapticFeedback?.notificationOccurred("success")}catch(e){mark.disabled=false;alert(e.message)}});mark.disabled=done;c.append(mark);content.append(c)}catch(e){fail(e)}}
-async function openQuiz(id){setMain("quizzes");clear();content.append(el("div","در حال بارگذاری…","loading"));try{const {quiz,questions}=await api("quiz",{id});if(!questions?.length)throw Error("این آزمون هنوز سؤالی ندارد.");clear();content.append(button("← بازگشت به آزمون‌ها",()=>setMain("quizzes"),"back"));const form=el("form",null,"cards");form.append(el("h3",quiz.title));for(let i=0;i<questions.length;i++){const q=questions[i],c=el("article",null,"card");c.append(el("h3",(i+1)+" / "+questions.length+" — "+q.prompt));q.options.forEach((text,index)=>{const lbl=el("label",null,"option"),radio=el("input");radio.type="radio";radio.name="question-"+i;radio.value=String(index);lbl.append(radio,document.createTextNode(String(text)));c.append(lbl)});form.append(c)}const submit=button("ثبت و مشاهده نتیجه",()=>{});submit.type="submit";form.append(submit);form.addEventListener("submit",async event=>{event.preventDefault();const answers=questions.map((_,i)=>{const checked=form.querySelector('input[name="question-'+i+'"]:checked');return checked?Number(checked.value):null});if(answers.some(x=>x===null)){alert("به همه سؤال‌ها پاسخ دهید.");return}submit.disabled=true;try{const result=await api("submit",{id,answers});clear();const resultCard=el("div",null,"card");resultCard.append(el("h3","نتیجه آزمون"),el("p",result.score+" پاسخ درست از "+result.total+" سؤال"));content.append(resultCard,button("بازگشت",async()=>{await home();setMain("quizzes")}))}catch(e){submit.disabled=false;alert(e.message)}});content.append(form)}catch(e){fail(e)}}
+async function openQuiz(id){
+ setMain("quizzes");clear();content.append(el("div","در حال بارگذاری آزمون…","loading"));
+ try{
+  const {quiz,questions}=await api("quiz",{id});if(!questions?.length)throw Error("این آزمون هنوز سؤال ندارد.");
+  const answers=Array(questions.length).fill(null);let index=0;
+  function draw(){
+   clear();
+   content.append(button("← بازگشت به آزمون‌ها",()=>setMain("quizzes"),"back"));
+   const track=el("div",null,"progress-track"),bar=el("div");
+   bar.style.width=((index+1)/questions.length*100)+"%";track.append(bar);
+   content.append(el("p","سؤال "+(index+1).toLocaleString("fa-IR")+" از "+questions.length.toLocaleString("fa-IR")+" • "+quiz.title,"meta"),track);
+   const q=questions[index],panel=el("article",null,"card");
+   panel.append(el("h3",q.prompt));
+   q.options.forEach((option,idx)=>{
+    const label=el("label",null,"option"),radio=el("input");
+    radio.type="radio";radio.name="quiz-choice";radio.value=String(idx);radio.checked=answers[index]===idx;
+    radio.addEventListener("change",()=>{answers[index]=idx;next.disabled=false;tg?.HapticFeedback?.selectionChanged()});
+    label.append(radio,document.createTextNode(String(option)));panel.append(label);
+   });
+   content.append(panel);
+   const row=el("div",null,"quiz-actions");
+   if(index>0)row.append(button("قبلی",()=>{index--;draw()},"action outline"));
+   const next=button(index===questions.length-1?"ثبت پاسخ‌ها":"سؤال بعدی",async()=>{
+    if(answers[index]===null)return;
+    if(index<questions.length-1){index++;draw();return}
+    next.disabled=true;
+    try{
+     const result=await api("submit",{id,answers});
+     clear();const resultPanel=el("article",null,"card");
+     resultPanel.append(el("h3","آزمون به پایان رسید 🎉"),el("p","پاسخ‌های درست: "+result.score.toLocaleString("fa-IR")+" از "+result.total.toLocaleString("fa-IR")));
+     const progress=el("div",null,"progress-track"),fill=el("div");fill.style.width=(result.score/result.total*100)+"%";progress.append(fill);resultPanel.append(progress);
+     content.append(resultPanel,button("بازگشت به آزمون‌ها",async()=>{await home();setMain("quizzes")}));
+     tg?.HapticFeedback?.notificationOccurred("success");
+    }catch(e){next.disabled=false;alert(e.message)}
+   });
+   next.disabled=answers[index]===null;row.append(next);content.append(row);
+  }
+  draw();
+ }catch(e){fail(e)}
+}
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.tab)));
 document.querySelectorAll("[data-quick]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.quick)));
 document.querySelectorAll("[data-jump]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.jump)));
