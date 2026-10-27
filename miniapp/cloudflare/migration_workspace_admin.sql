@@ -15,3 +15,6 @@ CREATE TABLE IF NOT EXISTS workspace_expenses(id TEXT PRIMARY KEY,workspace_id T
 CREATE INDEX IF NOT EXISTS idx_expenses_ws ON workspace_expenses(workspace_id,spent_at);
 CREATE TABLE IF NOT EXISTS content_revision_requests(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','review','approved','rejected')),created_by INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS idx_content_ws ON content_revision_requests(workspace_id,status);
+-- Opt-in membership invitations: no automatic membership without invitee acceptance.
+CREATE TABLE IF NOT EXISTS workspace_invitations(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,invited_telegram_id INTEGER NOT NULL REFERENCES candidate_users(telegram_id),role TEXT NOT NULL CHECK(role IN ('admin','editor','member','auditor')),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','revoked')),created_by INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_invites_user ON workspace_invitations(invited_telegram_id,status,expires_at);
