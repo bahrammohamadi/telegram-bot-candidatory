@@ -1,12 +1,32 @@
 # Candidatory Mini App — Cloudflare Workers + D1
-- This migration branch is separate from main. The Telegram bot in main is unchanged.
-- D1 instance: `candidatory-miniapp`, ID `48b3c86b-45ea-492b-96e1-334dfafa2097`.
-- `schema.sql` applied to remote D1 on 2026-10-27.
-- `worker.js` exposes a Telegram-signed API only. Every request verifies `initData` HMAC and 1-hour auth age; uses D1 prepared statements and per-user 60/minute rate limit.
-- The authenticated endpoints are `home`, `lesson`, `quiz`, `submit`, and accept only POST JSON.
-- Do not commit bot tokens. Set the `TELEGRAM_BOT_TOKEN` Worker secret with a **rotated** token for the educational bot, not the news bot. Until then calls return 503 and cannot access D1.
-- Host static `miniapp/web/` with Cloudflare Pages or Workers static assets. Add the deployed Worker URL in index.html meta name `miniapp-api`.
-- Bind D1 as `DB` (wrangler.json). No public database access.
-- Populate lessons/quizzes after reviewing existing `src/flows/educational.js` and questions.
-- Before production: protect unauthenticated traffic against abuse, verify signed auth tests, clean obsolete request_limits buckets, move user PII to consent/privacy workflows, require content approval, confirm bots and admin roles.
-- Prior Supabase prototype remains in miniapp/supabase for comparison only and must not be deployed.
+
+## Current deployment (2026-10-27)
+- Cloudflare Worker: `candidatory-miniapp-api`
+- D1: `candidatory-miniapp`, binding `DB`
+- Telegram bot `TELEGRAM_BOT_TOKEN` is a Cloudflare **secret_text** binding; never store the token in GitHub.
+- Hosted at https://candidatory-miniapp-api.lasvaram-candidatory.workers.dev/
+- Public UI: Persian RTL dashboard, learning cards, searchable lessons, one-question-at-a-time multiple-choice tests, progress/history, basic Telegram profile.
+- Content: 12 **public** summary/key-point lessons from the previous bot; 2 new general-education quizzes (10 questions) about media literacy and public accountability.
+- API: Telegram-signed initData HMAC authentication on every POST, 1h freshness check, user-scoped progress/attempts, 60 requests/minute per signed Telegram user; no public D1 endpoint.
+- SQL: `schema.sql`, `seed_public_lessons.sql`, `seed_neutral_quizzes.sql` are the reproducible source of schema/content (seeds idempotent).
+- Existing Appwrite bot on `main` has not been modified. This change is an unmerged draft PR.
+
+## Verification
+- Cloudflare deployment API acknowledged the active Worker upload.
+- Independently queried D1: 12 published lessons, 2 quizzes, 10 questions.
+- Confirmed Cloudflare secret binding type `secret_text` and D1 binding after upload.
+- External public-network smoke test is **unverified** from the tool environment. Test inside Telegram with a real bot session and verify lesson completion/quiz score.
+- No simulated user results were inserted.
+
+## Remaining work
+- Full end-to-end tests from real Telegram clients (mobile and web).
+- Generic teacher/editor dashboard and moderation workflow (not yet implemented).
+- Advanced legacy bot functions (campaign analysis, SWOT, AI content creation, plan restrictions and purchases) have **not been migrated**.
+- Legacy candidate self-assessment is not an objective scored quiz. It needs a separate, privacy-reviewed flow; do not auto-import national ID or phone information.
+- Improve abuse controls before broader launch: unauthenticated rate limits, retention/cleanup of request_limits, observability, accessibility tests.
+- Confirm usage stays within Cloudflare Free quotas; AI provider charges would be separate.
+
+## Deploy
+The static assets (`miniapp/web/`) are bundled with API source (`miniapp/cloudflare/worker.js`) into `site-worker.js`.
+Deploy as a module Worker with the D1 binding and **preserve** the Cloudflare Secret named `TELEGRAM_BOT_TOKEN`.
+Use the existing workers.dev route; never rotate/remove a production secret as part of a source update.
