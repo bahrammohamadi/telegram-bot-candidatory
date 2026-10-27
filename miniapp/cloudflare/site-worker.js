@@ -83,6 +83,15 @@ const apiHandler = {
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
+    if(request.method==="GET" && url.pathname==="/_diagnostic"){
+      const token=env.TELEGRAM_BOT_TOKEN;
+      if(!token)return reply({configured:false,botMatches:false},503);
+      try {const r=await fetch("https://api.telegram.org/bot"+token+"/getMe",{headers:{"accept":"application/json"}});
+        const x=await r.json();
+        const matches=r.ok && x.ok===true && String(x.result?.username||"").toLowerCase()==="candidatoryiran_bot";
+        return reply({configured:true,telegramApiReachable:r.ok,botMatches:matches},matches?200:503);
+      }catch {return reply({configured:true,telegramApiReachable:false,botMatches:false},503)}
+    }
     if(request.method==="GET"){
       let body,kind;
       if(url.pathname==="/"||url.pathname==="/index.html"){body=SITE_HTML;kind="text/html; charset=utf-8";}
