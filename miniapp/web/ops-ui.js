@@ -20,6 +20,16 @@ async function renderWorkspace(){
   if(!opState.list.some(x=>x.id===opState.id))opState.id=opState.list[0]?.id||null;
   opState.record=opState.id?await api("workspaceSummary",{workspaceId:opState.id}):null;
   clear();
+  const pending=await api("myInvites");
+  if(pending.invitations?.length){
+    const invitations=el("article",null,"card");invitations.append(el("h3","دعوت‌های دریافتی"));
+    for(const invite of pending.invitations){
+      const line=makeRow(invite.name,"نقش: "+invite.role);
+      line.append(button("پذیرش دعوت",async()=>{try{await api("acceptInvite",{invitationId:invite.id});await renderWorkspace()}catch(e){alert(e.message)}},"action"));
+      invitations.append(line);
+    }
+    content.append(invitations);
+  }
   const head=el("article",null,"card");head.append(el("h3","فضاهای کاری"));
   if(opState.list.length){const select=el("select",null,"op-select");for(const w of opState.list){const opt=el("option",w.name+" — "+w.role);opt.value=w.id;opt.selected=w.id===opState.id;select.append(opt)}select.addEventListener("change",()=>{opState.id=select.value;renderWorkspace()});head.append(select)}
   head.append(detailsForm("＋ ایجاد فضای کاری",[["name","نام فضای کاری","text"],["jurisdiction","حوزه فعالیت","text"]],async x=>{await api("createWorkspace",x);opState.id=null;await renderWorkspace()}));
@@ -51,7 +61,7 @@ async function renderWorkspace(){
   if(manager){
     const members=el("section",null,"card");members.append(el("h3","اعضای تیم"));
     for(const member of ws.members||[])members.append(makeRow(member.display_name||String(member.telegram_id),member.role+" / "+member.status));
-    members.append(detailsForm("＋ افزودن عضو ثبت‌شده",[["telegramId","شناسه عددی تلگرام","number"],["role","نقش","select",[["member","عضو"],["editor","ویرایشگر"],["admin","مدیر"],["auditor","بازرس"]]]],async x=>{await api("addMember",{workspaceId:opState.id,telegramId:Number(x.telegramId),role:x.role});await renderWorkspace()}));
+    members.append(detailsForm("＋ ارسال دعوت برای عضو ثبت‌شده",[["telegramId","شناسه عددی تلگرام","number"],["role","نقش","select",[["member","عضو"],["editor","ویرایشگر"],["admin","مدیر"],["auditor","بازرس"]]]],async x=>{await api("addMember",{workspaceId:opState.id,telegramId:Number(x.telegramId),role:x.role});await renderWorkspace()}));
     content.append(members);
     content.append(button("نمایش گزارش فعالیت‌ها",async()=>{try{const r=await api("auditTrail",{workspaceId:opState.id});const audit=el("article",null,"card");audit.append(el("h3","سوابق تغییرات"));for(const a of r.audit||[])audit.append(makeRow(a.action+" • "+a.record_type,a.created_at));content.append(audit)}catch(e){alert(e.message)}},"action outline"));
   }
