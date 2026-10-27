@@ -30,17 +30,40 @@ async function renderWorkspace(){
     }
     content.append(invitations);
   }
+  const intro=el("section",null,"admin-intro");
+  intro.append(el("div","مرکز فرماندهی","admin-overline"),el("h3","مدیریت کاندیداتوری هوشمند"),el("p","آموزش، برنامه‌ریزی، مسئولیت‌ها و گزارش‌ها در یک نگاه"));
+  content.append(intro);
   const head=el("article",null,"card");head.append(el("h3","فضاهای کاری"));
   if(opState.list.length){const select=el("select",null,"op-select");for(const w of opState.list){const opt=el("option",w.name+" — "+w.role);opt.value=w.id;opt.selected=w.id===opState.id;select.append(opt)}select.addEventListener("change",()=>{opState.id=select.value;renderWorkspace()});head.append(select)}
   head.append(detailsForm("＋ ایجاد فضای کاری",[["name","نام فضای کاری","text"],["jurisdiction","حوزه فعالیت","text"]],async x=>{await api("createWorkspace",x);opState.id=null;await renderWorkspace()}));
   content.append(head);
+  if(r.platformAdmin){
+    try{
+      const summary=await api("platformSummary");
+      const stats=el("div",null,"admin-metrics");
+      for(const [title,value,icon] of [["کاربران",summary.summary.users,"♙"],["فضاهای کاری",summary.summary.workspaces,"▦"],["درس‌های منتشرشده",summary.summary.lessons,"▤"]]){
+        const item=el("div",null,"admin-metric");item.append(el("span",icon,"admin-metric-icon"),el("strong",Number(value).toLocaleString("fa-IR")),el("small",title));stats.append(item)}
+      content.append(stats);
+    }catch(e){content.append(el("div","آمار مدیریتی دریافت نشد؛ سایر امکانات در دسترس‌اند.","empty"))}
+    const tools=el("div",null,"admin-tools");
+    for(const [title,detail,symbol,fn] of [
+      ["مدیریت درس‌ها","ایجاد و انتشار","▤",showPlatformCms],
+      ["بانک آزمون","سؤال و ارزیابی","▣",showPlatformQuizzes],
+      ["فضاهای کاری","مدیریت تیم‌ها","▦",showPlatformSpaces],
+      ["آمار سامانه","گزارش کلی","▥",async()=>{const r=await api("platformSummary");const c=el("section",null,"card");c.append(el("h3","آمار سامانه"));for(const [k,v] of [["کاربران",r.summary.users],["فضاهای کاری",r.summary.workspaces],["درس‌های منتشرشده",r.summary.lessons]])c.append(makeRow(k,Number(v).toLocaleString("fa-IR")));content.prepend(c)}]
+    ]){const tile=button("",()=>Promise.resolve(fn()).catch(e=>alert(e.message)),"admin-tool");tile.append(el("span",symbol,"admin-tool-icon"),el("strong",title),el("small",detail));tools.append(tile)}
+    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);
+  }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
   if(!ws){content.append(empty("برای شروع، یک فضای کاری ایجاد کنید."));return}
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
-  const report=el("section",null,"card");report.append(el("h3","گزارش وضعیت فضای کاری"));
+  const overview=el("div",null,"admin-metrics");
+  for(const [label,val,sym] of [["وظایف",ws.tasks.length,"✓"],["رویدادها",ws.events.length,"▣"],["تعهدات",ws.commitments.length,"▤"]]){const item=el("div",null,"admin-metric");item.append(el("span",sym,"admin-metric-icon"),el("strong",val.toLocaleString("fa-IR")),el("small",label));overview.append(item)}
+  content.append(overview);
+  const report=el("section",null,"card report-card");report.append(el("h3","گزارش وضعیت فضای کاری"));
   const done=(ws.tasks||[]).filter(x=>x.status==="done").length;
-  report.append(makeRow("پیشرفت وظایف",(ws.tasks.length?Math.round(done/ws.tasks.length*100):0).toLocaleString("fa-IR")+"٪ — "+done+" از "+ws.tasks.length));
+  report.append(makeRow("پیشرفت وظایف",(ws.tasks.length?Math.round(done/ws.tasks.length*100):0).toLocaleString("fa-IR")+"٪ — "+done+" از "+ws.tasks.length));const track=el("div",null,"progress-track"),fill=el("div");fill.style.width=(ws.tasks.length?Math.round(done/ws.tasks.length*100):0)+"%";track.append(fill);report.append(track);
   report.append(makeRow("جلسات ثبت‌شده",String(ws.events.length)));
   report.append(makeRow("تعهدات تکمیل‌شده",String(ws.commitments.filter(x=>x.status==="completed").length)+" از "+ws.commitments.length));
   if(["owner","admin"].includes(ws.workspace.role)){
