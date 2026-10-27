@@ -110,6 +110,7 @@ async function renderWorkspace(){
     else for(const item of rows){const label=item.title||item.description||"",detail=item.status||item.starts_at||(item.amount_minor!=null?Number(item.amount_minor).toLocaleString("fa-IR")+" ریال":"");
       const row=makeRow(label,detail);if(action==="createTask"&&edit){const change=el("select",null,"op-select");for(const [code,title] of [["todo","انجام‌نشده"],["doing","در جریان"],["done","تکمیل"]]){const o=el("option",title);o.value=code;o.selected=item.status===code;change.append(o)}change.addEventListener("change",async()=>{try{await api("taskStatus",{workspaceId:opState.id,id:item.id,status:change.value});await renderWorkspace()}catch(e){alert(e.message)}});row.append(change)}card.append(row)}
     if(edit&&(action!=="createExpense"||manager))card.append(detailsForm("＋ افزودن",fields,async x=>{const input={...x,workspaceId:opState.id};if(action==="createExpense")input.amountMinor=Number(x.amountMinor);await api(action,input);await renderWorkspace()}));
+    if(action==="createEvent" && (ws.events||[]).length)card.append(button("افزودن جلسات به تقویم (ICS)",()=>downloadCalendar(ws.events),"action outline"));
     content.append(card);
   }
   const library=el("section",null,"card");library.append(el("h3","کتابخانه اسناد و مدارک"));
@@ -252,4 +253,17 @@ async function showPlanAdmin(){
   for(const item of result.entitlements||[])assigned.append(makeRow(item.workspace_name,item.plan_id));
   content.append(box,assigned);
  }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+function downloadCalendar(events){
+ const safe=value=>String(value||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+ const toUTC=str=>{const date=new Date(str);return Number.isNaN(date.getTime())?null:date.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z")};
+ const dateStamp=toUTC(new Date().toISOString());
+ const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Candidatory//Calendar//FA","CALSCALE:GREGORIAN"];
+ for(const evt of events){const start=toUTC(evt.starts_at);if(!start)continue;
+  lines.push("BEGIN:VEVENT","UID:"+safe(evt.id)+"@candidatory.local","DTSTAMP:"+dateStamp,"DTSTART:"+start,"SUMMARY:"+safe(evt.title),"LOCATION:"+safe(evt.location),"DESCRIPTION:"+safe(evt.description),"END:VEVENT");
+ }
+ lines.push("END:VCALENDAR");
+ const blob=new Blob([lines.join("\r\n")+"\r\n"],{type:"text/calendar;charset=utf-8"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="candidatory-events.ics";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
