@@ -39,6 +39,14 @@ async function renderWorkspace(){
     if(edit&&(action!=="createExpense"||manager))card.append(detailsForm("＋ افزودن",fields,async x=>{const input={...x,workspaceId:opState.id};if(action==="createExpense")input.amountMinor=Number(x.amountMinor);await api(action,input);await renderWorkspace()}));
     content.append(card);
   }
+  const docs=el("section",null,"card");docs.append(el("h3","محتوا و گردش تأیید"));
+  if(!ws.drafts?.length)docs.append(el("p","هیچ پیش‌نویسی ثبت نشده است."));
+  for(const draft of ws.drafts||[]){const row=makeRow(draft.title,draft.status+" — "+(draft.body||"").slice(0,85));
+    if(edit){const sel=el("select",null,"op-select");for(const [value,label] of [["draft","پیش‌نویس"],["review","نیازمند بررسی"],["approved","تأییدشده"],["rejected","ردشده"]]){if(!manager&&["approved","rejected"].includes(value))continue;const opt=el("option",label);opt.value=value;opt.selected=draft.status===value;sel.append(opt)}
+    sel.addEventListener("change",async()=>{try{await api("draftStatus",{workspaceId:opState.id,id:draft.id,status:sel.value});await renderWorkspace()}catch(e){alert(e.message)}});row.append(sel)}
+    docs.append(row)}
+  if(edit)docs.append(detailsForm("＋ مطلب جدید",[["title","عنوان مطلب","text"],["body","متن مطلب","text"]],async x=>{await api("createDraft",{workspaceId:opState.id,...x});await renderWorkspace()}));
+  content.append(docs);
   if(manager){
     const members=el("section",null,"card");members.append(el("h3","اعضای تیم"));
     for(const member of ws.members||[])members.append(makeRow(member.display_name||String(member.telegram_id),member.role+" / "+member.status));
