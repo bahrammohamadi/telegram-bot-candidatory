@@ -4,6 +4,7 @@ const initData=tg?.initData||"";
 const endpoint=document.querySelector('meta[name="miniapp-api"]')?.content||"/";
 const content=document.getElementById("content"),inner=document.getElementById("inner-panel"),homepage=document.getElementById("home-panel"),featured=document.getElementById("featured-lessons");
 let state={lessons:[],quizzes:[],attempts:[],completed:[],bookmarks:[],dailyGoal:1},tab="home",searchTerm="";
+function GenCopyId(id){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(String(id)).then(()=>alert("شناسه کپی شد")).catch(()=>alert(String(id)));else alert(String(id))}
 function el(tag,text,cls){const x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined&&text!==null)x.textContent=String(text);return x}
 function clear(node=content){node.replaceChildren()}
 function button(text,fn,cls="action"){const b=el("button",text,cls);b.type="button";b.addEventListener("click",fn);return b}
@@ -30,7 +31,7 @@ const badgeRow=el("div",null,"badge-grid");
 badges.forEach(b=>{const x=el("div",null,state.completed.length>=b.threshold?"earned":"locked");x.append(el("span",state.completed.length>=b.threshold?"🏅":"🔒"),el("small",b.title));badgeRow.append(x)});
 achievement.append(badgeRow);section.append(achievement);
 if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
-if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));content.append(c);
+if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));if(state.user?.id){c.append(el("p","شناسه تلگرام شما: "+String(state.user.id)));c.append(button("کپی شناسه تلگرام",()=>GenCopyId(state.user.id),"action outline"))}content.append(c);
 const saved=el("article",null,"card");saved.append(el("h3","درس‌های نشان‌شده"));
 if(!state.bookmarks.length)saved.append(el("p","هنوز درسی نشان نکرده‌اید."));
 else for(const lesson of state.lessons.filter(x=>state.bookmarks.includes(x.id)))saved.append(button("★ "+lesson.title,()=>openLesson(lesson.id),"action outline"));
