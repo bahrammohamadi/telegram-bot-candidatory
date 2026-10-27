@@ -64,7 +64,7 @@ async function renderWorkspace(){
       ["فضاهای کاری","مدیریت تیم‌ها","▦",showPlatformSpaces],
       ["آمار سامانه","گزارش کلی","▥",async()=>{const r=await api("platformSummary");const c=el("section",null,"card");c.append(el("h3","آمار سامانه"));for(const [k,v] of [["کاربران",r.summary.users],["فضاهای کاری",r.summary.workspaces],["درس‌های منتشرشده",r.summary.lessons]])c.append(makeRow(k,Number(v).toLocaleString("fa-IR")));content.prepend(c)}]
     ]){const tile=button("",()=>Promise.resolve(fn()).catch(e=>alert(e.message)),"admin-tool");tile.append(el("span",symbol,"admin-tool-icon"),el("strong",title),el("small",detail));tools.append(tile)}
-    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);
+    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));
   }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
@@ -101,6 +101,19 @@ async function renderWorkspace(){
     if(edit&&(action!=="createExpense"||manager))card.append(detailsForm("＋ افزودن",fields,async x=>{const input={...x,workspaceId:opState.id};if(action==="createExpense")input.amountMinor=Number(x.amountMinor);await api(action,input);await renderWorkspace()}));
     content.append(card);
   }
+  const library=el("section",null,"card");library.append(el("h3","کتابخانه اسناد و مدارک"));
+  if(!ws.documents?.length)library.append(el("p","هنوز سندی ثبت نشده است."));
+  for(const doc of ws.documents||[]){const row=makeRow(doc.title,doc.category+" • "+(doc.visibility==="managers"?"فقط مدیران":"اعضای تیم"));
+    const open=button("مشاهده سند",()=>{try{const url=new URL(doc.source_url);if(url.protocol==="https:")window.open(url.href,"_blank","noopener,noreferrer")}catch{alert("لینک نامعتبر است")}},"action outline");row.append(open);
+    if(manager)row.append(button("حذف پیوند",async()=>{if(!confirm("پیوند این سند حذف شود؟"))return;try{await api("deleteDocument",{workspaceId:opState.id,id:doc.id});await renderWorkspace()}catch(e){alert(e.message)}},"action outline"));
+    library.append(row)}
+  if(edit)library.append(detailsForm("＋ ثبت لینک سند",[["title","عنوان سند","text"],["category","گروه سند","text"],["sourceUrl","آدرس امن HTTPS","url"],["visibility","دسترسی","select",manager?[["members","اعضا"],["managers","فقط مدیران"]]:[["members","اعضا"]]]],async x=>{await api("createDocument",{workspaceId:opState.id,...x});await renderWorkspace()}));
+  content.append(library);
+  const notices=el("section",null,"card");notices.append(el("h3","اطلاعیه‌های داخلی"));
+  if(!ws.notices?.length)notices.append(el("p","اطلاعیه‌ای ثبت نشده است."));
+  for(const item of ws.notices||[])notices.append(makeRow(item.title,item.body));
+  if(manager)notices.append(detailsForm("＋ اطلاعیه جدید",[["title","عنوان اطلاعیه","text"],["body","متن اطلاعیه","textarea"]],async x=>{await api("createNotice",{workspaceId:opState.id,...x});await renderWorkspace()}));
+  content.append(notices);
   const docs=el("section",null,"card");docs.append(el("h3","محتوا و گردش تأیید"));
   if(!ws.drafts?.length)docs.append(el("p","هیچ پیش‌نویسی ثبت نشده است."));
   for(const draft of ws.drafts||[]){const row=makeRow(draft.title,draft.status+" — "+(draft.body||"").slice(0,85));
@@ -161,4 +174,23 @@ async function showPlatformQuizzes(){
  }
  content.append(box);
  }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+async function showPrivacyAdmin(){
+  clear();content.append(el("div","در حال بارگذاری درخواست‌ها…","loading"));
+  try{
+    const result=await api("adminPrivacyQueue");
+    clear();content.append(button("← بازگشت به مدیریت",renderWorkspace,"back"));
+    const card=el("section",null,"card");card.append(el("h3","درخواست‌های حریم خصوصی"));
+    if(!result.requests?.length)card.append(el("p","درخواستی ثبت نشده است."));
+    for(const req of result.requests||[]){
+      const row=makeRow(req.request_type+" — "+req.telegram_id,req.status+" · "+req.created_at);
+      const select=el("select",null,"op-select");
+      for(const [value,label] of [["pending","در انتظار"],["reviewing","در بررسی"],["rejected","ردشده"]]){
+        const opt=el("option",label);opt.value=value;opt.selected=value===req.status;select.append(opt)}
+      select.addEventListener("change",async()=>{try{await api("adminPrivacyStatus",{requestId:req.id,status:select.value});await showPrivacyAdmin()}catch(e){alert(e.message)}});
+      row.append(select);card.append(row);
+    }
+    content.append(card);
+  }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
