@@ -32,6 +32,33 @@ async function logChange(db,id,workspace,action,kind,record){
 }
 async function handleOps(action,payload,db,user,env){
  const uid=user.id;
+ if(action==="createSupportTicket"){
+   const subject=clean(payload.subject,200),message=clean(payload.message,3000);
+   if(subject.length<3||message.length<5)return {error:"Invalid ticket",status:400};
+   const count=await db.prepare("SELECT COUNT(*) AS n FROM support_tickets WHERE telegram_id=? AND status IN ('open','reviewing')").bind(uid).first();
+   if(count.n>=5)return {error:"Too many open tickets",status:429};
+   const ticket=crypto.randomUUID();
+   await db.prepare("INSERT INTO support_tickets(id,telegram_id,subject,message) VALUES(?,?,?,?)").bind(ticket,uid,subject,message).run();
+   return {saved:true,id:ticket};
+ }
+ if(action==="mySupportTickets"){
+   const r=await db.prepare("SELECT id,subject,message,status,admin_reply,created_at,updated_at FROM support_tickets WHERE telegram_id=? ORDER BY created_at DESC LIMIT 50").bind(uid).all();
+   return {tickets:r.results};
+ }
+ if(action==="adminSupportQueue"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const r=await db.prepare("SELECT id,telegram_id,subject,message,status,admin_reply,created_at FROM support_tickets ORDER BY created_at DESC LIMIT 100").all();
+   return {tickets:r.results};
+ }
+ if(action==="adminReplyTicket"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const ticket=clean(payload.ticketId,64),status=clean(payload.status,16),reply=clean(payload.reply,3000);
+   if(!["open","reviewing","resolved","closed"].includes(status))return {error:"Invalid status",status:400};
+   const r=await db.prepare("UPDATE support_tickets SET status=?,admin_reply=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(status,reply,ticket).run();
+   if(!r.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,"reply","support",ticket);
+   return {saved:true};
+ }
  if(action==="myPrivacy"){
    const requests=await db.prepare("SELECT id,request_type,status,created_at FROM privacy_requests WHERE telegram_id=? ORDER BY created_at DESC LIMIT 30").bind(uid).all();
    return {requests:requests.results};
@@ -344,7 +371,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
