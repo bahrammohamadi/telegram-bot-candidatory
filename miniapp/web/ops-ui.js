@@ -34,7 +34,7 @@ async function renderWorkspace(){
   if(opState.list.length){const select=el("select",null,"op-select");for(const w of opState.list){const opt=el("option",w.name+" — "+w.role);opt.value=w.id;opt.selected=w.id===opState.id;select.append(opt)}select.addEventListener("change",()=>{opState.id=select.value;renderWorkspace()});head.append(select)}
   head.append(detailsForm("＋ ایجاد فضای کاری",[["name","نام فضای کاری","text"],["jurisdiction","حوزه فعالیت","text"]],async x=>{await api("createWorkspace",x);opState.id=null;await renderWorkspace()}));
   content.append(head);
-  if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
+  if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
   if(!ws){content.append(empty("برای شروع، یک فضای کاری ایجاد کنید."));return}
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
@@ -90,5 +90,24 @@ async function showPlatformCms(){
   row.append(edit);panel.append(row);
  }
  content.append(panel);
+ }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+async function showPlatformQuizzes(){
+ clear();content.append(el("div","در حال دریافت آزمون‌ها…","loading"));
+ try{const result=await api("adminLessons");clear();content.append(button("← بازگشت",renderWorkspace,"back"));
+ const box=el("section",null,"card");box.append(el("h3","مدیریت بانک آزمون‌ها"));
+ box.append(detailsForm("＋ ساخت آزمون",[["title","عنوان آزمون","text"],["description","شرح","text"]],async values=>{await api("adminCreateQuiz",values);await showPlatformQuizzes()}));
+ for(const quiz of result.quizzes||[]){
+  const row=makeRow(quiz.title,quiz.published?"منتشر شده":"پیش‌نویس");
+  row.append(button(quiz.published?"توقف انتشار":"انتشار",async()=>{try{await api("adminPublishQuiz",{id:quiz.id,published:!quiz.published});await showPlatformQuizzes()}catch(e){alert(e.message)}},"action outline"));
+  if(!quiz.published)row.append(detailsForm("＋ افزودن سؤال",[["prompt","متن سؤال","textarea"],["options","گزینه‌ها؛ هر گزینه یک خط","textarea"],["correct","شماره گزینه صحیح (از ۱)","number"]],async values=>{
+    const options=values.options.split("\n").map(x=>x.trim()).filter(Boolean);
+    await api("adminAddQuestion",{quizId:quiz.id,prompt:values.prompt,options,correctIndex:Number(values.correct)-1});
+    await showPlatformQuizzes();
+  }));
+  box.append(row);
+ }
+ content.append(box);
  }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
