@@ -54,7 +54,55 @@ function fail(err){clear();content.append(el("div",err.message||"خطا در د�
 function setMain(next){tab=next;homepage.hidden=tab!=="home";inner.hidden=tab==="home";document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));if(tab==="home")renderHome();else render()}
 function card(title,description,buttonText,fn,number,completed){const article=el("article",null,"card");const head=el("div",null,"card-head");head.append(el("h3",title));head.append(el("span",completed?"✓":String(number||"✦"),"mini-icon"));article.append(head,el("p",description||""));if(buttonText)article.append(button(buttonText,fn,completed?"action outline":"action"));return article}
 async function api(action,details={}){if(!initData)throw Error("برنامه را از منوی ربات در تلگرام باز کنید.");const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,initData,...details})});let data;try{data=await r.json()}catch{throw Error("پاسخ سرور قابل خواندن نیست.")}if(!r.ok)throw Error(data.error==="Unauthorized"?"نشست تلگرام معتبر نیست؛ برنامه را ببندید و دوباره باز کنید.":data.error||"خطای ارتباط");return data}
-function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume()}
+const launcherApps=[
+  {id:"lessons",label:"آموزش‌ها",icon:"📚",theme:"aqua",hint:"دوره و مطالعه"},
+  {id:"quizzes",label:"آزمون‌ها",icon:"📝",theme:"violet",hint:"پرسش و نتیجه"},
+  {id:"readiness",label:"خودارزیابی",icon:"🎯",theme:"coral",hint:"سنجش آمادگی"},
+  {id:"ai",label:"دستیار هوشمند",icon:"✦",theme:"indigo",hint:"پرسش از AI"},
+  {id:"progress",label:"پیشرفت من",icon:"📊",theme:"blue",hint:"هدف و گزارش"},
+  {id:"bookmarks",label:"ذخیره‌شده‌ها",icon:"🔖",theme:"amber",hint:"درس‌های منتخب"},
+  {id:"tasks",label:"وظایف",icon:"✅",theme:"green",hint:"پیگیری کارها",workspace:true},
+  {id:"events",label:"جلسات",icon:"📅",theme:"blue",hint:"رویداد و تقویم",workspace:true},
+  {id:"members",label:"تیم من",icon:"👥",theme:"violet",hint:"اعضا و دعوت",workspace:true},
+  {id:"commitments",label:"برنامه‌ها",icon:"📋",theme:"aqua",hint:"پیگیری تعهدات",workspace:true},
+  {id:"documents",label:"اسناد",icon:"📁",theme:"amber",hint:"بایگانی مدارک",workspace:true},
+  {id:"expenses",label:"هزینه‌ها",icon:"💳",theme:"coral",hint:"دفتر مالی",workspace:true},
+  {id:"notices",label:"اطلاعیه‌ها",icon:"📣",theme:"indigo",hint:"اعلان‌های تیم",workspace:true},
+  {id:"reports",label:"گزارش‌ها",icon:"📈",theme:"green",hint:"خروجی عملکرد",workspace:true},
+  {id:"support",label:"پشتیبانی",icon:"💬",theme:"blue",hint:"ثبت درخواست"},
+  {id:"profile",label:"حساب من",icon:"👤",theme:"aqua",hint:"حریم خصوصی"}
+];
+function openLauncher(id){
+  const app=launcherApps.find(x=>x.id===id);if(!app)return;
+  tg?.HapticFeedback?.selectionChanged?.();
+  if(app.workspace){
+    if(typeof opState!=="undefined")opState.focusTool=id;
+    setMain("workspace");return;
+  }
+  if(id==="readiness"){openReadiness();return}
+  if(id==="ai"){openStudyAssistant();return}
+  if(id==="bookmarks"){
+    setMain("profile");
+    document.querySelector(".saved-lessons")?.scrollIntoView({block:"center",behavior:"smooth"});return;
+  }
+  if(id==="support"){
+    setMain("profile");
+    document.querySelector(".support-center")?.scrollIntoView({block:"center",behavior:"smooth"});return;
+  }
+  setMain(id);
+}
+function renderLauncher(){
+  const root=document.getElementById("app-launcher");if(!root)return;
+  root.replaceChildren();
+  for(const app of launcherApps){
+    const tile=el("button",null,"launcher-app");tile.type="button";tile.dataset.tool=app.id;
+    const icon=el("span",app.icon,"launcher-icon theme-"+app.theme);
+    const label=el("strong",app.label),hint=el("small",app.hint);
+    tile.append(icon,label,hint);
+    tile.addEventListener("click",()=>openLauncher(app.id));root.append(tile);
+  }
+}
+function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher()}
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل",workspace:"مدیریت"})[tab]||"آموزش‌ها";
 if(tab==="workspace"){renderWorkspace();return}
 if(tab==="lessons"){const list=el("div",null,"cards");for(const x of state.lessons)list.append(card(x.title,x.summary,"مطالعه درس",()=>openLesson(x.id),x.position,state.completed.includes(x.id)));content.append(state.lessons.length?list:empty("هنوز آموزشی منتشر نشده است."));return}
@@ -80,7 +128,7 @@ const assistantCard=el("article",null,"card");assistantCard.append(el("h3","دس
 assistantCard.append(button("گفت‌وگو با دستیار آموزشی",openStudyAssistant,"action"));section.append(assistantCard);
 if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
 if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));if(state.user?.id){c.append(el("p","شناسه تلگرام شما: "+String(state.user.id)));c.append(button("کپی شناسه تلگرام",()=>GenCopyId(state.user.id),"action outline"))}content.append(c);
-const saved=el("article",null,"card");saved.append(el("h3","درس‌های نشان‌شده"));
+const saved=el("article",null,"card saved-lessons");saved.append(el("h3","درس‌های نشان‌شده"));
 if(!state.bookmarks.length)saved.append(el("p","هنوز درسی نشان نکرده‌اید."));
 else for(const lesson of state.lessons.filter(x=>state.bookmarks.includes(x.id)))saved.append(button("★ "+lesson.title,()=>openLesson(lesson.id),"action outline"));
 content.append(saved);
@@ -98,7 +146,7 @@ const request=button("ثبت درخواست حریم خصوصی",async()=>{
  }catch(e){alert(e.message)}
 },"action outline");privacy.append(request);
 content.append(privacy);if(!state.limitedAccess)showMyPrivacy(privacy);
-const support=el("section",null,"card");support.append(el("h3","پشتیبانی و راهنمایی"),el("p","برای پیگیری سؤال فنی یا گزارش مشکل، درخواست پشتیبانی ثبت کنید."));
+const support=el("section",null,"card support-center");support.append(el("h3","پشتیبانی و راهنمایی"),el("p","برای پیگیری سؤال فنی یا گزارش مشکل، درخواست پشتیبانی ثبت کنید."));
 const details=el("details"),summary=el("summary","＋ درخواست جدید"),form=el("form");
 const subject=el("input");subject.placeholder="عنوان درخواست";subject.minLength=3;subject.maxLength=200;subject.required=true;subject.className="notes-input";
 const message=el("textarea",null,"notes-input");message.placeholder="شرح مشکل یا سؤال";message.rows=4;message.minLength=5;message.maxLength=3000;message.required=true;
