@@ -64,7 +64,7 @@ async function renderWorkspace(){
       ["فضاهای کاری","مدیریت تیم‌ها","▦",showPlatformSpaces],
       ["آمار سامانه","گزارش کلی","▥",async()=>{const r=await api("platformSummary");const c=el("section",null,"card");c.append(el("h3","آمار سامانه"));for(const [k,v] of [["کاربران",r.summary.users],["فضاهای کاری",r.summary.workspaces],["درس‌های منتشرشده",r.summary.lessons]])c.append(makeRow(k,Number(v).toLocaleString("fa-IR")));content.prepend(c)}]
     ]){const tile=button("",()=>Promise.resolve(fn()).catch(e=>alert(e.message)),"admin-tool");tile.append(el("span",symbol,"admin-tool-icon"),el("strong",title),el("small",detail));tools.append(tile)}
-    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));
+    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));
   }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
@@ -208,4 +208,25 @@ function saveCSV(rows,filename){
   const csv="\uFEFF"+rows.map(row=>row.map(escape).join(",")).join("\r\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+async function showAdminSupport(){
+ clear();content.append(el("div","در حال بارگذاری پشتیبانی…","loading"));
+ try{
+  const result=await api("adminSupportQueue");clear();content.append(button("← بازگشت به مدیریت",renderWorkspace,"back"));
+  const panel=el("section",null,"card");panel.append(el("h3","درخواست‌های پشتیبانی"));
+  if(!result.tickets?.length)panel.append(el("p","درخواستی ثبت نشده است."));
+  for(const item of result.tickets||[]){
+   const row=makeRow(item.subject,"شناسه کاربر: "+item.telegram_id+" • "+item.status);
+   row.append(el("p",item.message));
+   const response=el("textarea",null,"notes-input");response.rows=3;response.value=item.admin_reply||"";response.placeholder="پاسخ پشتیبانی";response.maxLength=3000;row.append(response);
+   const select=el("select",null,"op-select");
+   for(const [value,title] of [["open","باز"],["reviewing","در بررسی"],["resolved","پاسخ داده‌شده"],["closed","بسته"]]){
+    const option=el("option",title);option.value=value;option.selected=value===item.status;select.append(option)
+   }
+   row.append(select,button("ثبت پاسخ",async()=>{try{await api("adminReplyTicket",{ticketId:item.id,status:select.value,reply:response.value});await showAdminSupport()}catch(e){alert(e.message)}},"action"));
+   panel.append(row);
+  }
+  content.append(panel);
+ }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
