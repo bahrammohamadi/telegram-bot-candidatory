@@ -4,6 +4,40 @@ const initData=tg?.initData||"";
 const endpoint=document.querySelector('meta[name="miniapp-api"]')?.content||"/";
 const content=document.getElementById("content"),inner=document.getElementById("inner-panel"),homepage=document.getElementById("home-panel"),featured=document.getElementById("featured-lessons");
 let state={lessons:[],quizzes:[],attempts:[],completed:[],bookmarks:[],dailyGoal:1},tab="home",searchTerm="";
+// UI state is local-only; authentication and permissions stay on the Worker.
+let toastTimer;
+function notify(message,type="success"){
+ const node=document.getElementById("app-toast");if(!node)return;
+ node.textContent=String(message);node.dataset.type=type;node.hidden=false;
+ clearTimeout(toastTimer);toastTimer=setTimeout(()=>{node.hidden=true},3500);
+}
+function applyTheme(next){
+ const theme=next==="dark"?"dark":"light";
+ document.documentElement.dataset.theme=theme;
+ const toggle=document.getElementById("theme-toggle");
+ if(toggle){toggle.textContent=theme==="dark"?"☀":"☾";toggle.setAttribute("aria-label",theme==="dark"?"فعال‌سازی حالت روشن":"فعال‌سازی حالت تیره")}
+ document.querySelector('meta[name="theme-color"]')?.setAttribute("content",theme==="dark"?"#101f26":"#057f83");
+ try{localStorage.setItem("candidatory-theme",theme)}catch{}
+}
+function setupUiControls(){
+ let current;try{current=localStorage.getItem("candidatory-theme")}catch{}
+ applyTheme(current==="dark"||current==="light"?current:tg?.colorScheme==="dark"?"dark":"light");
+ document.getElementById("theme-toggle")?.addEventListener("click",()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark"));
+ document.getElementById("reload-app")?.addEventListener("click",async()=>{await home();notify("اطلاعات برنامه به‌روزرسانی شد.")});
+ tg?.onEvent?.("themeChanged",()=>{let saved;try{saved=localStorage.getItem("candidatory-theme")}catch{}if(!saved)applyTheme(tg?.colorScheme)});
+}
+function renderResume(){
+ const root=document.getElementById("learning-resume");if(!root)return;root.replaceChildren();
+ const count=state.lessons.length,done=state.completed.length;
+ if(!count)return;
+ const pct=Math.round(done/count*100);
+ const target=state.lessons.find(x=>!state.completed.includes(x.id));
+ const container=el("div",null,"resume-card");
+ const dial=el("div",null,"resume-dial");dial.style.setProperty("--pct",pct);dial.append(el("strong",pct.toLocaleString("fa-IR")+"٪"));
+ const info=el("div",null,"resume-info");info.append(el("small",target?"درس بعدی شما":"مسیر یادگیری کامل شد"),el("strong",target?target.title:"تمام درس‌ها را به پایان رسانده‌اید."));
+ info.append(button(target?"ادامه مطالعه ←":"مشاهده پیشرفت",()=>target?openLesson(target.id):setMain("progress"),"action"));
+ container.append(dial,info);root.append(container);
+}
 function saveJsonFile(data,filename){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 async function showMyPrivacy(target){try{const result=await api("myPrivacy");let list=target.querySelector(".privacy-list");if(!list){list=el("div",null,"privacy-list");target.append(list)}clear(list);for(const item of result.requests||[])list.append(el("p",item.request_type+" — "+item.status+" — "+item.created_at,"meta"))}catch(e){target.append(el("p","دریافت وضعیت درخواست‌ها ممکن نشد.","meta"))}}
 async function showSupportTickets(container){
@@ -20,7 +54,7 @@ function fail(err){clear();content.append(el("div",err.message||"خطا در د�
 function setMain(next){tab=next;homepage.hidden=tab!=="home";inner.hidden=tab==="home";document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));if(tab==="home")renderHome();else render()}
 function card(title,description,buttonText,fn,number,completed){const article=el("article",null,"card");const head=el("div",null,"card-head");head.append(el("h3",title));head.append(el("span",completed?"✓":String(number||"✦"),"mini-icon"));article.append(head,el("p",description||""));if(buttonText)article.append(button(buttonText,fn,completed?"action outline":"action"));return article}
 async function api(action,details={}){if(!initData)throw Error("برنامه را از منوی ربات در تلگرام باز کنید.");const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,initData,...details})});let data;try{data=await r.json()}catch{throw Error("پاسخ سرور قابل خواندن نیست.")}if(!r.ok)throw Error(data.error==="Unauthorized"?"نشست تلگرام معتبر نیست؛ برنامه را ببندید و دوباره باز کنید.":data.error||"خطای ارتباط");return data}
-function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."))}
+function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume()}
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل",workspace:"مدیریت"})[tab]||"آموزش‌ها";
 if(tab==="workspace"){renderWorkspace();return}
 if(tab==="lessons"){const list=el("div",null,"cards");for(const x of state.lessons)list.append(card(x.title,x.summary,"مطالعه درس",()=>openLesson(x.id),x.position,state.completed.includes(x.id)));content.append(state.lessons.length?list:empty("هنوز آموزشی منتشر نشده است."));return}
@@ -75,17 +109,17 @@ content.append(support);if(!state.limitedAccess)showSupportTickets(support);
 }
 }
 async function home(){try{let data;try{data=await api("home")}catch(authError){const result=await fetch("/api/catalog",{cache:"no-store"});if(!result.ok)throw authError;const catalog=await result.json();data={...catalog,attempts:[],completed:[],bookmarks:[],dailyGoal:1,user:{name:""},limitedAccess:true}}state={lessons:data.lessons||[],quizzes:data.quizzes||[],attempts:data.attempts||[],completed:data.completed||[],user:data.user,limitedAccess:!!data.limitedAccess,bookmarks:data.bookmarks||[],dailyGoal:data.dailyGoal||1};document.getElementById("hello").textContent="سلام"+(data.user?.name?"، "+data.user.name:"")+" 👋";setMain(tab)}catch(e){homepage.hidden=true;inner.hidden=false;tab="lessons";fail(e);document.getElementById("inner-heading").querySelector("h2").textContent="خطا در بارگذاری اطلاعات";content.prepend(button("تلاش دوباره",home,"action"));}}
-async function openLesson(id){setMain("lessons");clear();content.append(el("div","در حال بارگذاری…","loading"));try{const {lesson}=state.limitedAccess?await (await fetch("/api/lesson/"+id)).json():await api("lesson",{id});if(!lesson)throw Error("درس پیدا نشد.");clear();content.append(button("← بازگشت به آموزش‌ها",()=>setMain("lessons"),"back"));const c=el("article",null,"card");c.append(el("h3",lesson.title),el("p",lesson.summary),el("div",lesson.body,"body-text"));const done=state.completed.includes(id),mark=button(done?"✓ این درس تکمیل شده":"✓ پایان مطالعه و ثبت پیشرفت",async()=>{mark.disabled=true;try{await api("completeLesson",{id});if(!state.completed.includes(id))state.completed.push(id);mark.textContent="✓ این درس تکمیل شده";tg?.HapticFeedback?.notificationOccurred("success")}catch(e){mark.disabled=false;alert(e.message)}});mark.disabled=done||state.limitedAccess;if(state.limitedAccess)mark.textContent="ثبت پیشرفت نیازمند ورود معتبر تلگرام است";c.append(mark);
+async function openLesson(id){setMain("lessons");clear();content.append(el("div","در حال بارگذاری…","loading"));try{const {lesson}=state.limitedAccess?await (await fetch("/api/lesson/"+id)).json():await api("lesson",{id});if(!lesson)throw Error("درس پیدا نشد.");clear();content.append(button("← بازگشت به آموزش‌ها",()=>setMain("lessons"),"back"));const c=el("article",null,"card");c.append(el("h3",lesson.title),el("p",lesson.summary),el("div",lesson.body,"body-text"));const done=state.completed.includes(id),mark=button(done?"✓ این درس تکمیل شده":"✓ پایان مطالعه و ثبت پیشرفت",async()=>{mark.disabled=true;try{await api("completeLesson",{id});if(!state.completed.includes(id))state.completed.push(id);mark.textContent="✓ این درس تکمیل شده";notify("پیشرفت مطالعه ثبت شد.");tg?.HapticFeedback?.notificationOccurred("success")}catch(e){mark.disabled=false;alert(e.message)}});mark.disabled=done||state.limitedAccess;if(state.limitedAccess)mark.textContent="ثبت پیشرفت نیازمند ورود معتبر تلگرام است";c.append(mark);
 const isSaved=state.bookmarks.includes(id);
 const bookmarkBtn=button(isSaved?"★ حذف از علاقه‌مندی‌ها":"☆ نشان‌کردن درس",async()=>{
  if(state.limitedAccess)return alert("برای ثبت علاقه‌مندی وارد تلگرام شوید.");
  bookmarkBtn.disabled=true;const newValue=!state.bookmarks.includes(id);
- try{await api("bookmark",{id,enabled:newValue});state.bookmarks=newValue?[...state.bookmarks,id]:state.bookmarks.filter(x=>x!==id);bookmarkBtn.textContent=newValue?"★ حذف از علاقه‌مندی‌ها":"☆ نشان‌کردن درس"}catch(e){alert(e.message)}finally{bookmarkBtn.disabled=false}
+ try{await api("bookmark",{id,enabled:newValue});state.bookmarks=newValue?[...state.bookmarks,id]:state.bookmarks.filter(x=>x!==id);bookmarkBtn.textContent=newValue?"★ حذف از علاقه‌مندی‌ها":"☆ نشان‌کردن درس";notify(newValue?"درس به علاقه‌مندی‌ها اضافه شد.":"درس از علاقه‌مندی‌ها حذف شد.")}catch(e){alert(e.message)}finally{bookmarkBtn.disabled=false}
 },"action outline");c.append(bookmarkBtn);
 const noteLabel=el("h3","یادداشت شخصی من");c.append(noteLabel);
 const notes=el("textarea",null,"notes-input");notes.placeholder="نکات مهمی که می‌خواهید به خاطر بسپارید…";notes.maxLength=2000;notes.rows=4;notes.disabled=state.limitedAccess;c.append(notes);
 if(!state.limitedAccess){api("note",{id}).then(x=>{notes.value=x.note||""}).catch(()=>{notes.placeholder="بارگذاری یادداشت انجام نشد"});}
-const save=button("ذخیره یادداشت",async()=>{save.disabled=true;try{await api("note",{id,note:notes.value});save.textContent="✓ ذخیره شد"}catch(e){alert(e.message)}finally{save.disabled=false}},"action outline");save.disabled=state.limitedAccess;c.append(save);
+const save=button("ذخیره یادداشت",async()=>{save.disabled=true;try{await api("note",{id,note:notes.value});save.textContent="✓ ذخیره شد";notify("یادداشت خصوصی ذخیره شد.")}catch(e){alert(e.message)}finally{save.disabled=false}},"action outline");save.disabled=state.limitedAccess;c.append(save);
 content.append(c)}catch(e){fail(e)}}
 async function openStudyAssistant(){
  setMain("progress");clear();
@@ -189,4 +223,5 @@ document.querySelectorAll("[data-quick]").forEach(b=>b.addEventListener("click",
 document.querySelectorAll("[data-jump]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.jump)));
 document.getElementById("featured-start").addEventListener("click",()=>setMain("lessons"));
 document.getElementById("search").addEventListener("input",e=>{searchTerm=e.target.value.trim();renderHome()});
+setupUiControls();
 home();
