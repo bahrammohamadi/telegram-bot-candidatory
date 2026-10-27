@@ -190,6 +190,9 @@ async function handleOps(action,payload,db,user,env){
    if(!item)return {error:"Invitation not found or expired",status:404};
    const owner=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=?").bind(item.workspace_id,uid).first();
    if(owner?.role==="owner")return {error:"Already owner",status:409};
+   const ent=await db.prepare("SELECT p.max_members FROM workspace_entitlements e JOIN service_plans p ON p.id=e.plan_id WHERE e.workspace_id=? AND (e.expires_at IS NULL OR datetime(e.expires_at)>datetime('now'))").bind(item.workspace_id).first();
+   const count=await db.prepare("SELECT COUNT(*) AS n FROM workspace_members WHERE workspace_id=? AND status='active'").bind(item.workspace_id).first();
+   if(count.n>=(ent?.max_members||3))return {error:"Member limit reached",status:409};
    await db.batch([
     db.prepare("UPDATE workspace_invitations SET status='accepted' WHERE id=? AND invited_telegram_id=? AND status='pending'").bind(item.id,uid),
     db.prepare("INSERT INTO workspace_members(workspace_id,telegram_id,role) VALUES(?,?,?) ON CONFLICT(workspace_id,telegram_id) DO UPDATE SET role=excluded.role,status='active'").bind(item.workspace_id,uid,item.role)
