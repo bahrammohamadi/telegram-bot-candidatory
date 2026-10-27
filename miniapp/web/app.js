@@ -37,6 +37,11 @@ achievement.append(el("h3","نشان‌های یادگیری"));
 const badgeRow=el("div",null,"badge-grid");
 badges.forEach(b=>{const x=el("div",null,state.completed.length>=b.threshold?"earned":"locked");x.append(el("span",state.completed.length>=b.threshold?"🏅":"🔒"),el("small",b.title));badgeRow.append(x)});
 achievement.append(badgeRow);section.append(achievement);
+const readinessCard=el("article",null,"card");
+readinessCard.append(el("h3","خودارزیابی آمادگی فردی"),el("p","۶ سؤال درباره مقررات، شفافیت، برنامه‌ریزی، امنیت و پاسخ‌گویی. امتیاز، خوداظهاری آموزشی است و نتیجه انتخابات را پیش‌بینی نمی‌کند."));
+readinessCard.append(button("شروع خودارزیابی",openReadiness,"action"));
+if(!state.limitedAccess)readinessCard.append(button("سوابق ارزیابی",showReadinessHistory,"action outline"));
+section.append(readinessCard);
 if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
 if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));if(state.user?.id){c.append(el("p","شناسه تلگرام شما: "+String(state.user.id)));c.append(button("کپی شناسه تلگرام",()=>GenCopyId(state.user.id),"action outline"))}content.append(c);
 const saved=el("article",null,"card");saved.append(el("h3","درس‌های نشان‌شده"));
@@ -80,6 +85,47 @@ const notes=el("textarea",null,"notes-input");notes.placeholder="نکات مهم
 if(!state.limitedAccess){api("note",{id}).then(x=>{notes.value=x.note||""}).catch(()=>{notes.placeholder="بارگذاری یادداشت انجام نشد"});}
 const save=button("ذخیره یادداشت",async()=>{save.disabled=true;try{await api("note",{id,note:notes.value});save.textContent="✓ ذخیره شد"}catch(e){alert(e.message)}finally{save.disabled=false}},"action outline");save.disabled=state.limitedAccess;c.append(save);
 content.append(c)}catch(e){fail(e)}}
+async function openReadiness(){
+ setMain("progress");clear();content.append(el("div","در حال دریافت پرسش‌ها…","loading"));
+ try{
+  const result=await api("readinessQuestions");const questions=result.questions||[];
+  if(!questions.length)throw Error("پرسشنامه هنوز آماده نشده است.");
+  let index=0;const answers=Array(questions.length).fill(null);
+  function draw(){
+   clear();content.append(button("← بازگشت به پیشرفت",()=>setMain("progress"),"back"));
+   const pct=(index+1)/questions.length*100,track=el("div",null,"progress-track"),fill=el("div");fill.style.width=pct+"%";track.append(fill);
+   content.append(el("p","پرسش "+(index+1).toLocaleString("fa-IR")+" از "+questions.length.toLocaleString("fa-IR"),"meta"),track);
+   const q=questions[index],panel=el("section",null,"card quiz-question");panel.append(el("div",q.title,"quiz-topic"),el("h3",q.question));
+   q.options.forEach((label,n)=>{
+     const item=el("label",null,"option"),radio=el("input");radio.type="radio";radio.name="readiness";radio.value=String(n);radio.checked=answers[index]===n;
+     radio.addEventListener("change",()=>{answers[index]=n;next.disabled=false});
+     item.append(el("span",String.fromCharCode(65+n),"option-letter"),radio,document.createTextNode(label));panel.append(item);
+   });
+   content.append(panel);
+   const nav=el("div",null,"quiz-actions");
+   if(index>0)nav.append(button("قبلی",()=>{index--;draw()},"action outline"));
+   const next=button(index===questions.length-1?"ثبت خودارزیابی":"سؤال بعدی",async()=>{
+     if(answers[index]===null)return;
+     if(index<questions.length-1){index++;draw();return}
+     next.disabled=true;
+     try{const report=await api("submitReadiness",{answers});clear();
+       const c=el("section",null,"card");c.append(el("h3","نتیجه خودارزیابی"),el("p",report.score.toLocaleString("fa-IR")+" از "+report.maximum.toLocaleString("fa-IR")+" امتیاز"));
+       for(const item of report.sections||[])c.append(el("p",item.category+": "+item.score.toLocaleString("fa-IR")+" امتیاز"));
+       c.append(el("p",report.notice||"این یک ابزار خوداظهاری آموزشی است."));content.append(c,button("بازگشت به پیشرفت",()=>setMain("progress"),"action"));
+     }catch(e){next.disabled=false;alert(e.message)}
+   });next.disabled=answers[index]===null;nav.append(next);content.append(nav);
+  }draw();
+ }catch(e){fail(e)}
+}
+async function showReadinessHistory(){
+ clear();content.append(el("div","در حال دریافت سوابق…","loading"));
+ try{const r=await api("myReadiness");clear();content.append(button("← بازگشت به پیشرفت",()=>setMain("progress"),"back"));
+ const list=el("section",null,"card");list.append(el("h3","سوابق خودارزیابی"));
+ if(!r.results?.length)list.append(el("p","هنوز ارزیابی ثبت نشده است."));
+ for(const x of r.results||[])list.append(el("p",x.submitted_at+" — "+x.score+" از "+x.max_score));
+ content.append(list);
+ }catch(e){fail(e)}
+}
 async function openQuiz(id){
  setMain("quizzes");clear();content.append(el("div","در حال بارگذاری آزمون…","loading"));
  try{
