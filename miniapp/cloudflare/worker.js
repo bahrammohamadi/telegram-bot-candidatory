@@ -1,0 +1,77 @@
+// Candidatory Telegram Mini App API — Cloudflare Workers + D1
+// Telegram signed initData is authenticated on every request; no public D1 binding.
+const enc = new TextEncoder();
+function reply(value, status=200) { return new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-methods":"POST, OPTIONS","access-control-allow-headers":"content-type"}}); }
+async function verify(initData,token){
+ if(!token) throw new Error("NOT_CONFIGURED");
+ if(typeof initData!=="string"||initData.length>8192) throw new Error("UNAUTHORIZED");
+ const p=new URLSearchParams(initData),hash=p.get("hash")||"", ts=Number(p.get("auth_date"));
+ if(!/^[0-9a-f]{64}$/.test(hash)||!Number.isFinite(ts)||Math.abs(Date.now()/1000-ts)>3600) throw new Error("UNAUTHORIZED");
+ const data=[...p.entries()].filter(([k])=>k!=="hash"&&k!=="signature").sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+"="+v).join("\n");
+ const base=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const secret=await crypto.subtle.sign("HMAC",base,enc.encode(token));
+ const key=await crypto.subtle.importKey("raw",secret,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const signed=new Uint8Array(await crypto.subtle.sign("HMAC",key,enc.encode(data)));
+ const provided=new Uint8Array(hash.match(/../g).map(h=>parseInt(h,16)));
+ let diff=0;for(let i=0;i<32;i++)diff|=signed[i]^provided[i];
+ if(diff)throw new Error("UNAUTHORIZED");
+ let user;try{user=JSON.parse(p.get("user")||"null")}catch{throw new Error("UNAUTHORIZED")}
+ if(!user||!Number.isSafeInteger(user.id)||user.id<=0)throw new Error("UNAUTHORIZED");
+ return user;
+}
+const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0&&String(Number(v))===String(v);
+export default {
+ async fetch(request,env){
+  if(request.method==="OPTIONS")return reply({});
+  if(request.method!=="POST")return reply({error:"Method not allowed"},405);
+  if(Number(request.headers.get("content-length")||0)>16384)return reply({error:"Too large"},413);
+  if(!env.DB)return reply({error:"Service not configured"},503);
+  try{
+   const payload=await request.json();
+   const user=await verify(payload.initData,env.TELEGRAM_BOT_TOKEN);
+   const id=user.id, bucket=Math.floor(Date.now()/60000);
+   const rl=await env.DB.prepare("INSERT INTO request_limits(telegram_id,window_bucket,request_count) VALUES(?,?,1) ON CONFLICT(telegram_id,window_bucket) DO UPDATE SET request_count=request_count+1 RETURNING request_count").bind(id,bucket).first();
+   if(rl.request_count>60)return reply({error:"Too many requests"},429);
+   await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
+   const action=payload.action;
+   if(action==="home"){
+    const [lessons,quizzes,attempts]=await Promise.all([
+     env.DB.prepare("SELECT id,title,summary,position FROM lessons WHERE published=1 ORDER BY position,id LIMIT 100").all(),
+     env.DB.prepare("SELECT id,title,description FROM quizzes WHERE published=1 ORDER BY id LIMIT 100").all(),
+     env.DB.prepare("SELECT id,quiz_id,score,question_count,submitted_at FROM quiz_attempts WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 20").bind(id).all()
+    ]);
+    return reply({user:{id,name:String(user.first_name||"").slice(0,100)},lessons:lessons.results,quizzes:quizzes.results,attempts:attempts.results});
+   }
+   if(action==="lesson"){
+    if(!validId(payload.id))return reply({error:"Invalid ID"},400);
+    const lesson=await env.DB.prepare("SELECT id,title,summary,body FROM lessons WHERE published=1 AND id=?").bind(Number(payload.id)).first();
+    return lesson?reply({lesson}):reply({error:"Not found"},404);
+   }
+   if(action==="quiz"){
+    if(!validId(payload.id))return reply({error:"Invalid ID"},400);
+    const q=await env.DB.prepare("SELECT id,title FROM quizzes WHERE published=1 AND id=?").bind(Number(payload.id)).first();
+    if(!q)return reply({error:"Not found"},404);
+    const rows=await env.DB.prepare("SELECT id,prompt,options_json,position FROM quiz_questions WHERE quiz_id=? ORDER BY position,id LIMIT 100").bind(q.id).all();
+    return reply({quiz:q,questions:rows.results.map(({options_json,...r})=>({...r,options:JSON.parse(options_json)}))});
+   }
+   if(action==="submit"){
+    if(!validId(payload.id)||!Array.isArray(payload.answers)||payload.answers.length>100||!payload.answers.every(a=>Number.isInteger(a)&&a>=0&&a<=7))return reply({error:"Invalid answers"},400);
+    const q=await env.DB.prepare("SELECT id FROM quizzes WHERE published=1 AND id=?").bind(Number(payload.id)).first();
+    if(!q)return reply({error:"Not found"},404);
+    const rows=await env.DB.prepare("SELECT id,correct_index,options_json FROM quiz_questions WHERE quiz_id=? ORDER BY position,id LIMIT 100").bind(q.id).all();
+    const questions=rows.results;
+    if(!questions.length||questions.length!==payload.answers.length)return reply({error:"Incomplete submission"},400);
+    if(!questions.every((x,i)=>payload.answers[i]<JSON.parse(x.options_json).length))return reply({error:"Invalid option"},400);
+    const score=questions.reduce((v,x,i)=>v+(x.correct_index===payload.answers[i]?1:0),0);
+    await env.DB.prepare("INSERT INTO quiz_attempts(id,quiz_id,telegram_id,answers_json,score,question_count) VALUES(?,?,?,?,?,?)").bind(crypto.randomUUID(),q.id,id,JSON.stringify(payload.answers),score,questions.length).run();
+    return reply({score,total:questions.length});
+   }
+   return reply({error:"Unknown action"},400);
+  }catch(e){
+   if(e?.message==="UNAUTHORIZED")return reply({error:"Unauthorized"},401);
+   if(e?.message==="NOT_CONFIGURED")return reply({error:"Telegram bot token not configured"},503);
+   console.error("Candidatory API error",e?.name||"Error");
+   return reply({error:"Internal error"},500);
+  }
+ }
+};
