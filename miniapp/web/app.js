@@ -6,6 +6,11 @@ const content=document.getElementById("content"),inner=document.getElementById("
 let state={lessons:[],quizzes:[],attempts:[],completed:[],bookmarks:[],dailyGoal:1},tab="home",searchTerm="";
 function saveJsonFile(data,filename){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 async function showMyPrivacy(target){try{const result=await api("myPrivacy");let list=target.querySelector(".privacy-list");if(!list){list=el("div",null,"privacy-list");target.append(list)}clear(list);for(const item of result.requests||[])list.append(el("p",item.request_type+" — "+item.status+" — "+item.created_at,"meta"))}catch(e){target.append(el("p","دریافت وضعیت درخواست‌ها ممکن نشد.","meta"))}}
+async function showSupportTickets(container){
+ try{const result=await api("mySupportTickets");let list=container.querySelector(".support-list");if(!list){list=el("div",null,"support-list");container.append(list)}clear(list);
+ for(const t of result.tickets||[]){const item=el("div",null,"op-row");item.append(el("strong",t.subject),el("small","وضعیت: "+t.status));if(t.admin_reply)item.append(el("p","پاسخ: "+t.admin_reply));list.append(item)}
+ }catch(e){container.append(el("p","دریافت درخواست‌های پشتیبانی ممکن نشد.","meta"))}
+}
 function GenCopyId(id){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(String(id)).then(()=>alert("شناسه کپی شد")).catch(()=>alert(String(id)));else alert(String(id))}
 function el(tag,text,cls){const x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined&&text!==null)x.textContent=String(text);return x}
 function clear(node=content){node.replaceChildren()}
@@ -52,6 +57,14 @@ const request=button("ثبت درخواست حریم خصوصی",async()=>{
  }catch(e){alert(e.message)}
 },"action outline");privacy.append(request);
 content.append(privacy);if(!state.limitedAccess)showMyPrivacy(privacy);
+const support=el("section",null,"card");support.append(el("h3","پشتیبانی و راهنمایی"),el("p","برای پیگیری سؤال فنی یا گزارش مشکل، درخواست پشتیبانی ثبت کنید."));
+const details=el("details"),summary=el("summary","＋ درخواست جدید"),form=el("form");
+const subject=el("input");subject.placeholder="عنوان درخواست";subject.minLength=3;subject.maxLength=200;subject.required=true;subject.className="notes-input";
+const message=el("textarea",null,"notes-input");message.placeholder="شرح مشکل یا سؤال";message.rows=4;message.minLength=5;message.maxLength=3000;message.required=true;
+const send=button("ارسال درخواست",()=>{});send.type="submit";
+form.append(subject,message,send);details.append(summary,form);support.append(details);
+form.addEventListener("submit",async event=>{event.preventDefault();send.disabled=true;try{await api("createSupportTicket",{subject:subject.value,message:message.value});form.reset();details.open=false;await showSupportTickets(support)}catch(e){alert(e.message)}finally{send.disabled=false}});
+content.append(support);if(!state.limitedAccess)showSupportTickets(support);
 }
 }
 async function home(){try{let data;try{data=await api("home")}catch(authError){const result=await fetch("/api/catalog",{cache:"no-store"});if(!result.ok)throw authError;const catalog=await result.json();data={...catalog,attempts:[],completed:[],bookmarks:[],dailyGoal:1,user:{name:""},limitedAccess:true}}state={lessons:data.lessons||[],quizzes:data.quizzes||[],attempts:data.attempts||[],completed:data.completed||[],user:data.user,limitedAccess:!!data.limitedAccess,bookmarks:data.bookmarks||[],dailyGoal:data.dailyGoal||1};document.getElementById("hello").textContent="سلام"+(data.user?.name?"، "+data.user.name:"")+" 👋";setMain(tab)}catch(e){homepage.hidden=true;inner.hidden=false;tab="lessons";fail(e);document.getElementById("inner-heading").querySelector("h2").textContent="خطا در بارگذاری اطلاعات";content.prepend(button("تلاش دوباره",home,"action"));}}
