@@ -44,6 +44,18 @@ async function renderWorkspace(){
       for(const [title,value,icon] of [["کاربران",summary.summary.users,"♙"],["فضاهای کاری",summary.summary.workspaces,"▦"],["درس‌های منتشرشده",summary.summary.lessons,"▤"]]){
         const item=el("div",null,"admin-metric");item.append(el("span",icon,"admin-metric-icon"),el("strong",Number(value).toLocaleString("fa-IR")),el("small",title));stats.append(item)}
       content.append(stats);
+      const series=Array.from({length:7},(_,i)=>{const d=new Date();d.setUTCDate(d.getUTCDate()-(6-i));return d.toISOString().slice(0,10)});
+      const counts=series.map(day=>(summary.audit||[]).filter(a=>String(a.created_at||"").slice(0,10)===day).length);
+      const max=Math.max(1,...counts);
+      const graph=el("section",null,"card admin-chart");
+      graph.append(el("h3","فعالیت‌های مدیریتی ۷ روز اخیر"));
+      const plot=el("div",null,"activity-chart");
+      series.forEach((day,i)=>{const column=el("div",null,"activity-column");
+        const wrapper=el("div",null,"activity-bar-wrap");
+        const bar=el("div",null,"activity-bar");bar.style.height=Math.max(5,Math.round((counts[i]/max)*100))+"%";bar.title=counts[i].toLocaleString("fa-IR")+" تغییر ثبت‌شده";
+        wrapper.append(bar);column.append(wrapper,el("small",new Date(day+"T12:00:00Z").toLocaleDateString("fa-IR",{weekday:"short",timeZone:"UTC"})));plot.append(column)});
+      graph.append(plot,el("p","این نمودار از آخرین رویدادهای ثبت‌شده سامانه ساخته می‌شود؛ مجموع آن ممکن است با کل فعالیت‌ها متفاوت باشد."));
+      content.append(graph);
     }catch(e){content.append(el("div","آمار مدیریتی دریافت نشد؛ سایر امکانات در دسترس‌اند.","empty"))}
     const tools=el("div",null,"admin-tools");
     for(const [title,detail,symbol,fn] of [
