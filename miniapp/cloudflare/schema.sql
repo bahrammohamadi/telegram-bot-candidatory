@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS candidate_users(telegram_id INTEGER PRIMARY KEY,display_name TEXT NOT NULL DEFAULT '',username TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS lessons(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',body TEXT NOT NULL DEFAULT '',position INTEGER NOT NULL DEFAULT 0,published INTEGER NOT NULL DEFAULT 0 CHECK(published IN (0,1)));
+CREATE TABLE IF NOT EXISTS quizzes(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',published INTEGER NOT NULL DEFAULT 0 CHECK(published IN (0,1)));
+CREATE TABLE IF NOT EXISTS quiz_questions(id INTEGER PRIMARY KEY AUTOINCREMENT,quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,prompt TEXT NOT NULL,options_json TEXT NOT NULL CHECK(json_valid(options_json)),correct_index INTEGER NOT NULL CHECK(correct_index BETWEEN 0 AND 7),position INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS quiz_attempts(id TEXT PRIMARY KEY,quiz_id INTEGER NOT NULL REFERENCES quizzes(id),telegram_id INTEGER NOT NULL REFERENCES candidate_users(telegram_id),answers_json TEXT NOT NULL CHECK(json_valid(answers_json)),score INTEGER NOT NULL,question_count INTEGER NOT NULL,submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_attempts_user ON quiz_attempts(telegram_id,submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_questions_quiz ON quiz_questions(quiz_id,position);
+CREATE TABLE IF NOT EXISTS request_limits(telegram_id INTEGER NOT NULL,window_bucket INTEGER NOT NULL,request_count INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(telegram_id,window_bucket));
