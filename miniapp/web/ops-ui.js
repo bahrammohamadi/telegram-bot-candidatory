@@ -120,6 +120,15 @@ async function renderWorkspace(){
     if(!rows?.length)card.append(el("p","موردی ثبت نشده است."));
     else for(const item of rows){const label=item.title||item.description||"",detail=item.status||item.starts_at||(item.amount_minor!=null?Number(item.amount_minor).toLocaleString("fa-IR")+" ریال":"");
       const row=makeRow(label,detail);
+      if(action==="createEvent"){
+        const responses=(ws.rsvps||[]).filter(x=>x.event_id===item.id);
+        if(manager)row.append(el("small",responses.filter(x=>x.response==="going").length.toLocaleString("fa-IR")+" موافق · "+responses.filter(x=>x.response==="unable").length.toLocaleString("fa-IR")+" عدم امکان"));
+        const mine=responses.find(x=>x.telegram_id===state.user?.id);
+        const answer=el("select",null,"op-select");
+        for(const [value,label] of [["","پاسخ به دعوت"],["going","شرکت می‌کنم"],["unable","نمی‌توانم شرکت کنم"]]){const o=el("option",label);o.value=value;o.selected=mine?.response===value;answer.append(o)}
+        answer.addEventListener("change",async()=>{if(!answer.value)return;answer.disabled=true;try{await api("eventRsvp",{workspaceId:opState.id,eventId:item.id,response:answer.value});notify("پاسخ شما ذخیره شد.");await renderWorkspace()}catch(e){answer.disabled=false;notify(e.message,"error")}});
+        row.append(answer);
+      }
       if(action==="createCommitment"&&edit){
         const sel=el("select",null,"op-select");
         for(const [code,name] of [["draft","پیش‌نویس"],["review","در بررسی"],["published","منتشرشده"],["completed","انجام‌شده"]]){
