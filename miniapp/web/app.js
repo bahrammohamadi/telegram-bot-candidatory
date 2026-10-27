@@ -42,6 +42,8 @@ readinessCard.append(el("h3","خودارزیابی آمادگی فردی"),el("p
 readinessCard.append(button("شروع خودارزیابی",openReadiness,"action"));
 if(!state.limitedAccess)readinessCard.append(button("سوابق ارزیابی",showReadinessHistory,"action outline"));
 section.append(readinessCard);
+const assistantCard=el("article",null,"card");assistantCard.append(el("h3","دستیار آموزشی هوشمند"),el("p","پرسش‌های عمومی درباره آموزش، مدیریت، برنامه‌ریزی، امنیت و شفافیت را با کمک هوش مصنوعی بررسی کنید. حداکثر ۳ پرسش در روز."));
+assistantCard.append(button("گفت‌وگو با دستیار آموزشی",openStudyAssistant,"action"));section.append(assistantCard);
 if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
 if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));if(state.user?.id){c.append(el("p","شناسه تلگرام شما: "+String(state.user.id)));c.append(button("کپی شناسه تلگرام",()=>GenCopyId(state.user.id),"action outline"))}content.append(c);
 const saved=el("article",null,"card");saved.append(el("h3","درس‌های نشان‌شده"));
@@ -85,6 +87,20 @@ const notes=el("textarea",null,"notes-input");notes.placeholder="نکات مهم
 if(!state.limitedAccess){api("note",{id}).then(x=>{notes.value=x.note||""}).catch(()=>{notes.placeholder="بارگذاری یادداشت انجام نشد"});}
 const save=button("ذخیره یادداشت",async()=>{save.disabled=true;try{await api("note",{id,note:notes.value});save.textContent="✓ ذخیره شد"}catch(e){alert(e.message)}finally{save.disabled=false}},"action outline");save.disabled=state.limitedAccess;c.append(save);
 content.append(c)}catch(e){fail(e)}}
+async function openStudyAssistant(){
+ setMain("progress");clear();
+ content.append(button("← بازگشت به پیشرفت",()=>setMain("progress"),"back"));
+ const panel=el("section",null,"card");panel.append(el("h3","دستیار آموزشی هوشمند"),el("p","پرسش خود را درباره مفاهیم آموزشی و مسئولیت‌های عمومی بنویسید. پرسش‌ها در پایگاه داده ذخیره نمی‌شوند؛ برای پردازش به مدل Cloudflare ارسال خواهند شد."));
+ const textarea=el("textarea",null,"notes-input");textarea.rows=5;textarea.placeholder="مثلاً: یک روش ساده برای مستندسازی و پیگیری وظایف تیم چیست؟";textarea.maxLength=600;textarea.minLength=5;
+ const send=button("پرسیدن از دستیار",async()=>{
+  if(textarea.value.trim().length<5)return alert("حداقل ۵ کاراکتر وارد کنید.");
+  send.disabled=true;send.textContent="در حال دریافت پاسخ…";
+  try{const result=await api("studyAssistant",{question:textarea.value.trim()});let old=panel.querySelector(".ai-answer");if(old)old.remove();
+   const answer=el("div",null,"ai-answer");answer.append(el("h3","پاسخ دستیار"),el("p",result.answer),el("p",result.disclaimer||"پاسخ را با منابع معتبر بررسی کنید."),el("small","سهمیه باقی‌مانده امروز: "+(result.dailyRemaining??0).toLocaleString("fa-IR")));panel.append(answer);
+  }catch(e){alert(e.message)}finally{send.disabled=false;send.textContent="پرسیدن از دستیار"}
+ },"action");
+ panel.append(textarea,send);content.append(panel);
+}
 async function openReadiness(){
  setMain("progress");clear();content.append(el("div","در حال دریافت پرسش‌ها…","loading"));
  try{
