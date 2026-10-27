@@ -4,6 +4,8 @@ const initData=tg?.initData||"";
 const endpoint=document.querySelector('meta[name="miniapp-api"]')?.content||"/";
 const content=document.getElementById("content"),inner=document.getElementById("inner-panel"),homepage=document.getElementById("home-panel"),featured=document.getElementById("featured-lessons");
 let state={lessons:[],quizzes:[],attempts:[],completed:[],bookmarks:[],dailyGoal:1},tab="home",searchTerm="";
+function saveJsonFile(data,filename){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+async function showMyPrivacy(target){try{const result=await api("myPrivacy");let list=target.querySelector(".privacy-list");if(!list){list=el("div",null,"privacy-list");target.append(list)}clear(list);for(const item of result.requests||[])list.append(el("p",item.request_type+" — "+item.status+" — "+item.created_at,"meta"))}catch(e){target.append(el("p","دریافت وضعیت درخواست‌ها ممکن نشد.","meta"))}}
 function GenCopyId(id){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(String(id)).then(()=>alert("شناسه کپی شد")).catch(()=>alert(String(id)));else alert(String(id))}
 function el(tag,text,cls){const x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined&&text!==null)x.textContent=String(text);return x}
 function clear(node=content){node.replaceChildren()}
@@ -37,6 +39,19 @@ if(!state.bookmarks.length)saved.append(el("p","هنوز درسی نشان نک�
 else for(const lesson of state.lessons.filter(x=>state.bookmarks.includes(x.id)))saved.append(button("★ "+lesson.title,()=>openLesson(lesson.id),"action outline"));
 content.append(saved);
 content.append(button("به‌روزرسانی اطلاعات",home,"action outline"));
+const privacy=el("section",null,"card");privacy.append(el("h3","حریم خصوصی و داده‌های من"));
+privacy.append(el("p","می‌توانید نسخه‌ای از داده‌های آموزشی خود را دریافت کنید یا درخواست اصلاح یا حذف حساب ثبت کنید. ثبت درخواست، حذف خودکار نیست و ابتدا بررسی می‌شود."));
+privacy.append(button("دریافت اطلاعات شخصی (JSON)",async()=>{
+ try{const result=await api("myDataExport");saveJsonFile(result.data,"candidatory-my-data.json")}catch(e){alert(e.message)}
+},"action outline"));
+const request=button("ثبت درخواست حریم خصوصی",async()=>{
+ try{const type=prompt("نوع درخواست: export یا delete یا correct","delete");if(type===null)return;
+ if(!["export","delete","correct"].includes(type)){alert("نوع درخواست معتبر نیست.");return}
+ const details=prompt("توضیحات تکمیلی (اختیاری)","");if(details===null)return;
+ await api("requestPrivacy",{requestType:type,details});alert("درخواست ثبت شد و پس از بررسی پیگیری می‌شود.");await showMyPrivacy(privacy)
+ }catch(e){alert(e.message)}
+},"action outline");privacy.append(request);
+content.append(privacy);if(!state.limitedAccess)showMyPrivacy(privacy);
 }
 }
 async function home(){try{let data;try{data=await api("home")}catch(authError){const result=await fetch("/api/catalog",{cache:"no-store"});if(!result.ok)throw authError;const catalog=await result.json();data={...catalog,attempts:[],completed:[],bookmarks:[],dailyGoal:1,user:{name:""},limitedAccess:true}}state={lessons:data.lessons||[],quizzes:data.quizzes||[],attempts:data.attempts||[],completed:data.completed||[],user:data.user,limitedAccess:!!data.limitedAccess,bookmarks:data.bookmarks||[],dailyGoal:data.dailyGoal||1};document.getElementById("hello").textContent="سلام"+(data.user?.name?"، "+data.user.name:"")+" 👋";setMain(tab)}catch(e){homepage.hidden=true;inner.hidden=false;tab="lessons";fail(e);document.getElementById("inner-heading").querySelector("h2").textContent="خطا در بارگذاری اطلاعات";content.prepend(button("تلاش دوباره",home,"action"));}}
