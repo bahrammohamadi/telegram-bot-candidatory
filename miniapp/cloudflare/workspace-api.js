@@ -170,6 +170,17 @@ async function handleOps(action,payload,db,user,env){
    const r=await db.prepare("SELECT id,name,jurisdiction,status,created_at FROM workspaces ORDER BY created_at DESC LIMIT 200").all();
    return {workspaces:r.results};
  }
+ if(action==="adminSystemHealth"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const today=new Date().toISOString().slice(0,10);
+   const [lessons,quizzes,workspaces,aiUsage]=await Promise.all([
+     db.prepare("SELECT COUNT(*) AS n FROM lessons WHERE published=1").first(),
+     db.prepare("SELECT COUNT(*) AS n FROM quizzes WHERE published=1").first(),
+     db.prepare("SELECT COUNT(*) AS n FROM workspaces").first(),
+     db.prepare("SELECT requests FROM ai_global_usage WHERE day=?").bind(today).first()
+   ]);
+   return {status:"online",date:today,checks:{database:true,aiBound:!!env.AI,telegramTokenConfigured:!!env.TELEGRAM_BOT_TOKEN,adminSecretConfigured:!!env.ADMIN_TELEGRAM_IDS},counts:{lessons:lessons.n,quizzes:quizzes.n,workspaces:workspaces.n,aiRequestsToday:aiUsage?.requests||0},dailyAiCallLimit:40};
+ }
  if(action==="platformSummary"){
    if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
    const [a,b,c,d]=await Promise.all([
