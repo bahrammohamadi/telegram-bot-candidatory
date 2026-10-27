@@ -171,28 +171,24 @@ async function renderWorkspace(){
     content.append(members);
     content.append(button("نمایش گزارش فعالیت‌ها",async()=>{try{const r=await api("auditTrail",{workspaceId:opState.id});const audit=el("article",null,"card");audit.append(el("h3","سوابق تغییرات"));for(const a of r.audit||[])audit.append(makeRow(a.action+" • "+a.record_type,a.created_at));content.append(audit)}catch(e){alert(e.message)}},"action outline"));
   }
+  if(opState.focusTool){opState.activeTool=opState.focusTool;opState.focusTool=null;}
   if(opState.activeTool){
-    const focused=opState.activeTool,sections=[...content.querySelectorAll("[data-tool]")];
-    const chosen=sections.find(e=>e.dataset.tool===focused);
+    const key=opState.activeTool;
+    const chosen=[...content.querySelectorAll("[data-tool]")].find(x=>x.dataset.tool===key);
     if(chosen){
-      const back=button("← نمایش داشبورد کامل",()=>{opState.activeTool=null;opState.focusTool=null;renderWorkspace()},"back tool-back");
-      const title=el("h3",({tasks:"مدیریت وظایف",events:"مدیریت جلسات",members:"اعضای تیم",documents:"مدیریت اسناد",expenses:"ثبت هزینه‌ها",commitments:"برنامه‌ها و تعهدات",notices:"اطلاعیه‌ها",reports:"گزارش‌های فضای کاری"})[focused]||"مدیریت","focused-title");
-      for(const item of [...content.children]){
-        if(item!==chosen&&item!==head&&item!==intro&&item!==back&&item!==title)item.hidden=true;
-      }
-      content.prepend(back,title);
-      chosen.classList.add("tool-spotlight");
-      chosen.scrollIntoView({block:"start",behavior:"smooth"});
+      const labels={tasks:"وظایف و پیگیری‌ها",events:"جلسات و تقویم",members:"اعضای تیم",documents:"اسناد و مدارک",expenses:"دفتر هزینه‌ها",commitments:"برنامه‌ها و تعهدات",notices:"اطلاعیه‌ها",reports:"گزارش‌های مدیریتی"};
+      const page=el("section",null,"tool-screen page-enter");
+      page.append(button("← بازگشت به مرکز مدیریت",()=>{opState.activeTool=null;renderWorkspace()},"back"));
+      page.append(el("h3",labels[key]||"ابزار مدیریت","tool-page-title"));
+      page.append(el("p","فضای کاری: "+ws.workspace.name,"tool-page-subtitle"));
+      page.append(chosen);
+      clear();content.append(page);
+      const heading=document.getElementById("inner-heading")?.querySelector("h2");if(heading)heading.textContent=labels[key]||"مدیریت";
+      window.scrollTo({top:0,behavior:"instant"});
     }else{
       opState.activeTool=null;
-      notify("برای دسترسی به این بخش، مجوز مناسب لازم است.","error");
+      notify("این بخش برای نقش شما مجاز نیست یا هنوز فضای کاری ندارید.","error");
     }
-  }
-  if(opState.focusTool){
-    const requested=opState.focusTool;opState.activeTool=requested;opState.focusTool=null;
-    const target=[...content.querySelectorAll("[data-tool]")].find(x=>x.dataset.tool===requested);
-    if(target){target.classList.add("tool-spotlight");target.scrollIntoView({block:"start",behavior:"smooth"});}
-    else notify("برای این بخش ابتدا یک فضای کاری بسازید یا مجوز مربوط را دریافت کنید.","error");
   }
  }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
