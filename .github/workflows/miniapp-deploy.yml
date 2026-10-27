@@ -1,0 +1,39 @@
+name: Mini App Controlled Cloudflare Deployment
+on:
+  push:
+    branches:
+      - feature/telegram-miniapp-supabase
+    paths:
+      - "miniapp/**"
+      - ".github/workflows/miniapp-deploy.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: candidatory-miniapp-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: vars.ENABLE_MINIAPP_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: "2c5a01fdb67439e8e2c91afe9e2ba810"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify deploy credentials are present
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "Missing GitHub CLOUDFLARE_API_TOKEN secret" >&2; exit 1; fi
+      - name: Run tests
+        run: |
+          node --check miniapp/cloudflare/worker.js
+          node --check miniapp/web/app.js
+          node --check miniapp/web/ops-ui.js
+          node --test miniapp/tests/*.test.mjs
+      - name: Build worker bundle
+        run: |
+          node miniapp/scripts/build-worker.mjs
+          node --check miniapp/cloudflare/site-worker.js
+      - name: Deploy existing free-tier Worker
+        run: npx --yes wrangler@4 deploy --config miniapp/cloudflare/wrangler.json
