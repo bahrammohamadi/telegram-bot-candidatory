@@ -8,7 +8,7 @@ async function verify(initData,token){
  const p=new URLSearchParams(initData),hash=p.get("hash")||"", ts=Number(p.get("auth_date"));
  if(!/^[0-9a-f]{64}$/.test(hash)||!Number.isFinite(ts)) throw new Error("INVALID_INIT_DATA");
  if(Math.abs(Date.now()/1000-ts)>3600) throw new Error("EXPIRED_INIT_DATA");
- const data=[...p.entries()].filter(([k])=>k!=="hash"&&k!=="signature").sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+"="+v).join("\n");
+ const data=[...p.entries()].filter(([k])=>k!=="hash").sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+"="+v).join("\n");
  const base=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const secret=await crypto.subtle.sign("HMAC",base,enc.encode(token));
  const key=await crypto.subtle.importKey("raw",secret,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
