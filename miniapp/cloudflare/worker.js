@@ -90,6 +90,22 @@ async function handleOps(action,payload,db,user,env){
    ]);
    return {summary:{workspaces:a.total,users:b.total,lessons:c.total},audit:d.results};
  }
+ if(action==="myInvites"){
+   const r=await db.prepare("SELECT i.id,i.workspace_id,w.name,i.role,i.expires_at FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.invited_telegram_id=? AND i.status='pending' AND i.expires_at>CURRENT_TIMESTAMP ORDER BY i.created_at DESC LIMIT 30").bind(uid).all();
+   return {invitations:r.results};
+ }
+ if(action==="acceptInvite"){
+   const invitation=clean(payload.invitationId,64);
+   const item=await db.prepare("SELECT id,workspace_id,role FROM workspace_invitations WHERE id=? AND invited_telegram_id=? AND status='pending' AND expires_at>CURRENT_TIMESTAMP").bind(invitation,uid).first();
+   if(!item)return {error:"Invitation not found or expired",status:404};
+   const owner=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=?").bind(item.workspace_id,uid).first();
+   if(owner?.role==="owner")return {error:"Already owner",status:409};
+   await db.batch([
+    db.prepare("UPDATE workspace_invitations SET status='accepted' WHERE id=? AND invited_telegram_id=? AND status='pending'").bind(item.id,uid),
+    db.prepare("INSERT INTO workspace_members(workspace_id,telegram_id,role) VALUES(?,?,?) ON CONFLICT(workspace_id,telegram_id) DO UPDATE SET role=excluded.role,status='active'").bind(item.workspace_id,uid,item.role)
+   ]);
+   await logChange(db,uid,item.workspace_id,"accept","invitation",item.id);return {saved:true};
+ }
  const workspace=clean(payload.workspaceId,64);
  if(!workspace)return {error:"Choose workspace",status:400};
  const membership=await db.prepare("SELECT w.id,w.name,w.status,m.role FROM workspace_members m JOIN workspaces w ON w.id=m.workspace_id WHERE m.workspace_id=? AND m.telegram_id=? AND m.status='active'").bind(workspace,uid).first();
@@ -114,14 +130,15 @@ async function handleOps(action,payload,db,user,env){
  if(action==="addMember"){
    if(!canManage)return {error:"Forbidden",status:403};
    const member=Number(payload.telegramId),newRole=clean(payload.role,12);
-   if(!Number.isSafeInteger(member)||member<=0||!["admin","editor","member","auditor"].includes(newRole))return {error:"Invalid member or role",status:400};
+   if(!Number.isSafeInteger(member)||member<=0||!["admin","editor","member","auditor"].includes(newRole)||member===uid)return {error:"Invalid member or role",status:400};
    const exists=await db.prepare("SELECT telegram_id FROM candidate_users WHERE telegram_id=?").bind(member).first();
-   if(!exists)return {error:"Member must open app first",status:404};
-   const previous=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=?").bind(workspace,member).first();
-   if(previous?.role==="owner")return {error:"Cannot change owner",status:403};
-   await db.prepare("INSERT INTO workspace_members(workspace_id,telegram_id,role) VALUES(?,?,?) ON CONFLICT(workspace_id,telegram_id) DO UPDATE SET role=excluded.role,status='active'").bind(workspace,member,newRole).run();
-   await logChange(db,uid,workspace,"memberUpsert","member",member);
-   return {saved:true};
+   if(!exists)return {error:"Invitee must first open the mini app",status:404};
+   const existing=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=? AND status='active'").bind(workspace,member).first();
+   if(existing)return {error:"Already an active member",status:409};
+   const invId=crypto.randomUUID(),expires=new Date(Date.now()+7*86400000).toISOString();
+   await db.prepare("INSERT INTO workspace_invitations(id,workspace_id,invited_telegram_id,role,created_by,expires_at) VALUES(?,?,?,?,?,?)").bind(invId,workspace,member,newRole,uid,expires).run();
+   await logChange(db,uid,workspace,"invite","member",member);
+   return {invited:true,expiresAt:expires};
  }
  if(action==="removeMember"){
    if(!canManage)return {error:"Forbidden",status:403};
@@ -235,7 +252,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
