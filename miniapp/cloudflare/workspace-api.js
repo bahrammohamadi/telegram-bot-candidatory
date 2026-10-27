@@ -68,12 +68,12 @@ async function handleOps(action,payload,db,user,env){
    return {summary:{workspaces:a.total,users:b.total,lessons:c.total},audit:d.results};
  }
  if(action==="myInvites"){
-   const r=await db.prepare("SELECT i.id,i.workspace_id,w.name,i.role,i.expires_at FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.invited_telegram_id=? AND i.status='pending' AND i.expires_at>CURRENT_TIMESTAMP ORDER BY i.created_at DESC LIMIT 30").bind(uid).all();
+   const r=await db.prepare("SELECT i.id,i.workspace_id,w.name,i.role,i.expires_at FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id WHERE i.invited_telegram_id=? AND i.status='pending' AND datetime(i.expires_at)>datetime('now') ORDER BY i.created_at DESC LIMIT 30").bind(uid).all();
    return {invitations:r.results};
  }
  if(action==="acceptInvite"){
    const invitation=clean(payload.invitationId,64);
-   const item=await db.prepare("SELECT id,workspace_id,role FROM workspace_invitations WHERE id=? AND invited_telegram_id=? AND status='pending' AND expires_at>CURRENT_TIMESTAMP").bind(invitation,uid).first();
+   const item=await db.prepare("SELECT id,workspace_id,role FROM workspace_invitations WHERE id=? AND invited_telegram_id=? AND status='pending' AND datetime(expires_at)>datetime('now')").bind(invitation,uid).first();
    if(!item)return {error:"Invitation not found or expired",status:404};
    const owner=await db.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND telegram_id=?").bind(item.workspace_id,uid).first();
    if(owner?.role==="owner")return {error:"Already owner",status:409};
