@@ -64,7 +64,7 @@ async function renderWorkspace(){
       ["فضاهای کاری","مدیریت تیم‌ها","▦",showPlatformSpaces],
       ["آمار سامانه","گزارش کلی","▥",async()=>{const r=await api("platformSummary");const c=el("section",null,"card");c.append(el("h3","آمار سامانه"));for(const [k,v] of [["کاربران",r.summary.users],["فضاهای کاری",r.summary.workspaces],["درس‌های منتشرشده",r.summary.lessons]])c.append(makeRow(k,Number(v).toLocaleString("fa-IR")));content.prepend(c)}]
     ]){const tile=button("",()=>Promise.resolve(fn()).catch(e=>alert(e.message)),"admin-tool");tile.append(el("span",symbol,"admin-tool-icon"),el("strong",title),el("small",detail));tools.append(tile)}
-    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));content.append(button("مدیریت بسته‌ها و دسترسی‌ها",showPlanAdmin,"action outline"));
+    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));content.append(button("وضعیت و سهمیه سرویس‌های رایگان",showSystemHealth,"action outline"));content.append(button("مدیریت بسته‌ها و دسترسی‌ها",showPlanAdmin,"action outline"));
   }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
@@ -266,4 +266,21 @@ function downloadCalendar(events){
  lines.push("END:VCALENDAR");
  const blob=new Blob([lines.join("\r\n")+"\r\n"],{type:"text/calendar;charset=utf-8"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="candidatory-events.ics";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+
+async function showSystemHealth(){
+ clear();content.append(el("div","در حال بررسی وضعیت سامانه…","loading"));
+ try{
+  const r=await api("adminSystemHealth");
+  clear();content.append(button("← بازگشت به مدیریت",renderWorkspace,"back"));
+  const card=el("section",null,"card");card.append(el("h3","پایش سلامت سرویس‌های رایگان"),el("p","وضعیت فعلی اتصال‌ها و مصرف ثبت‌شده برنامه؛ بدون نمایش توکن‌ها."));
+  for(const [key,label] of [["database","اتصال دیتابیس D1"],["aiBound","اتصال Workers AI"],["telegramTokenConfigured","توکن امن تلگرام"],["adminSecretConfigured","مجوز ادمین کل"]]){
+   card.append(makeRow(label,r.checks[key]?"متصل ✓":"نیازمند بررسی"))}
+  card.append(makeRow("درس‌های منتشرشده",Number(r.counts.lessons).toLocaleString("fa-IR")));
+  card.append(makeRow("آزمون‌های منتشرشده",Number(r.counts.quizzes).toLocaleString("fa-IR")));
+  card.append(makeRow("فضاهای کاری",Number(r.counts.workspaces).toLocaleString("fa-IR")));
+  card.append(makeRow("پرسش‌های AI امروز",Number(r.counts.aiRequestsToday).toLocaleString("fa-IR")+" از "+Number(r.dailyAiCallLimit).toLocaleString("fa-IR")));
+  card.append(el("p","آمار مصرف Neuron فقط در داشبورد Cloudflare قابل تأیید است؛ تعداد پرسش‌ها معادل مقدار مصرف Neuron نیست."));
+  content.append(card);
+ }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
