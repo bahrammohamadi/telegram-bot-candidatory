@@ -57,3 +57,12 @@ html[data-theme="dark"] .launcher-app{color:var(--ink)}
 .launcher-skeleton{height:75px;border-radius:18px;background:linear-gradient(100deg,#e5f0ed 15%,#f7fcfb 45%,#e5f0ed 70%);background-size:240% 100%;animation:candidatory-glimmer 1.3s linear infinite}
 html[data-theme="dark"] .launcher-skeleton{background:linear-gradient(100deg,#243a40 15%,#3a5259 45%,#243a40 70%);background-size:240% 100%}
 @media(prefers-reduced-motion:reduce){.launcher-app,.page-enter,.launcher-skeleton{animation:none!important}.launcher-icon{transition:none!important}}
+
+/* Cohesive self-hosted sculpted vector icon system */
+.launcher-icon{isolation:isolate;position:relative;overflow:hidden;border:1px solid #ffffffb5;border-radius:21px;background-clip:padding-box;box-shadow:0 3px 0 #00000021,0 9px 16px #092a3730,inset 0 2px 0 #ffffff65,inset 0 -7px 14px #00000019;transform:translateZ(0);contain:paint}
+.launcher-icon:before{content:"";position:absolute;z-index:0;pointer-events:none;left:-11%;top:-48%;width:124%;height:103%;border-radius:50%;background:linear-gradient(160deg,#ffffff82,#ffffff10 80%);transform:rotate(-19deg)}
+.launcher-icon:after{content:"";position:absolute;z-index:0;pointer-events:none;inset:auto 10% 5% 10%;height:27%;border-radius:50%;background:#00000013;filter:blur(9px)}
+.launcher-pictogram{width:57%;height:57%;z-index:1;position:relative;overflow:visible;filter:drop-shadow(0 2px 1px #0a2d3965) drop-shadow(0 -1px 0 #ffffff45)}
+.launcher-pictogram path,.launcher-pictogram circle,.launcher-pictogram rect{vector-effect:non-scaling-stroke}
+@media(hover:hover){.launcher-app:hover .launcher-icon{box-shadow:0 3px 0 #00000020,0 16px 27px #05363c35,inset 0 2px 0 #ffffff75,inset 0 -7px 14px #00000020}}
+html[data-theme="dark"] .launcher-icon{border-color:#ffffff66;box-shadow:0 4px 0 #0000004a,0 12px 23px #00000060,inset 0 2px 0 #ffffff38}
