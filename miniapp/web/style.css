@@ -66,3 +66,15 @@ html[data-theme="dark"] .launcher-skeleton{background:linear-gradient(100deg,#24
 .launcher-pictogram path,.launcher-pictogram circle,.launcher-pictogram rect{vector-effect:non-scaling-stroke}
 @media(hover:hover){.launcher-app:hover .launcher-icon{box-shadow:0 3px 0 #00000020,0 16px 27px #05363c35,inset 0 2px 0 #ffffff75,inset 0 -7px 14px #00000020}}
 html[data-theme="dark"] .launcher-icon{border-color:#ffffff66;box-shadow:0 4px 0 #0000004a,0 12px 23px #00000060,inset 0 2px 0 #ffffff38}
+
+/* Focused full-screen tool views */
+[hidden]{display:none!important}
+.focused-title{font-size:20px;font-weight:900;margin:15px 0;color:var(--ink)}
+.tool-back{margin:14px 0}
+.workspace-onboarding{border:1px solid #a4ddd4;background:linear-gradient(145deg,#f2fffa,#e4f6f3)}
+.workspace-onboarding h3{font-size:17px}.workspace-onboarding p{line-height:2}
+.onboarding-steps{margin:10px 20px 8px 0;padding:0 10px 0 0;color:#447873;font-size:12px;line-height:2.6}
+.quick-start-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.quick-start-actions .action{min-height:43px;padding:9px}
+html[data-theme="dark"] .workspace-onboarding{background:linear-gradient(145deg,#21413e,#182f32);border-color:#416c65}
+html[data-theme="dark"] .onboarding-steps{color:#c5e0d9}
