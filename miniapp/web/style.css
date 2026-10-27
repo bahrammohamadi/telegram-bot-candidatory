@@ -78,3 +78,13 @@ html[data-theme="dark"] .launcher-icon{border-color:#ffffff66;box-shadow:0 4px 0
 .quick-start-actions .action{min-height:43px;padding:9px}
 html[data-theme="dark"] .workspace-onboarding{background:linear-gradient(145deg,#21413e,#182f32);border-color:#416c65}
 html[data-theme="dark"] .onboarding-steps{color:#c5e0d9}
+
+/* Dedicated functional tool screens */
+.tool-screen{min-height:55dvh;padding:4px 0 24px;display:flex;flex-direction:column;gap:10px}
+.tool-screen>.card{margin:0}
+.tool-page-title{font-size:20px;font-weight:900;color:var(--ink);margin:4px 0 0}
+.tool-page-subtitle{margin:0 0 10px;color:var(--ink-soft);font-size:12px}
+.tool-screen .op-row{min-height:58px;align-items:center}
+.tool-screen .op-row select{max-width:175px}
+.tool-screen .op-details{margin-top:15px}
+.tool-screen .back{align-self:start}
