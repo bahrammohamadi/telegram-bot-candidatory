@@ -3,7 +3,7 @@ const tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
 const initData=tg?.initData||"";
 const endpoint=document.querySelector('meta[name="miniapp-api"]')?.content||"/";
 const content=document.getElementById("content"),inner=document.getElementById("inner-panel"),homepage=document.getElementById("home-panel"),featured=document.getElementById("featured-lessons");
-let state={lessons:[],quizzes:[],attempts:[],completed:[]},tab="home",searchTerm="";
+let state={lessons:[],quizzes:[],attempts:[],completed:[],bookmarks:[],dailyGoal:1},tab="home",searchTerm="";
 function el(tag,text,cls){const x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined&&text!==null)x.textContent=String(text);return x}
 function clear(node=content){node.replaceChildren()}
 function button(text,fn,cls="action"){const b=el("button",text,cls);b.type="button";b.addEventListener("click",fn);return b}
@@ -16,11 +16,40 @@ function renderHome(){document.getElementById("stat-lessons").textContent=state.
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل"})[tab]||"آموزش‌ها";
 if(tab==="lessons"){const list=el("div",null,"cards");for(const x of state.lessons)list.append(card(x.title,x.summary,"مطالعه درس",()=>openLesson(x.id),x.position,state.completed.includes(x.id)));content.append(state.lessons.length?list:empty("هنوز آموزشی منتشر نشده است."));return}
 if(tab==="quizzes"){const list=el("div",null,"cards");for(const q of state.quizzes)list.append(card(q.title,q.description,"شروع آزمون",()=>openQuiz(q.id)));content.append(state.quizzes.length?list:empty("آزمون مستقلی هنوز منتشر نشده است. محتوای آموزش‌ها در دسترس است."));return}
-if(tab==="progress"){const section=el("div",null,"cards"),pct=state.lessons.length?Math.round(state.completed.length/state.lessons.length*100):0;const stat=el("article",null,"card");stat.append(el("h3","پیشرفت مطالعه"),el("p",state.completed.length+" درس از "+state.lessons.length+" درس تکمیل شده"));const track=el("div",null,"progress-track"),bar=el("div");bar.style.width=pct+"%";track.append(bar);stat.append(track,el("p",pct+"٪ مسیر مطالعه"));section.append(stat);if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
-if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));content.append(c)}
+if(tab==="progress"){const section=el("div",null,"cards"),pct=state.lessons.length?Math.round(state.completed.length/state.lessons.length*100):0;const stat=el("article",null,"card");stat.append(el("h3","پیشرفت مطالعه"),el("p",state.completed.length+" درس از "+state.lessons.length+" درس تکمیل شده"));const track=el("div",null,"progress-track"),bar=el("div");bar.style.width=pct+"%";track.append(bar);stat.append(track,el("p",pct+"٪ مسیر مطالعه"));section.append(stat);
+const goalCard=el("article",null,"card");
+goalCard.append(el("h3","هدف روزانه مطالعه"),el("p","هدف فعلی: "+state.dailyGoal.toLocaleString("fa-IR")+" درس در روز"));
+const goalOptions=el("div",null,"quiz-actions");[1,2,3,4,5].forEach(n=>{const b=button(n.toLocaleString("fa-IR"),async()=>{if(state.limitedAccess)return alert("برای ذخیره هدف وارد تلگرام شوید.");try{await api("dailyGoal",{goal:n});state.dailyGoal=n;render()}catch(e){alert(e.message)}},"action outline");b.style.minWidth="0";goalOptions.append(b)});
+goalCard.append(goalOptions);if(state.limitedAccess)goalCard.append(el("p","برای ذخیره هدف، ورود تلگرام لازم است."));
+section.append(goalCard);
+const achievement=el("article",null,"card");
+const badges=[{title:"قدم اول",threshold:1},{title:"یادگیرنده پیگیر",threshold:3},{title:"نیمه راه",threshold:6},{title:"پایان مسیر",threshold:12}];
+achievement.append(el("h3","نشان‌های یادگیری"));
+const badgeRow=el("div",null,"badge-grid");
+badges.forEach(b=>{const x=el("div",null,state.completed.length>=b.threshold?"earned":"locked");x.append(el("span",state.completed.length>=b.threshold?"🏅":"🔒"),el("small",b.title));badgeRow.append(x)});
+achievement.append(badgeRow);section.append(achievement);
+if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
+if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));content.append(c);
+const saved=el("article",null,"card");saved.append(el("h3","درس‌های نشان‌شده"));
+if(!state.bookmarks.length)saved.append(el("p","هنوز درسی نشان نکرده‌اید."));
+else for(const lesson of state.lessons.filter(x=>state.bookmarks.includes(x.id)))saved.append(button("★ "+lesson.title,()=>openLesson(lesson.id),"action outline"));
+content.append(saved);
+content.append(button("به‌روزرسانی اطلاعات",home,"action outline"));
 }
-async function home(){try{let data;try{data=await api("home")}catch(authError){const result=await fetch("/api/catalog",{cache:"no-store"});if(!result.ok)throw authError;const catalog=await result.json();data={...catalog,attempts:[],completed:[],user:{name:""},limitedAccess:true}}state={lessons:data.lessons||[],quizzes:data.quizzes||[],attempts:data.attempts||[],completed:data.completed||[],user:data.user,limitedAccess:!!data.limitedAccess};document.getElementById("hello").textContent="سلام"+(data.user?.name?"، "+data.user.name:"")+" 👋";setMain(tab)}catch(e){homepage.hidden=true;inner.hidden=false;tab="lessons";fail(e);document.getElementById("inner-heading").querySelector("h2").textContent="خطا در بارگذاری اطلاعات";content.prepend(button("تلاش دوباره",home,"action"));}}
-async function openLesson(id){setMain("lessons");clear();content.append(el("div","در حال بارگذاری…","loading"));try{const {lesson}=state.limitedAccess?await (await fetch("/api/lesson/"+id)).json():await api("lesson",{id});if(!lesson)throw Error("درس پیدا نشد.");clear();content.append(button("← بازگشت به آموزش‌ها",()=>setMain("lessons"),"back"));const c=el("article",null,"card");c.append(el("h3",lesson.title),el("p",lesson.summary),el("div",lesson.body,"body-text"));const done=state.completed.includes(id),mark=button(done?"✓ این درس تکمیل شده":"✓ پایان مطالعه و ثبت پیشرفت",async()=>{mark.disabled=true;try{await api("completeLesson",{id});if(!state.completed.includes(id))state.completed.push(id);mark.textContent="✓ این درس تکمیل شده";tg?.HapticFeedback?.notificationOccurred("success")}catch(e){mark.disabled=false;alert(e.message)}});mark.disabled=done||state.limitedAccess;if(state.limitedAccess)mark.textContent="ثبت پیشرفت نیازمند ورود معتبر تلگرام است";c.append(mark);content.append(c)}catch(e){fail(e)}}
+}
+async function home(){try{let data;try{data=await api("home")}catch(authError){const result=await fetch("/api/catalog",{cache:"no-store"});if(!result.ok)throw authError;const catalog=await result.json();data={...catalog,attempts:[],completed:[],bookmarks:[],dailyGoal:1,user:{name:""},limitedAccess:true}}state={lessons:data.lessons||[],quizzes:data.quizzes||[],attempts:data.attempts||[],completed:data.completed||[],user:data.user,limitedAccess:!!data.limitedAccess,bookmarks:data.bookmarks||[],dailyGoal:data.dailyGoal||1};document.getElementById("hello").textContent="سلام"+(data.user?.name?"، "+data.user.name:"")+" 👋";setMain(tab)}catch(e){homepage.hidden=true;inner.hidden=false;tab="lessons";fail(e);document.getElementById("inner-heading").querySelector("h2").textContent="خطا در بارگذاری اطلاعات";content.prepend(button("تلاش دوباره",home,"action"));}}
+async function openLesson(id){setMain("lessons");clear();content.append(el("div","در حال بارگذاری…","loading"));try{const {lesson}=state.limitedAccess?await (await fetch("/api/lesson/"+id)).json():await api("lesson",{id});if(!lesson)throw Error("درس پیدا نشد.");clear();content.append(button("← بازگشت به آموزش‌ها",()=>setMain("lessons"),"back"));const c=el("article",null,"card");c.append(el("h3",lesson.title),el("p",lesson.summary),el("div",lesson.body,"body-text"));const done=state.completed.includes(id),mark=button(done?"✓ این درس تکمیل شده":"✓ پایان مطالعه و ثبت پیشرفت",async()=>{mark.disabled=true;try{await api("completeLesson",{id});if(!state.completed.includes(id))state.completed.push(id);mark.textContent="✓ این درس تکمیل شده";tg?.HapticFeedback?.notificationOccurred("success")}catch(e){mark.disabled=false;alert(e.message)}});mark.disabled=done||state.limitedAccess;if(state.limitedAccess)mark.textContent="ثبت پیشرفت نیازمند ورود معتبر تلگرام است";c.append(mark);
+const isSaved=state.bookmarks.includes(id);
+const bookmarkBtn=button(isSaved?"★ حذف از علاقه‌مندی‌ها":"☆ نشان‌کردن درس",async()=>{
+ if(state.limitedAccess)return alert("برای ثبت علاقه‌مندی وارد تلگرام شوید.");
+ bookmarkBtn.disabled=true;const newValue=!state.bookmarks.includes(id);
+ try{await api("bookmark",{id,enabled:newValue});state.bookmarks=newValue?[...state.bookmarks,id]:state.bookmarks.filter(x=>x!==id);bookmarkBtn.textContent=newValue?"★ حذف از علاقه‌مندی‌ها":"☆ نشان‌کردن درس"}catch(e){alert(e.message)}finally{bookmarkBtn.disabled=false}
+},"action outline");c.append(bookmarkBtn);
+const noteLabel=el("h3","یادداشت شخصی من");c.append(noteLabel);
+const notes=el("textarea",null,"notes-input");notes.placeholder="نکات مهمی که می‌خواهید به خاطر بسپارید…";notes.maxLength=2000;notes.rows=4;notes.disabled=state.limitedAccess;c.append(notes);
+if(!state.limitedAccess){api("note",{id}).then(x=>{notes.value=x.note||""}).catch(()=>{notes.placeholder="بارگذاری یادداشت انجام نشد"});}
+const save=button("ذخیره یادداشت",async()=>{save.disabled=true;try{await api("note",{id,note:notes.value});save.textContent="✓ ذخیره شد"}catch(e){alert(e.message)}finally{save.disabled=false}},"action outline");save.disabled=state.limitedAccess;c.append(save);
+content.append(c)}catch(e){fail(e)}}
 async function openQuiz(id){
  setMain("quizzes");clear();content.append(el("div","در حال بارگذاری آزمون…","loading"));
  try{
