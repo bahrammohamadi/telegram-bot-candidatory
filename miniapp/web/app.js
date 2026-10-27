@@ -51,7 +51,7 @@ function clear(node=content){node.replaceChildren()}
 function button(text,fn,cls="action"){const b=el("button",text,cls);b.type="button";b.addEventListener("click",fn);return b}
 function empty(text){return el("div",text,"empty")}
 function fail(err){clear();content.append(el("div",err.message||"خطا در دریافت اطلاعات","error"))}
-function setMain(next){tab=next;homepage.hidden=tab!=="home";inner.hidden=tab==="home";document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));if(tab==="home")renderHome();else render()}
+function setMain(next){const changed=tab!==next;tab=next;homepage.hidden=tab!=="home";inner.hidden=tab==="home";document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));if(tab==="home")renderHome();else render();if(changed){const panel=tab==="home"?homepage:inner;panel.classList.remove("page-enter");void panel.offsetWidth;panel.classList.add("page-enter");window.scrollTo({top:0,behavior:"instant"});}}
 function card(title,description,buttonText,fn,number,completed){const article=el("article",null,"card");const head=el("div",null,"card-head");head.append(el("h3",title));head.append(el("span",completed?"✓":String(number||"✦"),"mini-icon"));article.append(head,el("p",description||""));if(buttonText)article.append(button(buttonText,fn,completed?"action outline":"action"));return article}
 async function api(action,details={}){if(!initData)throw Error("برنامه را از منوی ربات در تلگرام باز کنید.");const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,initData,...details})});let data;try{data=await r.json()}catch{throw Error("پاسخ سرور قابل خواندن نیست.")}if(!r.ok)throw Error(data.error==="Unauthorized"?"نشست تلگرام معتبر نیست؛ برنامه را ببندید و دوباره باز کنید.":data.error||"خطای ارتباط");return data}
 const launcherApps=[
@@ -94,12 +94,12 @@ function openLauncher(id){
 function renderLauncher(){
   const root=document.getElementById("app-launcher");if(!root)return;
   root.replaceChildren();
-  for(const app of launcherApps){
-    const tile=el("button",null,"launcher-app");tile.type="button";tile.dataset.tool=app.id;
+  for(const [index,app] of launcherApps.entries()){
+    const tile=el("button",null,"launcher-app");tile.style.setProperty("--launch-index",String(index));tile.type="button";tile.dataset.tool=app.id;
     const icon=el("span",app.icon,"launcher-icon theme-"+app.theme);
     const label=el("strong",app.label),hint=el("small",app.hint);
     tile.append(icon,label,hint);
-    tile.addEventListener("click",()=>openLauncher(app.id));root.append(tile);
+    tile.addEventListener("click",()=>{tile.classList.add("launcher-pressed");openLauncher(app.id)});root.append(tile);
   }
 }
 function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher()}
