@@ -23,3 +23,24 @@ html[data-theme="dark"] .progress-track{background:#31474c}html[data-theme="dark
 html[data-theme="dark"] .op-details{background:#19343b;border-color:#376267}html[data-theme="dark"] .op-row{border-color:#335057}
 html[data-theme="dark"] .activity-chart{background:repeating-linear-gradient(to top,transparent 0,transparent 33px,#294348 34px);border-color:#37545a}
 @media(prefers-reduced-motion:reduce){.top-control,.card,.categories button{transition:none!important}}
+
+/* APPLICATION SHELL — the header is compact on every tool screen; the hero lives ONLY in Home */
+.top{padding:calc(11px + env(safe-area-inset-top)) 15px 12px;border-radius:0 0 16px 16px;background:linear-gradient(115deg,#075e6c,#008b88);box-shadow:0 8px 20px #075e6c17}
+.top:before{opacity:.035}.top-row{min-height:45px}.brand-copy small{font-size:10px}
+.top-icon{height:39px;width:39px}.page{padding-top:0}
+#home-panel{min-width:0}.home-intro{margin:0 -18px 18px;padding:10px 16px 18px;background:linear-gradient(143deg,#006b78,#00a79c);border-radius:0 0 28px 28px;box-shadow:0 14px 28px #006e7a20}
+.home-intro .hello{margin:10px 0 14px}.home-intro .hello h1{font-size:17px}.home-intro .hello-avatar{height:40px;width:40px;flex-shrink:0}.home-intro .featured{min-height:122px;grid-template-columns:31% 69%;border-radius:17px}.home-intro .feature-visual{min-height:122px}.home-intro .sunrise{width:50px;height:50px}.home-intro .summit-flag{font-size:22px}.home-intro .feature-copy{padding:10px 12px}.home-intro .featured h2{font-size:14px;margin:4px 0}.home-intro .featured p{font-size:10px;margin:0 0 7px;line-height:1.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.home-intro .featured .light-btn{font-size:10px;padding:7px 9px}
+.launcher-header{margin-top:23px}.app-launcher{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:8px;row-gap:15px;padding:8px 0 18px}
+.launcher-app{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;min-width:0;padding:6px 0;background:transparent;border:0;color:var(--ink);text-align:center;border-radius:14px;-webkit-tap-highlight-color:transparent;transition:transform .15s ease}
+.launcher-app:active{transform:scale(.94)}.launcher-app:focus-visible{outline:2px solid var(--teal)}
+.launcher-icon{width:clamp(49px,14vw,69px);height:clamp(49px,14vw,69px);display:grid;place-items:center;border:1px solid #ffffffbb;border-radius:19px;font-size:27px;color:white;font-weight:800;box-shadow:0 8px 14px #0b53581a,inset 0 1px 1px #ffffff55;margin-bottom:5px}
+.launcher-app strong{font-size:11px;line-height:1.5;max-width:100%;font-weight:800}.launcher-app small{font-size:9px;color:var(--muted);line-height:1.4}
+.launcher-icon.theme-aqua{background:linear-gradient(145deg,#32c0b2,#087a83)}.launcher-icon.theme-violet{background:linear-gradient(145deg,#ab8ef0,#7454c9)}.launcher-icon.theme-coral{background:linear-gradient(145deg,#ffa889,#e66c67)}.launcher-icon.theme-indigo{background:linear-gradient(145deg,#8094ee,#485abf)}.launcher-icon.theme-blue{background:linear-gradient(145deg,#7cc4fb,#4085c7)}.launcher-icon.theme-amber{background:linear-gradient(145deg,#ffd27a,#dd9a35)}.launcher-icon.theme-green{background:linear-gradient(145deg,#87dbab,#2f9a76)}
+#inner-panel{padding-top:19px;min-height:calc(100dvh - 175px)}#inner-panel>.section-head{margin-top:1px}
+.tool-spotlight{outline:2px solid var(--teal);outline-offset:2px;scroll-margin-top:85px}
+.bottom-nav button{min-height:46px}.bottom-nav button span{font-size:21px}
+html[data-theme="dark"] .home-intro{background:linear-gradient(145deg,#07505c,#087c78)}
+html[data-theme="dark"] .launcher-app{color:var(--ink)}
+@media(max-width:360px){.home-intro{margin-left:-11px;margin-right:-11px;padding:10px}.home-intro .featured{grid-template-columns:28% 72%}.launcher-app strong{font-size:10px}.launcher-app small{font-size:8px}.launcher-icon{border-radius:15px}}
+@media(min-width:560px){.home-intro{margin-left:-28px;margin-right:-28px;padding:15px 28px 23px}.app-launcher{grid-template-columns:repeat(5,minmax(0,1fr));gap:15px}.home-intro .featured{min-height:148px}.home-intro .feature-visual{min-height:148px}}
+@media(prefers-reduced-motion:reduce){.launcher-app{transition:none}}
