@@ -72,7 +72,8 @@ async function handleOps(action,payload,db,user,env){
     db.prepare("SELECT id,description,amount_minor,currency,category,spent_at FROM workspace_expenses WHERE workspace_id=? ORDER BY spent_at DESC LIMIT 100").bind(workspace).all(),
     db.prepare("SELECT m.telegram_id,m.role,m.status,u.display_name FROM workspace_members m JOIN candidate_users u ON u.telegram_id=m.telegram_id WHERE m.workspace_id=? ORDER BY m.created_at LIMIT 100").bind(workspace).all()
    ]);
-   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:expenses.results,members:canManage?members.results:[]};
+   const drafts=await db.prepare("SELECT id,title,body,status,created_at FROM content_revision_requests WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspace).all();
+   return {workspace:{id:workspace,name:membership.name,role},tasks:tasks.results,events:events.results,commitments:commitments.results,expenses:expenses.results,members:canManage?members.results:[],drafts:drafts.results};
  }
  if(action==="auditTrail"){
    if(!canManage)return {error:"Forbidden",status:403};
@@ -102,6 +103,23 @@ async function handleOps(action,payload,db,user,env){
    return {saved:true};
  }
  if(!canWrite)return {error:"Read-only role",status:403};
+ if(action==="createDraft"){
+   const title=clean(payload.title),body=clean(payload.body,6000);
+   if(title.length<2||body.length<5)return {error:"Invalid content",status:400};
+   const id=crypto.randomUUID();
+   await db.prepare("INSERT INTO content_revision_requests(id,workspace_id,title,body,created_by) VALUES(?,?,?,?,?)").bind(id,workspace,title,body,uid).run();
+   await logChange(db,uid,workspace,"create","draft",id);return {saved:true,id};
+ }
+ if(action==="draftStatus"){
+   const status=clean(payload.status,16);
+   if(!["draft","review","approved","rejected"].includes(status))return {error:"Invalid status",status:400};
+   if(["approved","rejected"].includes(status)&&!canManage)return {error:"Approval requires admin",status:403};
+   const item=await db.prepare("SELECT id,created_by,status FROM content_revision_requests WHERE workspace_id=? AND id=?").bind(workspace,clean(payload.id,64)).first();
+   if(!item)return {error:"Not found",status:404};
+   if(!canManage&&item.created_by!==uid)return {error:"Forbidden",status:403};
+   const r=await db.prepare("UPDATE content_revision_requests SET status=? WHERE workspace_id=? AND id=?").bind(status,workspace,item.id).run();
+   await logChange(db,uid,workspace,"status:"+status,"draft",item.id);return {saved:true};
+ }
  if(action==="createTask"){
    const title=clean(payload.title),description=clean(payload.description,3000),due=payload.dueDate||null;
    if(title.length<2||(due&&!validDate(due)))return {error:"Invalid task",status:400};
@@ -186,7 +204,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
