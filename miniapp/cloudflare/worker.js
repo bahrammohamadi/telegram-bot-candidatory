@@ -31,6 +31,24 @@ export default {
       return reply({lessons:lessons.results,quizzes:quizzes.results});
     }catch{return reply({error:"Catalog unavailable"},503)}
   }
+  if(request.method==="GET" && new URL(request.url).pathname.startsWith("/api/")){
+    try{
+      const path=new URL(request.url).pathname.split("/");
+      const id=Number(path[3]);
+      if(!Number.isSafeInteger(id)||id<=0)return reply({error:"Invalid ID"},400);
+      if(path[2]==="lesson"){
+        const lesson=await env.DB.prepare("SELECT id,title,summary,body FROM lessons WHERE id=? AND published=1").bind(id).first();
+        return lesson?reply({lesson}):reply({error:"Not found"},404);
+      }
+      if(path[2]==="quiz"){
+        const quiz=await env.DB.prepare("SELECT id,title FROM quizzes WHERE id=? AND published=1").bind(id).first();
+        if(!quiz)return reply({error:"Not found"},404);
+        const q=await env.DB.prepare("SELECT id,prompt,options_json,position FROM quiz_questions WHERE quiz_id=? ORDER BY position,id").bind(id).all();
+        return reply({quiz,questions:q.results.map(({options_json,...x})=>({...x,options:JSON.parse(options_json)}))});
+      }
+      return reply({error:"Not found"},404);
+    }catch{return reply({error:"Content unavailable"},503)}
+  }
   if(request.method!=="POST")return reply({error:"Method not allowed"},405);
   if(Number(request.headers.get("content-length")||0)>16384)return reply({error:"Too large"},413);
   if(!env.DB)return reply({error:"Service not configured"},503);
