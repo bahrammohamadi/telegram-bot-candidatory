@@ -38,6 +38,22 @@ async function renderWorkspace(){
   const ws=opState.record;
   if(!ws){content.append(empty("برای شروع، یک فضای کاری ایجاد کنید."));return}
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
+  const report=el("section",null,"card");report.append(el("h3","گزارش وضعیت فضای کاری"));
+  const done=(ws.tasks||[]).filter(x=>x.status==="done").length;
+  report.append(makeRow("پیشرفت وظایف",(ws.tasks.length?Math.round(done/ws.tasks.length*100):0).toLocaleString("fa-IR")+"٪ — "+done+" از "+ws.tasks.length));
+  report.append(makeRow("جلسات ثبت‌شده",String(ws.events.length)));
+  report.append(makeRow("تعهدات تکمیل‌شده",String(ws.commitments.filter(x=>x.status==="completed").length)+" از "+ws.commitments.length));
+  if(["owner","admin"].includes(ws.workspace.role)){
+    const amount=ws.expenses.reduce((v,x)=>v+Number(x.amount_minor||0),0);
+    report.append(makeRow("جمع هزینه‌های ثبت‌شده",amount.toLocaleString("fa-IR")+" ریال"));
+  }
+  report.append(button("دریافت گزارش JSON",()=>{
+    const safe={workspace:ws.workspace,generatedAt:new Date().toISOString(),tasks:ws.tasks,events:ws.events,commitments:ws.commitments};
+    if(["owner","admin"].includes(ws.workspace.role))safe.expenses=ws.expenses;
+    const blob=new Blob([JSON.stringify(safe,null,2)],{type:"application/json;charset=utf-8"});
+    const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="candidatory-report.json";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  },"action outline"));
+  content.append(report);
   const blocks=[["وظایف",ws.tasks,"createTask",[["title","عنوان","text"],["description","توضیح","text"],["priority","اولویت","select",[["normal","عادی"],["high","بالا"],["low","پایین"]]]]],
   ["جلسات",ws.events,"createEvent",[["title","عنوان","text"],["startsAt","زمان","datetime-local"],["location","مکان","text"]]],
   ["تعهدات عمومی",ws.commitments,"createCommitment",[["title","عنوان","text"],["description","شرح","text"]]],
