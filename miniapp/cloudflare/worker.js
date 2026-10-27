@@ -4,9 +4,10 @@ const enc = new TextEncoder();
 function reply(value, status=200) { return new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-methods":"POST, OPTIONS","access-control-allow-headers":"content-type"}}); }
 async function verify(initData,token){
  if(!token) throw new Error("NOT_CONFIGURED");
- if(typeof initData!=="string"||initData.length>8192) throw new Error("UNAUTHORIZED");
+ if(typeof initData!=="string"||initData.length>8192) throw new Error("INVALID_INIT_DATA");
  const p=new URLSearchParams(initData),hash=p.get("hash")||"", ts=Number(p.get("auth_date"));
- if(!/^[0-9a-f]{64}$/.test(hash)||!Number.isFinite(ts)||Math.abs(Date.now()/1000-ts)>3600) throw new Error("UNAUTHORIZED");
+ if(!/^[0-9a-f]{64}$/.test(hash)||!Number.isFinite(ts)) throw new Error("INVALID_INIT_DATA");
+ if(Math.abs(Date.now()/1000-ts)>3600) throw new Error("EXPIRED_INIT_DATA");
  const data=[...p.entries()].filter(([k])=>k!=="hash"&&k!=="signature").sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+"="+v).join("\n");
  const base=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const secret=await crypto.subtle.sign("HMAC",base,enc.encode(token));
@@ -14,7 +15,7 @@ async function verify(initData,token){
  const signed=new Uint8Array(await crypto.subtle.sign("HMAC",key,enc.encode(data)));
  const provided=new Uint8Array(hash.match(/../g).map(h=>parseInt(h,16)));
  let diff=0;for(let i=0;i<32;i++)diff|=signed[i]^provided[i];
- if(diff)throw new Error("UNAUTHORIZED");
+ if(diff)throw new Error("INVALID_SIGNATURE");
  let user;try{user=JSON.parse(p.get("user")||"null")}catch{throw new Error("UNAUTHORIZED")}
  if(!user||!Number.isSafeInteger(user.id)||user.id<=0)throw new Error("UNAUTHORIZED");
  return user;
@@ -68,7 +69,7 @@ export default {
    }
    return reply({error:"Unknown action"},400);
   }catch(e){
-   if(e?.message==="UNAUTHORIZED")return reply({error:"Unauthorized"},401);
+   if(["UNAUTHORIZED","INVALID_INIT_DATA","EXPIRED_INIT_DATA","INVALID_SIGNATURE"].includes(e?.message))return reply({error:e.message},401);
    if(e?.message==="NOT_CONFIGURED")return reply({error:"Telegram bot token not configured"},503);
    console.error("Candidatory API error",e?.name||"Error");
    return reply({error:"Internal error"},500);
