@@ -64,11 +64,14 @@ async function renderWorkspace(){
       ["فضاهای کاری","مدیریت تیم‌ها","▦",showPlatformSpaces],
       ["آمار سامانه","گزارش کلی","▥",async()=>{const r=await api("platformSummary");const c=el("section",null,"card");c.append(el("h3","آمار سامانه"));for(const [k,v] of [["کاربران",r.summary.users],["فضاهای کاری",r.summary.workspaces],["درس‌های منتشرشده",r.summary.lessons]])c.append(makeRow(k,Number(v).toLocaleString("fa-IR")));content.prepend(c)}]
     ]){const tile=button("",()=>Promise.resolve(fn()).catch(e=>alert(e.message)),"admin-tool");tile.append(el("span",symbol,"admin-tool-icon"),el("strong",title),el("small",detail));tools.append(tile)}
-    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));
+    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));content.append(button("مدیریت بسته‌ها و دسترسی‌ها",showPlanAdmin,"action outline"));
   }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
   if(!ws){content.append(empty("برای شروع، یک فضای کاری ایجاد کنید."));return}
+  try{const entitlement=await api("workspacePlan",{workspaceId:opState.id});
+    const plan=el("article",null,"card");plan.append(el("h3","بسته خدمات فعلی"),makeRow(entitlement.plan.name,"حداکثر "+entitlement.plan.max_members.toLocaleString("fa-IR")+" عضو فعال"));content.append(plan);
+  }catch(e){content.append(el("p","بسته خدمات در دسترس نیست.","meta"))}
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
   const overview=el("div",null,"admin-metrics");
   for(const [label,val,sym] of [["وظایف",ws.tasks.length,"✓"],["رویدادها",ws.events.length,"▣"],["تعهدات",ws.commitments.length,"▤"]]){const item=el("div",null,"admin-metric");item.append(el("span",sym,"admin-metric-icon"),el("strong",val.toLocaleString("fa-IR")),el("small",label));overview.append(item)}
@@ -228,5 +231,25 @@ async function showAdminSupport(){
    panel.append(row);
   }
   content.append(panel);
+ }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+async function showPlanAdmin(){
+ clear();content.append(el("div","در حال دریافت بسته‌ها…","loading"));
+ try{
+  const [result,ws]=await Promise.all([api("adminEntitlements"),api("adminWorkspaces")]);
+  clear();content.append(button("← بازگشت به مدیریت",renderWorkspace,"back"));
+  const box=el("section",null,"card");box.append(el("h3","بسته‌ها و دسترسی‌ها"),el("p","تعیین بسته صرفاً سطح دسترسی است و پرداخت خودکار یا خرید فعال نیست."));
+  for(const plan of result.plans||[])box.append(makeRow(plan.name,"سقف اعضا: "+Number(plan.max_members).toLocaleString("fa-IR")+" • "+plan.description));
+  if(ws.workspaces?.length){
+   const fields=[["workspaceId","فضای کاری","select",ws.workspaces.map(x=>[x.id,x.name])],
+   ["planId","انتخاب بسته","select",result.plans.map(x=>[x.id,x.name])]];
+   box.append(detailsForm("＋ تخصیص بسته به فضای کاری",fields,async values=>{
+      await api("adminAssignPlan",{workspaceId:values.workspaceId,planId:values.planId});await showPlanAdmin();
+   }));
+  }
+  const assigned=el("section",null,"card");assigned.append(el("h3","بسته‌های تخصیص داده‌شده"));
+  for(const item of result.entitlements||[])assigned.append(makeRow(item.workspace_name,item.plan_id));
+  content.append(box,assigned);
  }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
