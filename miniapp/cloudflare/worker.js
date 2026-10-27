@@ -36,17 +36,25 @@ export default {
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
    if(action==="home"){
-    const [lessons,quizzes,attempts]=await Promise.all([
+    const [lessons,quizzes,attempts,progress]=await Promise.all([
      env.DB.prepare("SELECT id,title,summary,position FROM lessons WHERE published=1 ORDER BY position,id LIMIT 100").all(),
      env.DB.prepare("SELECT id,title,description FROM quizzes WHERE published=1 ORDER BY id LIMIT 100").all(),
-     env.DB.prepare("SELECT id,quiz_id,score,question_count,submitted_at FROM quiz_attempts WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 20").bind(id).all()
+     env.DB.prepare("SELECT id,quiz_id,score,question_count,submitted_at FROM quiz_attempts WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 20").bind(id).all(),
+     env.DB.prepare("SELECT lesson_id FROM lesson_progress WHERE telegram_id=? ORDER BY completed_at DESC").bind(id).all()
     ]);
-    return reply({user:{id,name:String(user.first_name||"").slice(0,100)},lessons:lessons.results,quizzes:quizzes.results,attempts:attempts.results});
+    return reply({user:{id,name:String(user.first_name||"").slice(0,100)},lessons:lessons.results,quizzes:quizzes.results,attempts:attempts.results,completed:progress.results.map(x=>x.lesson_id)});
    }
    if(action==="lesson"){
     if(!validId(payload.id))return reply({error:"Invalid ID"},400);
     const lesson=await env.DB.prepare("SELECT id,title,summary,body FROM lessons WHERE published=1 AND id=?").bind(Number(payload.id)).first();
     return lesson?reply({lesson}):reply({error:"Not found"},404);
+   }
+   if(action==="completeLesson"){
+    if(!validId(payload.id))return reply({error:"Invalid ID"},400);
+    const lesson=await env.DB.prepare("SELECT id FROM lessons WHERE published=1 AND id=?").bind(Number(payload.id)).first();
+    if(!lesson)return reply({error:"Not found"},404);
+    await env.DB.prepare("INSERT OR IGNORE INTO lesson_progress(telegram_id,lesson_id) VALUES(?,?)").bind(id,lesson.id).run();
+    return reply({completed:true,lessonId:lesson.id});
    }
    if(action==="quiz"){
     if(!validId(payload.id))return reply({error:"Invalid ID"},400);
