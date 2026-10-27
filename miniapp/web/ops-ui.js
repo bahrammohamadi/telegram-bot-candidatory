@@ -5,7 +5,8 @@ function makeRow(title,detail){const x=el("div",null,"op-row");x.append(el("stro
 function detailsForm(title,fields,send){const d=el("details",null,"op-details"),summary=el("summary",title),form=el("form",null,"op-form");d.append(summary);
 const inputs={};
 for(const [key,label,type,choices] of fields){const wrap=el("label",null,"op-field");wrap.append(el("span",label));let input;
-if(type==="select"){input=el("select");for(const [value,text] of choices){const opt=el("option",text);opt.value=value;input.append(opt)}}
+if(type==="textarea"){input=el("textarea");input.rows=5;input.maxLength=12000}
+else if(type==="select"){input=el("select");for(const [value,text] of choices){const opt=el("option",text);opt.value=value;input.append(opt)}}
 else {input=el("input");input.type=type||"text"}
 input.required=true;input.name=key;wrap.append(input);form.append(wrap);inputs[key]=input}
 const save=button("ذخیره",()=>{});save.type="submit";form.append(save);
@@ -23,7 +24,7 @@ async function renderWorkspace(){
   if(opState.list.length){const select=el("select",null,"op-select");for(const w of opState.list){const opt=el("option",w.name+" — "+w.role);opt.value=w.id;opt.selected=w.id===opState.id;select.append(opt)}select.addEventListener("change",()=>{opState.id=select.value;renderWorkspace()});head.append(select)}
   head.append(detailsForm("＋ ایجاد فضای کاری",[["name","نام فضای کاری","text"],["jurisdiction","حوزه فعالیت","text"]],async x=>{await api("createWorkspace",x);opState.id=null;await renderWorkspace()}));
   content.append(head);
-  if(r.platformAdmin){content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
+  if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
   if(!ws){content.append(empty("برای شروع، یک فضای کاری ایجاد کنید."));return}
   const role=ws.workspace.role,edit=["owner","admin","editor"].includes(role),manager=["owner","admin"].includes(role);
@@ -54,5 +55,30 @@ async function renderWorkspace(){
     content.append(members);
     content.append(button("نمایش گزارش فعالیت‌ها",async()=>{try{const r=await api("auditTrail",{workspaceId:opState.id});const audit=el("article",null,"card");audit.append(el("h3","سوابق تغییرات"));for(const a of r.audit||[])audit.append(makeRow(a.action+" • "+a.record_type,a.created_at));content.append(audit)}catch(e){alert(e.message)}},"action outline"));
   }
+ }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+async function showPlatformSpaces(){
+ try{const r=await api("adminWorkspaces");clear();content.append(button("← مدیریت",renderWorkspace,"back"));
+ const box=el("article",null,"card");box.append(el("h3","فهرست فضاهای کاری"));
+ for(const w of r.workspaces||[])box.append(makeRow(w.name,w.jurisdiction+" • "+w.status));
+ content.append(box);
+ }catch(e){alert(e.message)}
+}
+async function showPlatformCms(){
+ clear();content.append(el("div","در حال دریافت آموزش‌ها…","loading"));
+ try{const data=await api("adminLessons");clear();content.append(button("← بازگشت",renderWorkspace,"back"));
+ const panel=el("section",null,"card");panel.append(el("h3","مرکز مدیریت آموزش‌ها"));
+ panel.append(detailsForm("＋ درس جدید",[["title","عنوان","text"],["summary","معرفی کوتاه","text"],["body","متن درس","textarea"],["position","ترتیب نمایش","number"]],async v=>{
+ await api("adminSaveLesson",{title:v.title,summary:v.summary,body:v.body,position:Number(v.position)});await showPlatformCms()}));
+ for(const lesson of data.lessons||[]){
+  const row=makeRow(lesson.title,lesson.published?"منتشرشده":"پیش‌نویس");
+  const publish=button(lesson.published?"توقف انتشار":"انتشار",async()=>{try{await api("adminPublishLesson",{id:lesson.id,published:!lesson.published});await showPlatformCms()}catch(e){alert(e.message)}},"action outline");row.append(publish);
+  const edit=detailsForm("✎ ویرایش درس",[["title","عنوان","text"],["summary","خلاصه","text"],["body","محتوا","textarea"],["position","ترتیب","number"]],async v=>{
+   await api("adminSaveLesson",{id:lesson.id,title:v.title,summary:v.summary,body:v.body,position:Number(v.position)});await showPlatformCms()});
+  const inputs=edit.querySelectorAll("[name]");for(const input of inputs){if(input.name==="title")input.value=lesson.title;else if(input.name==="summary")input.value=lesson.summary;else if(input.name==="body")input.value=lesson.body;else if(input.name==="position")input.value=lesson.position}
+  row.append(edit);panel.append(row);
+ }
+ content.append(panel);
  }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
