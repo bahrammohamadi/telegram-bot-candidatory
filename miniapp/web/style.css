@@ -136,3 +136,12 @@ html[data-theme="dark"] .candidate-field :is(input,textarea,select){background:#
 .candidate-home-mini strong{font-size:14px}.candidate-home-mini p{font-size:11px;line-height:1.8;color:var(--ink-soft);margin:0}
 .candidate-home-mini button{align-self:flex-start;margin:0;font-size:11px}
 .candidate-home-mini .progress-track{width:100%}
+
+/* Legal resource reading and verification */
+.legal-intro p{font-size:12px;line-height:1.95;color:var(--ink-soft)}
+.legal-source{display:flex;flex-direction:column;gap:9px}
+.legal-source strong{font-size:14px;line-height:1.8}
+.legal-source small,.legal-source .meta{font-size:11px;color:var(--ink-soft);overflow-wrap:anywhere}
+.legal-source button{margin:0;align-self:stretch}
+.legal-source .action.outline{border-color:var(--line)}
+.legal-source p{line-height:1.85}
