@@ -12,3 +12,33 @@ $('profileForm').addEventListener('submit',async e=>{e.preventDefault();const b=
 $('taskForm').addEventListener('submit',async e=>{e.preventDefault();const title=new FormData(e.currentTarget).get('title');try{await api('tasks',{method:'POST',body:JSON.stringify({title})});e.currentTarget.reset();await refresh();message('وظیفه ثبت شد.')}catch(err){message(err.message)}});
 $('openBot').addEventListener('click',()=>{webapp?.openTelegramLink('https://t.me/candidatoryiran_bot')});
 if(initData)refresh().catch(e=>message(e.message));else message('برای دریافت اطلاعات و استفاده از امکانات، Mini App را داخل تلگرام اجرا کنید.');
+let academy=null;
+async function loadAcademy(){try{academy=await api('courses');renderAcademy();}catch(e){message(e.message)}}
+function renderAcademy(){
+ if(!academy)return;
+ const summary=$('academySummary');summary.replaceChildren();
+ for(const [label,value] of [['تعداد دوره‌ها',academy.courses.length],['آزمون‌های گذرانده',academy.completed.length]]){
+  const card=document.createElement('article'),l=document.createElement('small'),v=document.createElement('strong');
+  l.textContent=label;v.textContent=String(value);card.append(l,v);summary.append(card);
+ }
+ const filter=$('categoryFilter');if(filter.options.length===1){for(const category of new Set(academy.courses.map(c=>c.category))){const opt=document.createElement('option');opt.value=category;opt.textContent=category;filter.append(opt)}}
+ const list=$('courseList');list.replaceChildren();
+ for(const course of academy.courses.filter(c=>!filter.value||filter.value===c.category)){
+  const card=document.createElement('article'),head=document.createElement('h3'),info=document.createElement('p'),btn=document.createElement('button');
+  head.textContent=course.title+(academy.completed.includes(course.id)?' ✓':'');
+  info.textContent=course.category+' · '+course.minutes+' دقیقه · '+course.summary;
+  btn.type='button';btn.textContent='مشاهده درس و آزمون';btn.addEventListener('click',()=>showCourse(course));
+  card.append(head,info,btn);list.append(card);
+ }
+}
+function showCourse(course){
+ const panel=$('lessonDetail');panel.hidden=false;panel.replaceChildren();
+ const title=document.createElement('h3');title.textContent=course.title;panel.append(title);
+ for(const section of course.sections){const h=document.createElement('h4'),p=document.createElement('p');h.textContent=section.title;p.textContent=section.body;panel.append(h,p)}
+ const q=document.createElement('h4');q.textContent=course.quiz.question;panel.append(q);
+ course.quiz.options.forEach((answer,index)=>{const b=document.createElement('button');b.type='button';b.className='quiz-choice';b.textContent=answer;b.addEventListener('click',async()=>{try{const result=await api('courses/complete',{method:'POST',body:JSON.stringify({courseId:course.id,answer:index})});message(result.passed?'آزمون با موفقیت گذرانده شد.':'پاسخ درست نیست؛ نکات درس را مرور کنید.');if(result.passed){await loadAcadem();}}catch(e){message(e.message)}});panel.append(b)});
+ panel.scrollIntoView({behavior:'auto',block:'start'});
+}
+async function loadAcadem(){academy=await api('courses');renderAcademy();}
+$('categoryFilter').addEventListener('change',renderAcademy);
+document.querySelector('[data-tab="academy"]').addEventListener('click',()=>{if(!academy)loadAcademy()});
