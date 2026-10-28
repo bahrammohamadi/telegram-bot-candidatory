@@ -1,0 +1,10 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const source = fs.readFileSync("src/main.js","utf8");
+const schema = fs.readFileSync("setup-db.js","utf8");
+assert.match(source,/validWebhookSecret\(req\.headers\)/);
+assert.match(source,/timingSafeEqual\(a, b\)/);
+assert.match(source,/await ensureBotReady\(\)/);
+assert.doesNotMatch(source,/const fakeRequest\s*=/);
+assert.match(schema,/key:\s*"candidateProfile"/);
+console.log("P0 static safety checks passed");
