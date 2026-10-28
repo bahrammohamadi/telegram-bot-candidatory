@@ -9,6 +9,29 @@ async function logChange(db,id,workspace,action,kind,record){
 }
 async function handleOps(action,payload,db,user,env){
  const uid=user.id;
+ if(action==="candidateProfile"){
+   const profile=await db.prepare("SELECT election_type,district,stage,professional_summary,updated_at FROM candidate_profiles WHERE telegram_id=?").bind(uid).first();
+   const rows=await db.prepare("SELECT id,item_key,label,status,source_type FROM candidate_checklist_items WHERE telegram_id=? ORDER BY item_key").bind(uid).all();
+   return {profile:profile||null,checklist:rows.results,note:"این چک‌لیست پیشنهاد مدیریتی است و جایگزین قوانین رسمی یا مشاوره حقوقی نیست."};
+ }
+ if(action==="saveCandidateProfile"){
+   const election=clean(payload.electionType,22),stage=clean(payload.stage,22),district=clean(payload.district,120),summary=clean(payload.professionalSummary,500);
+   if(!["council","parliament","presidency","other"].includes(election)||!["planning","registration","operations","report"].includes(stage)||district.length<2)return {error:"نوع انتخابات، حوزه و مرحله فعالیت را بررسی کنید.",status:400};
+   await db.prepare("INSERT INTO candidate_profiles(telegram_id,election_type,district,stage,professional_summary) VALUES(?,?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET election_type=excluded.election_type,district=excluded.district,stage=excluded.stage,professional_summary=excluded.professional_summary,updated_at=CURRENT_TIMESTAMP").bind(uid,election,district,stage,summary).run();
+   const tasks=[["profile","بررسی مشخصات پرونده"],["official_rules","مطالعه آخرین اطلاعیه رسمی انتخابات مربوط"],["eligibility","بررسی شرایط و مدارک موردنیاز از منبع رسمی"],["timeline","ثبت مهلت‌های رسمی در تقویم"],["security","بررسی امنیت حساب و دسترسی تیم"],["activity_plan","تنظیم برنامه اجرایی و مسئولیت‌ها"]];
+   for(const [key,label] of tasks){
+     await db.prepare("INSERT OR IGNORE INTO candidate_checklist_items(id,telegram_id,item_key,label,source_type) VALUES(?,?,?,?,'recommended')").bind(crypto.randomUUID(),uid,key,label).run();
+   }
+   const profile=await db.prepare("SELECT election_type,district,stage,professional_summary,updated_at FROM candidate_profiles WHERE telegram_id=?").bind(uid).first();
+   return {saved:true,profile,note:"الزامات قانونی باید از مرجع رسمی انتخابات و متناسب با نوع و زمان انتخابات تأیید شوند."};
+ }
+ if(action==="updateCandidateChecklist"){
+   const key=clean(payload.itemKey,40),status=payload.status;
+   if(!["todo","done"].includes(status))return {error:"Invalid status",status:400};
+   const r=await db.prepare("UPDATE candidate_checklist_items SET status=?,updated_at=CURRENT_TIMESTAMP WHERE telegram_id=? AND item_key=?").bind(status,uid,key).run();
+   if(!r.meta.changes)return {error:"Checklist item not found",status:404};
+   return {saved:true};
+ }
  if(action==="createSupportTicket"){
    const subject=clean(payload.subject,200),message=clean(payload.message,3000);
    if(subject.length<3||message.length<5)return {error:"Invalid ticket",status:400};
