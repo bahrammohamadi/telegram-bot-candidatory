@@ -42,3 +42,20 @@ function showCourse(course){
 async function loadAcadem(){academy=await api('courses');renderAcademy();}
 $('categoryFilter').addEventListener('change',renderAcademy);
 document.querySelector('[data-tab="academy"]').addEventListener('click',()=>{if(!academy)loadAcademy()});
+
+let assessment=null;let assessmentIndex=0;let assessmentAnswers=[];
+$('startAssessment').addEventListener('click',async()=>{try{assessment=await api('assessment-v2');assessmentIndex=0;assessmentAnswers=Array(assessment.questions.length).fill(null);drawAssessment()}catch(e){message(e.message)}});
+function drawAssessment(){
+ const area=$('assessmentStage');area.replaceChildren();const questions=assessment.questions;const q=questions[assessmentIndex];
+ const header=document.createElement('article');const heading=document.createElement('h3');heading.textContent='سؤال '+(assessmentIndex+1)+' از '+questions.length;const bar=document.createElement('progress');bar.max=questions.length;bar.value=assessmentAnswers.filter(x=>x!==null).length;bar.style.width='100%';const prompt=document.createElement('p');prompt.textContent=q.prompt;
+ header.append(heading,bar,prompt);
+ q.options.forEach((option,i)=>{const btn=document.createElement('button');btn.className='quiz-choice';btn.textContent=(assessmentAnswers[assessmentIndex]===i?'✓ ':'')+option;btn.setAttribute('aria-pressed',String(assessmentAnswers[assessmentIndex]===i));btn.onclick=()=>{assessmentAnswers[assessmentIndex]=i;drawAssessment()};header.append(btn)});
+ const navigation=document.createElement('div');navigation.className='assessment-actions';
+ for(const [label,diff] of [['قبلی',-1],['بعدی',1]]){const btn=document.createElement('button');btn.textContent=label;btn.disabled=(diff<0&&assessmentIndex===0)||(diff>0&&assessmentIndex===questions.length-1);btn.onclick=()=>{assessmentIndex+=diff;drawAssessment()};navigation.append(btn)}
+ const finish=document.createElement('button');finish.textContent='ثبت پاسخ‌ها و دریافت گزارش';finish.disabled=assessmentAnswers.some(x=>x===null);finish.onclick=async()=>{finish.disabled=true;try{const result=await api('assessment-v2/submit',{method:'POST',body:JSON.stringify({answers:assessmentAnswers})});showAssessmentResult(result)}catch(e){message(e.message);finish.disabled=false}};navigation.append(finish);area.append(header,navigation);
+}
+function showAssessmentResult(result){
+ const area=$('assessmentStage');area.replaceChildren();const main=document.createElement('article');const h=document.createElement('h3');h.textContent='گزارش آموزشی شما — '+result.score+' از ۱۰۰';main.append(h);
+ for(const d of result.breakdown){const label=document.createElement('p');label.textContent=d.label+' — '+d.score+'٪';const p=document.createElement('progress');p.max=100;p.value=d.score;p.style.width='100%';main.append(label,p);for(const gap of d.gaps){const note=document.createElement('p');note.textContent='برای مرور: '+gap.skill+' — '+gap.explanation;main.append(note)}}
+ const foot=document.createElement('p');foot.textContent=result.notice;main.append(foot);area.append(main);
+}
