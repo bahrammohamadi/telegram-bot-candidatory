@@ -1,3 +1,4 @@
+import {assessmentBank,assessmentDomains} from './assessment-bank.mjs';
 import {courses} from './courses.mjs';
 import {validateInitData} from './auth.mjs';
 import {html} from './ui.mjs';
@@ -16,6 +17,26 @@ export default {async fetch(req,env){
  const id=String(user.id);
  try{
   await env.DB.prepare('INSERT INTO accounts(telegram_id,first_name,last_name,username) VALUES(?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET first_name=excluded.first_name,last_name=excluded.last_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP').bind(id,String(user.first_name||'').slice(0,100),String(user.last_name||'').slice(0,100),String(user.username||'').slice(0,100)).run();
+  if(url.pathname==='/api/assessment-v2'&&req.method==='GET'){
+    const items=assessmentBank.filter((q,i)=>i%5===0);
+    return json({version:'v2',questions:items.map(({correct,explanation,weight,...q})=>q),domains:assessmentDomains});
+  }
+  if(url.pathname==='/api/assessment-v2/submit'&&req.method==='POST'){
+    const items=assessmentBank.filter((q,i)=>i%5===0), b=await req.json();
+    if(!Array.isArray(b.answers)||b.answers.length!==items.length||!b.answers.every((a,i)=>Number.isInteger(a)&&a>=0&&a<items[i].options.length))return fail('Invalid answers');
+    const breakdown=assessmentDomains.map(domain=>{
+      const selected=items.map((q,i)=>({q,answer:b.answers[i]})).filter(v=>v.q.domain===domain.id);
+      const correct=selected.filter(v=>v.q.correct===v.answer).length;
+      return {id:domain.id,label:domain.label,score:Math.round(correct/selected.length*100),correct,total:selected.length,gaps:selected.filter(v=>v.q.correct!==v.answer).map(v=>({skill:v.q.skill,explanation:v.q.explanation}))};
+    });
+    const score=Math.round(breakdown.reduce((n,d)=>n+d.score,0)/breakdown.length);
+    await env.DB.prepare('INSERT INTO assessment_attempts_v2(id,telegram_id,assessment_type,answers_json,breakdown_json,score) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),id,'v2',JSON.stringify(b.answers),JSON.stringify(breakdown),score).run();
+    return json({score,breakdown,priorities:breakdown.filter(x=>x.score<80).sort((a,b)=>a.score-b.score).slice(0,3),notice:'نتیجه آموزشی بر اساس پاسخ‌هاست و ابزار اعتبارسنجی‌شده سنجش شایستگی نیست.'});
+  }
+  if(url.pathname==='/api/assessment-v2/history'&&req.method==='GET'){
+    const rows=await env.DB.prepare('SELECT id,score,breakdown_json,submitted_at FROM assessment_attempts_v2 WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 10').bind(id).all();
+    return json({attempts:(rows.results||[]).map(x=>({id:x.id,score:x.score,date:x.submitted_at,breakdown:JSON.parse(x.breakdown_json)}))});
+  }
   if(url.pathname==='/api/courses'&&req.method==='GET'){
    const done=await env.DB.prepare('SELECT course_id FROM learning_progress WHERE telegram_id=? AND passed=1').bind(id).all();
    return json({courses:courses.map(({id,title,summary,category,minutes,sections,quiz})=>({id,title,summary,category,minutes,sections,quiz:{question:quiz.question,options:quiz.options}})),completed:(done.results||[]).map(x=>x.course_id)});
