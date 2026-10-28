@@ -55,6 +55,7 @@ function setMain(next){const changed=tab!==next;tab=next;homepage.hidden=tab!=="
 function card(title,description,buttonText,fn,number,completed){const article=el("article",null,"card");const head=el("div",null,"card-head");head.append(el("h3",title));head.append(el("span",completed?"✓":String(number||"✦"),"mini-icon"));article.append(head,el("p",description||""));if(buttonText)article.append(button(buttonText,fn,completed?"action outline":"action"));return article}
 async function api(action,details={}){if(!initData)throw Error("برنامه را از منوی ربات در تلگرام باز کنید.");const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,initData,...details})});let data;try{data=await r.json()}catch{throw Error("پاسخ سرور قابل خواندن نیست.")}if(!r.ok)throw Error(data.error==="Unauthorized"?"نشست تلگرام معتبر نیست؛ برنامه را ببندید و دوباره باز کنید.":data.error||"خطای ارتباط");return data}
 const launcherApps=[
+  {id:"candidate",label:"پرونده من",icon:"🗂️",theme:"violet",hint:"مشخصات و مدارک"},
   {id:"lessons",label:"آموزش‌ها",icon:"📚",theme:"aqua",hint:"دوره و مطالعه"},
   {id:"quizzes",label:"آزمون‌ها",icon:"📝",theme:"violet",hint:"پرسش و نتیجه"},
   {id:"readiness",label:"خودارزیابی",icon:"🎯",theme:"coral",hint:"سنجش آمادگی"},
@@ -79,6 +80,7 @@ function openLauncher(id){
     if(typeof opState!=="undefined")opState.focusTool=id;
     setMain("workspace");return;
   }
+  if(id==="candidate"){openCandidateProfile();return}
   if(id==="readiness"){openReadiness();return}
   if(id==="ai"){openStudyAssistant();return}
   if(id==="bookmarks"){
@@ -93,6 +95,7 @@ function openLauncher(id){
 }
 // Original vector pictograms, bundled into app.js — no CDN, licensing, or image fetch.
 const iconPaths={
+ candidate:'<rect x="7" y="8" width="34" height="33" rx="5"/><circle cx="18" cy="20" r="5"/><path d="M11 34c0-6 3-9 7-9s7 3 7 9M29 19h7m-7 7h7m-7 7h5"/>',
  lessons:'<path d="M24 15c-7-4-13-3-17-1v25c6-2 11-2 17 1 6-3 11-3 17-1V14c-5-2-11-3-17 1Z"/><path d="M24 15v25"/><path d="m11 21 9 2m8 0 9-2M11 28l9 2m8 0 9-2"/>',
  quizzes:'<rect x="10" y="8" width="28" height="36" rx="5"/><path d="M18 8v-3h12v3M17 20h13m-13 8h8m-8 7h5"/><path d="m29 33 3 3 6-7"/>',
  readiness:'<circle cx="24" cy="25" r="16"/><circle cx="24" cy="25" r="10"/><circle cx="24" cy="25" r="4"/><path d="m27 22 14-14m-8 1h8v8"/>',
@@ -154,6 +157,48 @@ function showGettingStarted(){
  ]){const item=el("article",null,"guide-step");item.append(el("strong",title),el("p",description),button(cta,click,"action outline"));root.append(item)}
  root.append(button("بستن راهنما",()=>root.remove(),"action outline"));document.getElementById("app-launcher").before(root);root.scrollIntoView({block:"start",behavior:"smooth"});
 }
+async function openCandidateProfile(){
+ setMain("profile");clear();
+ content.append(el("div","در حال دریافت پرونده…","loading"));
+ try{
+  const r=await api("candidateProfile");clear();
+  content.append(button("← بازگشت به پروفایل",()=>setMain("profile"),"back"));
+  const panel=el("section",null,"card candidate-profile");
+  panel.append(el("h3","پرونده هوشمند کاندیدا"),el("p","اطلاعات این بخش فقط در حساب تلگرام خودتان ذخیره می‌شود. مقررات قانونی را از منابع رسمی بررسی کنید."));
+  const fields=[
+   ["electionType","نوع انتخابات",[["council","شوراهای شهر و روستا"],["parliament","مجلس شورای اسلامی"],["presidency","ریاست‌جمهوری"],["other","سایر انتخابات"]]],
+   ["stage","مرحله فعالیت",[["planning","آماده‌سازی"],["registration","ثبت‌نام و مدارک"],["operations","فعالیت‌های مجاز"],["report","گزارش و آرشیو"]]]
+  ];
+  const controls={};
+  for(const [key,label,options] of fields){
+   const wrap=el("label",null,"candidate-field");wrap.append(el("span",label));
+   const select=el("select",null,"op-select");for(const [value,name] of options){const option=el("option",name);option.value=value;select.append(option)}select.value=r.profile?.[key==="electionType"?"election_type":key]||options[0][0];wrap.append(select);panel.append(wrap);controls[key]=select;
+  }
+  for(const [key,label,value] of [["district","حوزه فعالیت",r.profile?.district||""],["professionalSummary","توضیح کوتاه درباره سوابق و تخصص",r.profile?.professional_summary||""]]){
+   const wrap=el("label",null,"candidate-field"),input=key==="district"?el("input"):el("textarea");
+   input.value=value;input.maxLength=key==="district"?120:500;input.placeholder=key==="district"?"مثلاً نام شهر یا حوزه انتخابیه":"تجربه‌ها و زمینه تخصصی خود را بنویسید";wrap.append(el("span",label),input);panel.append(wrap);controls[key]=input;
+  }
+  const save=button("ذخیره پرونده و ساخت چک‌لیست",async()=>{
+   save.disabled=true;
+   try{await api("saveCandidateProfile",{electionType:controls.electionType.value,stage:controls.stage.value,district:controls.district.value.trim(),professionalSummary:controls.professionalSummary.value.trim()});notify("پرونده ذخیره شد.");await openCandidateProfile()}
+   catch(e){notify(e.message,"error");save.disabled=false}
+  },"action");panel.append(save);content.append(panel);
+  if(r.profile){
+   const checklist=el("section",null,"card candidate-checklist");
+   const items=r.checklist||[],done=items.filter(x=>x.status==="done").length;
+   checklist.append(el("h3","اقدام‌های پیشنهادی"),el("p",done.toLocaleString("fa-IR")+" از "+items.length.toLocaleString("fa-IR")+" مورد انجام شده"));
+   const progress=el("div",null,"progress-track"),fill=el("div");fill.style.width=(items.length?done/items.length*100:0)+"%";progress.append(fill);checklist.append(progress);
+   for(const item of items){
+    const row=el("label",null,"candidate-checklist-row"),box=el("input");box.type="checkbox";box.checked=item.status==="done";
+    row.append(box,el("span",item.label));
+    box.addEventListener("change",async()=>{box.disabled=true;try{await api("updateCandidateChecklist",{itemKey:item.item_key,status:box.checked?"done":"todo"});await openCandidateProfile()}catch(e){notify(e.message,"error");box.checked=!box.checked;box.disabled=false}});
+    checklist.append(row);
+   }
+   checklist.append(el("p",r.note||"این موارد پیشنهادهای مدیریتی هستند و فهرست قطعی الزامات قانونی نیستند.","meta"));
+   content.append(checklist);
+  }
+ }catch(e){fail(e)}
+}
 function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher();paintQuickSlide()}
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل",workspace:"مدیریت"})[tab]||"آموزش‌ها";
 if(tab==="workspace"){renderWorkspace();return}
@@ -179,7 +224,7 @@ section.append(readinessCard);
 const assistantCard=el("article",null,"card");assistantCard.append(el("h3","دستیار آموزشی هوشمند"),el("p","پرسش‌های عمومی درباره آموزش، مدیریت، برنامه‌ریزی، امنیت و شفافیت را با کمک هوش مصنوعی بررسی کنید. حداکثر ۳ پرسش در روز."));
 assistantCard.append(button("گفت‌وگو با دستیار آموزشی",openStudyAssistant,"action"));section.append(assistantCard);
 if(state.attempts.length){for(const a of state.attempts.slice(0,10))section.append(card("نتیجه آزمون",a.score+" پاسخ درست از "+a.question_count+" سؤال",null,null))}content.append(section);return}
-if(tab==="profile"){const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));if(state.user?.id){c.append(el("p","شناسه تلگرام شما: "+String(state.user.id)));c.append(button("کپی شناسه تلگرام",()=>GenCopyId(state.user.id),"action outline"))}content.append(c);
+if(tab==="profile"){content.append(button("🗂️ پرونده هوشمند و چک‌لیست من",openCandidateProfile,"action"));const c=el("div",null,"card");c.append(el("h3",state.user?.name||"کاربر تلگرام"),el("p","شناسه ورود شما با امضای تلگرام تأیید می‌شود. اطلاعات هویتی حساس دریافت نمی‌کنیم."));c.append(el("p","درس‌های تکمیل‌شده: "+state.completed.length.toLocaleString("fa-IR")));if(state.user?.id){c.append(el("p","شناسه تلگرام شما: "+String(state.user.id)));c.append(button("کپی شناسه تلگرام",()=>GenCopyId(state.user.id),"action outline"))}content.append(c);
 const saved=el("article",null,"card saved-lessons");saved.append(el("h3","درس‌های نشان‌شده"));
 if(!state.bookmarks.length)saved.append(el("p","هنوز درسی نشان نکرده‌اید."));
 else for(const lesson of state.lessons.filter(x=>state.bookmarks.includes(x.id)))saved.append(button("★ "+lesson.title,()=>openLesson(lesson.id),"action outline"));
