@@ -1,3 +1,4 @@
+import {courses} from './courses.mjs';
 import {validateInitData} from './auth.mjs';
 import {html} from './ui.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
@@ -15,6 +16,17 @@ export default {async fetch(req,env){
  const id=String(user.id);
  try{
   await env.DB.prepare('INSERT INTO accounts(telegram_id,first_name,last_name,username) VALUES(?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET first_name=excluded.first_name,last_name=excluded.last_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP').bind(id,String(user.first_name||'').slice(0,100),String(user.last_name||'').slice(0,100),String(user.username||'').slice(0,100)).run();
+  if(url.pathname==='/api/courses'&&req.method==='GET'){
+   const done=await env.DB.prepare('SELECT course_id FROM learning_progress WHERE telegram_id=? AND passed=1').bind(id).all();
+   return json({courses:courses.map(({id,title,summary,category,minutes,sections,quiz})=>({id,title,summary,category,minutes,sections,quiz:{question:quiz.question,options:quiz.options}})),completed:(done.results||[]).map(x=>x.course_id)});
+  }
+  if(url.pathname==='/api/courses/complete'&&req.method==='POST'){
+   const b=await req.json();const course=courses.find(x=>x.id===b.courseId);
+   if(!course||!Number.isInteger(b.answer))return fail('Invalid answer');
+   if(b.answer!==course.quiz.correct)return json({passed:false});
+   await env.DB.prepare('INSERT INTO learning_progress(telegram_id,course_id,passed) VALUES(?,?,1) ON CONFLICT(telegram_id,course_id) DO UPDATE SET passed=1,updated_at=CURRENT_TIMESTAMP').bind(id,course.id).run();
+   return json({passed:true});
+  }
   if(url.pathname==='/api/overview'&&req.method==='GET'){
    const [profile,tasks,assessment]=await Promise.all([
     env.DB.prepare('SELECT full_name,election_type,constituency,occupation FROM profile WHERE telegram_id=?').bind(id).first(),
