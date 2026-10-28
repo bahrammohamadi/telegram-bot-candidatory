@@ -4,6 +4,7 @@ const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:
 const fail=(msg,status=400)=>json({error:msg},status);
 export default {async fetch(req,env){
  const url=new URL(req.url);
+ if(req.method==='GET'&&(url.pathname==='/app.css'||url.pathname==='/app.js'))return env.ASSETS?env.ASSETS.fetch(req):fail('Static assets not configured',503);
  if(req.method==='GET'&&url.pathname==='/')return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors https://web.telegram.org;",'x-content-type-options':'nosniff'}});
  if(url.pathname==='/health'&&req.method==='GET')return json({status:'ok',database:!!env.DB});
  if(!url.pathname.startsWith('/api/'))return fail('Not found',404);
