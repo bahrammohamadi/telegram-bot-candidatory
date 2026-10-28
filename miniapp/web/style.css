@@ -145,3 +145,24 @@ html[data-theme="dark"] .candidate-field :is(input,textarea,select){background:#
 .legal-source button{margin:0;align-self:stretch}
 .legal-source .action.outline{border-color:var(--line)}
 .legal-source p{line-height:1.85}
+
+/* Candidate profile: read-first summary; edit form only on demand */
+.candidate-summary{display:flex;flex-direction:column;gap:10px}
+.candidate-summary-row{display:grid;gap:3px;padding:10px 12px;border-radius:12px;background:var(--mint);overflow-wrap:anywhere}
+.candidate-summary-row small{font-size:11px;color:var(--ink-soft)}
+.candidate-summary-row strong{font-size:13px;line-height:1.85}
+.candidate-summary .action{margin:3px 0 0}
+.candidate-guide{background:var(--white);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.candidate-guide[open]{border-color:var(--teal)}
+.candidate-guide-summary{cursor:pointer;padding:12px 10px;display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;column-gap:9px;row-gap:3px;list-style:none}
+.candidate-guide-summary::-webkit-details-marker{display:none}
+.candidate-guide-summary strong{font-size:12px;line-height:1.9}
+.candidate-guide-summary small{font-size:10px;color:var(--teal);grid-column:2}
+.candidate-guide-status{display:grid;place-items:center;font-size:18px;color:var(--teal)}
+.candidate-guide-body{padding:8px 14px 15px;border-top:1px solid var(--line);font-size:12px;line-height:2}
+.candidate-guide-body strong{font-size:12px;display:block;margin-top:8px}
+.candidate-guide-body p{margin:4px 0 8px;color:var(--ink-soft)}
+.candidate-guide-body ol{padding-right:19px;margin:5px 0 12px}
+.candidate-guide-body li{padding:3px 0}
+.candidate-guide-body .action{width:100%;margin-top:10px}
+html[data-theme="dark"] .candidate-guide{background:#1c3036;border-color:#34525a}
