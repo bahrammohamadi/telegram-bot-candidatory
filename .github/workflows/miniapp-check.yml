@@ -1,0 +1,33 @@
+name: Mini App Free-Tier Checks
+on:
+  push:
+    branches:
+      - feature/telegram-miniapp-supabase
+    paths:
+      - "miniapp/**"
+      - ".github/workflows/miniapp-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source JavaScript
+        run: |
+          node --check miniapp/cloudflare/worker.js
+          node --check miniapp/cloudflare/workspace-api.js
+          node --check miniapp/web/app.js
+          node --check miniapp/web/ops-ui.js
+          node --check miniapp/scripts/build-worker.mjs
+          node --test miniapp/tests/*.test.mjs
+      - name: Generate distributable Worker
+        run: |
+          node miniapp/scripts/build-worker.mjs
+          node --check miniapp/cloudflare/site-worker.js
+          git diff --stat -- miniapp/cloudflare/site-worker.js
+      - name: Verify no required bindings are omitted
+        run: |
+          node --input-type=module -e "import fs from 'node:fs';const j=JSON.parse(fs.readFileSync('miniapp/cloudflare/wrangler.json'));if(j.main!=='site-worker.js'||!j.ai||j.ai.binding!=='AI'||!j.d1_databases?.some(x=>x.binding==='DB'))process.exit(1);"

@@ -1,0 +1,8 @@
+-- Additive document registry and privacy center migration (no destructive statements).
+-- Remote D1 migration successfully applied on 2026-10-27.
+CREATE TABLE IF NOT EXISTS workspace_documents(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,title TEXT NOT NULL CHECK(length(title) BETWEEN 2 AND 200),category TEXT NOT NULL DEFAULT 'general',source_url TEXT NOT NULL CHECK(length(source_url)<=2048),visibility TEXT NOT NULL DEFAULT 'members' CHECK(visibility IN ('members','managers')),created_by INTEGER NOT NULL REFERENCES candidate_users(telegram_id),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_docs_workspace ON workspace_documents(workspace_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS privacy_requests(id TEXT PRIMARY KEY,telegram_id INTEGER NOT NULL REFERENCES candidate_users(telegram_id),request_type TEXT NOT NULL CHECK(request_type IN ('export','delete','correct')),details TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','reviewing','done','rejected')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,resolved_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_privacy_owner ON privacy_requests(telegram_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS workspace_notifications(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',created_by INTEGER NOT NULL REFERENCES candidate_users(telegram_id),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_ws_notifications ON workspace_notifications(workspace_id,created_at DESC);
