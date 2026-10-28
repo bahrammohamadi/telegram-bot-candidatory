@@ -3,14 +3,14 @@ const message=t=>{$('message').textContent=t};
 async function api(path,options={}){if(!initData)throw Error('برای ورود، برنامه را از داخل تلگرام باز کنید.');const r=await fetch('/api/'+path,{...options,headers:{'content-type':'application/json','X-Telegram-Init-Data':initData,...options.headers}});const result=await r.json();if(!r.ok)throw Error(result.error||'ارتباط ناموفق بود');return result;}
 function switchTab(name){document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===name?'page':'false'));document.querySelectorAll('.panel').forEach(e=>e.classList.toggle('active',e.id===name));}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
-function render(){if(!state)return;$('score').textContent=state.lastAssessment?state.lastAssessment.score+'٪':'ثبت نشده';$('assessmentScore').textContent=state.lastAssessment?state.lastAssessment.score+' از ۱۰۰':'ثبت نشده';$('openTasks').textContent=String(state.tasks.filter(t=>t.status==='open').length);
+function render(){if(!state)return;$('score').textContent=state.lastAssessment?state.lastAssessment.score+'٪':'ثبت نشده';$('openTasks').textContent=String(state.tasks.filter(t=>t.status==='open').length);
 const list=$('taskList');list.replaceChildren();const summary=$('homeTasks');summary.textContent=state.tasks.length?state.tasks.filter(t=>t.status==='open').slice(0,3).map(t=>t.title).join(' • ')||'همه وظایف انجام شده‌اند':'هنوز وظیفه‌ای ثبت نشده است';
 for(const t of state.tasks){const row=document.createElement('div');row.className='task';const span=document.createElement('span');span.textContent=t.title;const button=document.createElement('button');button.textContent=t.status==='done'?'بازگشایی':'انجام شد';button.addEventListener('click',async()=>{try{await api('tasks/'+encodeURIComponent(t.id),{method:'PATCH',body:JSON.stringify({status:t.status==='done'?'open':'done'})});await refresh()}catch(e){message(e.message)}});row.append(span,button);list.append(row);}
 if(state.profile){for(const [k,v] of Object.entries(state.profile)){const el=$('profileForm').elements.namedItem(k);if(el)el.value=v||'';}}}
 async function refresh(){state=await api('overview');render();}
 $('profileForm').addEventListener('submit',async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget).entries());try{await api('profile',{method:'POST',body:JSON.stringify(b)});await refresh();message('پروفایل ذخیره شد.')}catch(err){message(err.message)}});
 $('taskForm').addEventListener('submit',async e=>{e.preventDefault();const title=new FormData(e.currentTarget).get('title');try{await api('tasks',{method:'POST',body:JSON.stringify({title})});e.currentTarget.reset();await refresh();message('وظیفه ثبت شد.')}catch(err){message(err.message)}});
-$('openBot').addEventListener('click',()=>{webapp?.openTelegramLink('https://t.me/candidatoryiran_bot')});
+
 if(initData)refresh().catch(e=>message(e.message));else message('برای دریافت اطلاعات و استفاده از امکانات، Mini App را داخل تلگرام اجرا کنید.');
 let academy=null;
 async function loadAcademy(){try{academy=await api('courses');renderAcademy();}catch(e){message(e.message)}}
