@@ -23,7 +23,7 @@ function setupUiControls(){
  let current;try{current=localStorage.getItem("candidatory-theme")}catch{}
  applyTheme(current==="dark"||current==="light"?current:tg?.colorScheme==="dark"?"dark":"light");
  document.getElementById("theme-toggle")?.addEventListener("click",()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark"));
- document.getElementById("reload-app")?.addEventListener("click",async()=>{await home();notify("اطلاعات برنامه به‌روزرسانی شد.")});
+ document.getElementById("reload-app")?.addEventListener("click",async()=>{todayOverviewCache=null;candidateHomeCache=null;await home();notify("اطلاعات برنامه به‌روزرسانی شد.")});
  tg?.onEvent?.("themeChanged",()=>{let saved;try{saved=localStorage.getItem("candidatory-theme")}catch{}if(!saved)applyTheme(tg?.colorScheme)});
 }
 function renderResume(){
@@ -308,7 +308,56 @@ async function refreshCandidateHome(){
   slot.append(panel);
  }catch(e){slot.replaceChildren()}
 }
-function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher();paintQuickSlide();refreshCandidateHome()}
+let todayRequest=null,todayOverviewCache=null,todayOverviewAt=0;
+function openWorkTool(tool){
+ if(typeof opState!=="undefined"){opState.activeTool=null;opState.focusTool=tool}
+ setMain("workspace");
+}
+async function refreshTodayDashboard(force=false){
+ const slot=document.getElementById("today-dashboard");if(!slot)return;
+ if(!force&&todayOverviewCache&&Date.now()-todayOverviewAt<45000){paintTodayDashboard(todayOverviewCache);return}
+ if(state.limitedAccess){paintTodayDashboard({limited:true});return}
+ if(todayRequest)return;
+ todayRequest=(async()=>{
+  try{
+   const r=await api("myWorkspaces");
+   const space=(r.workspaces||[])[0];
+   if(!space){todayOverviewCache={empty:true};return}
+   const summary=await api("workspaceSummary",{workspaceId:space.id});
+   todayOverviewCache={workspaceId:space.id,workspaceName:space.name,tasks:summary.tasks||[],events:summary.events||[],notices:summary.notices||[]};
+  }catch(e){todayOverviewCache={error:true}}
+  finally{todayOverviewAt=Date.now();paintTodayDashboard(todayOverviewCache);todayRequest=null}
+ })();
+ return todayRequest;
+}
+function paintTodayDashboard(data){
+ const slot=document.getElementById("today-dashboard");if(!slot)return;slot.replaceChildren();
+ const section=el("div",null,"today-panel");
+ const header=el("div",null,"today-head");
+ header.append(el("strong","امروز من"),el("small",new Date().toLocaleDateString("fa-IR",{weekday:"long",day:"numeric",month:"long"})));
+ section.append(header);
+ if(data?.limited){section.append(el("p","برای دیدن وظایف و جلسات شخصی، از داخل تلگرام وارد شوید.","today-empty"));slot.append(section);return}
+ if(data?.error){section.append(el("p","اطلاعات امروز دریافت نشد. اتصال را بررسی کنید.","today-empty"),button("تلاش دوباره",()=>refreshTodayDashboard(true),"action outline"));slot.append(section);return}
+ if(data?.empty){section.append(el("p","برای نمایش کارهای امروز ابتدا یک فضای کاری بسازید.","today-empty"),button("ساخت فضای کاری",()=>setMain("workspace"),"action"));slot.append(section);return}
+ if(!data)return;
+ const now=new Date(),day=[now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0")].join("-");
+ const tasks=(data.tasks||[]).filter(x=>x.status!=="done");
+ const due=tasks.filter(x=>x.due_date&&String(x.due_date).slice(0,10)<=day);
+ const events=(data.events||[]).filter(x=>String(x.starts_at||"").slice(0,10)===day);
+ const counters=el("div",null,"today-counters");
+ for(const [label,count] of [["کارهای باز",tasks.length],["سررسید گذشته یا امروز",due.length],["جلسات امروز",events.length]]){
+  const tile=el("div",null,"today-count");tile.append(el("strong",count.toLocaleString("fa-IR")),el("small",label));counters.append(tile)}
+ section.append(counters);
+ const details=el("div",null,"today-list");
+ const list=[...due.slice(0,3).map(x=>({text:x.title,sub:"وظیفه دارای سررسید",target:"tasks"})),...events.slice(0,3).map(x=>({text:x.title,sub:"جلسه: "+String(x.starts_at||"").replace("T"," ").slice(0,16),target:"events"}))];
+ if(!list.length)details.append(el("p","برای امروز مورد دارای مهلتی ثبت نشده است. می‌توانید کار یا جلسه جدید ثبت کنید.","today-empty"));
+ for(const x of list){const btn=button("",()=>openWorkTool(x.target),"today-entry");btn.append(el("strong",x.text),el("small",x.sub));details.append(btn)}
+ section.append(details);
+ const actions=el("div",null,"today-actions");
+ actions.append(button("وظایف",()=>openWorkTool("tasks"),"action outline"),button("جلسات",()=>openWorkTool("events"),"action outline"),button("به‌روزرسانی",()=>refreshTodayDashboard(true),"action outline"));
+ section.append(actions);slot.append(section);
+}
+function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher();paintQuickSlide();refreshCandidateHome();refreshTodayDashboard()}
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل",workspace:"مدیریت"})[tab]||"آموزش‌ها";
 if(tab==="workspace"){renderWorkspace();return}
 if(tab==="lessons"){const list=el("div",null,"cards");for(const x of state.lessons)list.append(card(x.title,x.summary,"مطالعه درس",()=>openLesson(x.id),x.position,state.completed.includes(x.id)));content.append(state.lessons.length?list:empty("هنوز آموزشی منتشر نشده است."));return}
