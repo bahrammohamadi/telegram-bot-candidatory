@@ -166,3 +166,16 @@ html[data-theme="dark"] .candidate-field :is(input,textarea,select){background:#
 .candidate-guide-body li{padding:3px 0}
 .candidate-guide-body .action{width:100%;margin-top:10px}
 html[data-theme="dark"] .candidate-guide{background:#1c3036;border-color:#34525a}
+
+/* Today dashboard — scoped operational data, responsive and animated */
+.today-dashboard{margin:12px 0}.today-panel{border:1px solid var(--line);border-radius:19px;padding:14px;background:var(--white);box-shadow:var(--shadow)}
+.today-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:11px}.today-head strong{font-size:15px}.today-head small{font-size:11px;color:var(--ink-soft)}
+.today-counters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.today-count{display:grid;align-content:center;justify-items:center;gap:5px;background:var(--mint);border:1px solid var(--line);border-radius:12px;min-height:72px;text-align:center;padding:8px 4px}
+.today-count strong{font-size:22px;font-weight:900;color:var(--teal-deep)}.today-count small{font-size:10px;line-height:1.6;color:var(--ink-soft)}
+.today-list{display:grid;gap:8px;margin-top:12px}.today-entry{width:100%;text-align:right;display:grid;gap:4px;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-family:inherit;cursor:pointer}
+.today-entry strong{font-size:12px;line-height:1.65}.today-entry small{font-size:10px;color:var(--ink-soft)}
+.today-entry:active{transform:scale(.985)}.today-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.today-actions .action{margin:0;flex:1;min-width:75px;font-size:11px;padding:9px 6px}
+.today-empty{font-size:12px;color:var(--ink-soft);line-height:1.9;margin:9px 0}
+html[data-theme="dark"] .today-count{background:#223f42}html[data-theme="dark"] .today-entry{color:var(--ink);border-color:#35545c}
+@media(prefers-reduced-motion:reduce){.today-entry{transition:none!important}}
