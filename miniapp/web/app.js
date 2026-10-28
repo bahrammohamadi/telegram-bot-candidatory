@@ -195,11 +195,46 @@ async function openCandidateProfile(){
     checklist.append(row);
    }
    checklist.append(el("p",r.note||"این موارد پیشنهادهای مدیریتی هستند و فهرست قطعی الزامات قانونی نیستند.","meta"));
+   checklist.append(button("انتقال اقدام‌های باقی‌مانده به وظایف تیم",async()=>{
+     try{
+       const w=await api("myWorkspaces"),spaces=w.workspaces||[];
+       const eligible=spaces.filter(x=>["owner","admin","editor"].includes(x.role));
+       if(!eligible.length){notify("ابتدا از بخش مدیریت یک فضای کاری بسازید.","error");return}
+       const selected=eligible[0];
+       if(!confirm("اقدام‌های تکمیل‌نشده به فضای کاری «"+selected.name+"» اضافه شوند؟"))return;
+       const summary=await api("workspaceSummary",{workspaceId:selected.id});
+       const existing=new Set((summary.tasks||[]).map(t=>t.title));
+       let added=0;
+       for(const item of items.filter(x=>x.status!=="done")){
+         const title="پرونده کاندیدا: "+item.label;
+         if(existing.has(title))continue;
+         await api("createTask",{workspaceId:selected.id,title,description:"اقدام پیشنهادی پرونده شخصی؛ صحت مقررات مربوط را از منابع رسمی تأیید کنید.",priority:"normal"});
+         added++;
+       }
+       notify(added.toLocaleString("fa-IR")+" وظیفه به فضای کاری افزوده شد.");
+     }catch(e){notify(e.message,"error")}
+   },"action outline"));
    content.append(checklist);
   }
  }catch(e){fail(e)}
 }
-function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher();paintQuickSlide()}
+async function refreshCandidateHome(){
+ const slot=document.getElementById("candidate-home-status");if(!slot)return;
+ slot.replaceChildren();
+ if(state.limitedAccess){const panel=el("div",null,"candidate-home-mini");panel.append(el("strong","پرونده نامزدی من"),el("p","از تلگرام وارد شوید تا پرونده شخصی و چک‌لیست قابل ذخیره داشته باشید."));slot.append(panel);return}
+ try{
+  const result=await api("candidateProfile"),p=result.profile,items=result.checklist||[];
+  const panel=el("div",null,"candidate-home-mini");
+  if(!p){panel.append(el("strong","پرونده نامزدی هنوز ساخته نشده"),el("p","نوع انتخابات و حوزه فعالیت را ثبت کنید تا کارهایتان مرتب شود."));panel.append(button("شروع پرونده شخصی",openCandidateProfile,"action"))}
+  else{
+    const done=items.filter(x=>x.status==="done").length;
+    panel.append(el("strong","پرونده من • "+p.district),el("p",done.toLocaleString("fa-IR")+" از "+items.length.toLocaleString("fa-IR")+" اقدام پیشنهادی انجام شده"));
+    const track=el("div",null,"progress-track"),bar=el("div");bar.style.width=(items.length?done/items.length*100:0)+"%";track.append(bar);panel.append(track,button("مشاهده و تکمیل",openCandidateProfile,"action outline"));
+  }
+  slot.append(panel);
+ }catch(e){slot.replaceChildren()}
+}
+function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher();paintQuickSlide();refreshCandidateHome()}
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل",workspace:"مدیریت"})[tab]||"آموزش‌ها";
 if(tab==="workspace"){renderWorkspace();return}
 if(tab==="lessons"){const list=el("div",null,"cards");for(const x of state.lessons)list.append(card(x.title,x.summary,"مطالعه درس",()=>openLesson(x.id),x.position,state.completed.includes(x.id)));content.append(state.lessons.length?list:empty("هنوز آموزشی منتشر نشده است."));return}
