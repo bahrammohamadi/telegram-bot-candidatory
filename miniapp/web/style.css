@@ -130,3 +130,9 @@ body:has(#inner-panel:not([hidden])) .top-icon{width:34px;height:34px}
 .candidate-checklist-row input{width:19px;height:19px;accent-color:#079e91;flex-shrink:0}
 .candidate-checklist-row:has(input:checked){background:var(--mint)}
 html[data-theme="dark"] .candidate-field :is(input,textarea,select){background:#172a30;border-color:#34525a;color:var(--ink)}
+
+.candidate-home-status:empty{display:none}
+.candidate-home-mini{display:flex;flex-direction:column;gap:8px;border-radius:17px;background:var(--white);border:1px solid var(--line);padding:14px;margin:10px 0}
+.candidate-home-mini strong{font-size:14px}.candidate-home-mini p{font-size:11px;line-height:1.8;color:var(--ink-soft);margin:0}
+.candidate-home-mini button{align-self:flex-start;margin:0;font-size:11px}
+.candidate-home-mini .progress-track{width:100%}
