@@ -64,7 +64,7 @@ async function renderWorkspace(){
       ["فضاهای کاری","مدیریت تیم‌ها","▦",showPlatformSpaces],
       ["آمار سامانه","گزارش کلی","▥",async()=>{const r=await api("platformSummary");const c=el("section",null,"card");c.append(el("h3","آمار سامانه"));for(const [k,v] of [["کاربران",r.summary.users],["فضاهای کاری",r.summary.workspaces],["درس‌های منتشرشده",r.summary.lessons]])c.append(makeRow(k,Number(v).toLocaleString("fa-IR")));content.prepend(c)}]
     ]){const tile=button("",()=>Promise.resolve(fn()).catch(e=>alert(e.message)),"admin-tool");tile.append(el("span",symbol,"admin-tool-icon"),el("strong",title),el("small",detail));tools.append(tile)}
-    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));content.append(button("وضعیت و سهمیه سرویس‌های رایگان",showSystemHealth,"action outline"));content.append(button("مدیریت بسته‌ها و دسترسی‌ها",showPlanAdmin,"action outline"));
+    content.append(el("h3","ابزارهای مدیر سامانه","admin-section-title"),tools);content.append(button("درخواست‌های حریم خصوصی کاربران",showPrivacyAdmin,"action outline"));content.append(button("مرکز پشتیبانی کاربران",showAdminSupport,"action outline"));content.append(button("وضعیت و سهمیه سرویس‌های رایگان",showSystemHealth,"action outline"));content.append(button("مدیریت بسته‌ها و دسترسی‌ها",showPlanAdmin,"action outline"));content.append(button("⚖️ منابع و قوانین انتخاباتی",showLegalAdmin,"action outline"));
   }
   if(r.platformAdmin){content.append(button("مدیریت محتوای آموزشی کل سامانه",showPlatformCms,"action"));content.append(button("مدیریت بانک آزمون‌ها",showPlatformQuizzes,"action outline"));content.append(button("فهرست فضاهای کاری",showPlatformSpaces,"action outline"));content.append(button("گزارش ادمین کل سامانه",async()=>{try{const p=await api("platformSummary");content.prepend(makeRow("آمار کل","کاربران: "+p.summary.users+" • فضاهای کاری: "+p.summary.workspaces))}catch(e){alert(e.message)}},"action outline"))}
   const ws=opState.record;
@@ -375,5 +375,39 @@ async function showSystemHealth(){
   card.append(makeRow("پرسش‌های AI امروز",Number(r.counts.aiRequestsToday).toLocaleString("fa-IR")+" از "+Number(r.dailyAiCallLimit).toLocaleString("fa-IR")));
   card.append(el("p","آمار مصرف Neuron فقط در داشبورد Cloudflare قابل تأیید است؛ تعداد پرسش‌ها معادل مقدار مصرف Neuron نیست."));
   content.append(card);
+ }catch(e){clear();content.append(el("div",e.message,"error"))}
+}
+
+async function showLegalAdmin(){
+ clear();content.append(el("div","در حال دریافت فهرست منابع…","loading"));
+ try{
+  const data=await api("adminLegalSources");clear();
+  content.append(button("← بازگشت به مدیریت",renderWorkspace,"back"));
+  const box=el("section",null,"card");
+  box.append(el("h3","مدیریت منابع انتخاباتی"),el("p","ابتدا متن منبع و به‌روز بودن آن را در وب‌سایت صادرکننده بررسی کنید، سپس منتشر کنید. لینک‌های تاریخی را با مهلت جاری اشتباه نگیرید."));
+  box.append(detailsForm("＋ ثبت منبع جدید",[
+   ["title","عنوان منبع","text"],
+   ["electionType","نوع انتخابات","select",[["council","شوراها"],["parliament","مجلس"],["presidency","ریاست‌جمهوری"],["other","عمومی"]]],
+   ["topic","موضوع","select",[["registration","ثبت‌نام"],["documents","مدارک"],["deadlines","مهلت‌ها"],["finance","مالی"],["general","عمومی"]]],
+   ["issuer","مرجع صادرکننده","text"],
+   ["sourceUrl","لینک کامل منبع HTTPS","url"],
+   ["sourceDate","تاریخ انتشار میلادی YYYY-MM-DD","date"],
+   ["notes","توضیح / هشدار درباره اعتبار","textarea"]
+  ],async v=>{await api("adminSaveLegalSource",{title:v.title,electionType:v.electionType,topic:v.topic,issuer:v.issuer,sourceUrl:v.sourceUrl,sourceDate:v.sourceDate,notes:v.notes});notify("منبع به‌صورت پیش‌نویس ذخیره شد.");await showLegalAdmin()}));
+  content.append(box);
+  for(const r of data.resources||[]){
+    const card=el("section",null,"card");
+    card.append(el("h3",r.title),makeRow("نوع و موضوع",r.election_type+" • "+r.topic),makeRow("مرجع",r.issuer),makeRow("وضعیت",r.status),makeRow("لینک",r.source_url));
+    if(r.reviewed_at)card.append(makeRow("آخرین بررسی",r.reviewed_at));
+    const link=button("باز کردن منبع",()=>{const url=new URL(r.source_url);if(url.protocol==="https:")window.open(url.href,"_blank","noopener,noreferrer")},"action outline");card.append(link);
+    if(r.status!=="approved")card.append(button("تأیید و انتشار",async()=>{if(!confirm("محتوا و تاریخ اعتبار منبع را در وب‌سایت صادرکننده بررسی کرده‌اید؟"))return;try{await api("adminReviewLegalSource",{id:r.id,status:"approved"});await showLegalAdmin()}catch(e){notify(e.message,"error")}},"action"));
+    if(r.status!=="archived")card.append(button("بایگانی منبع",async()=>{if(!confirm("این منبع از فهرست عمومی حذف شود؟"))return;try{await api("adminReviewLegalSource",{id:r.id,status:"archived"});await showLegalAdmin()}catch(e){notify(e.message,"error")}},"action outline"));
+    card.append(button("ویرایش به‌صورت پیش‌نویس",()=>{
+      const form=detailsForm("اصلاح منبع",[["title","عنوان","text"],["issuer","مرجع","text"],["sourceUrl","لینک HTTPS","url"],["notes","یادداشت","textarea"]],async v=>{
+        await api("adminSaveLegalSource",{id:r.id,title:v.title,issuer:v.issuer,sourceUrl:v.sourceUrl,notes:v.notes,electionType:r.election_type,topic:r.topic,sourceDate:r.source_date});await showLegalAdmin()
+      });form.open=true;card.append(form);const fields=form.querySelectorAll("input,textarea");for(const i of fields){if(i.name==="title")i.value=r.title;if(i.name==="issuer")i.value=r.issuer;if(i.name==="sourceUrl")i.value=r.source_url;if(i.name==="notes")i.value=r.notes||""}
+    },"action outline"));
+    content.append(card);
+  }
  }catch(e){clear();content.append(el("div",e.message,"error"))}
 }
