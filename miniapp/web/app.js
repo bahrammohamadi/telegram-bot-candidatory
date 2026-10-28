@@ -55,6 +55,7 @@ function setMain(next){const changed=tab!==next;tab=next;homepage.hidden=tab!=="
 function card(title,description,buttonText,fn,number,completed){const article=el("article",null,"card");const head=el("div",null,"card-head");head.append(el("h3",title));head.append(el("span",completed?"✓":String(number||"✦"),"mini-icon"));article.append(head,el("p",description||""));if(buttonText)article.append(button(buttonText,fn,completed?"action outline":"action"));return article}
 async function api(action,details={}){if(!initData)throw Error("برنامه را از منوی ربات در تلگرام باز کنید.");const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,initData,...details})});let data;try{data=await r.json()}catch{throw Error("پاسخ سرور قابل خواندن نیست.")}if(!r.ok)throw Error(data.error==="Unauthorized"?"نشست تلگرام معتبر نیست؛ برنامه را ببندید و دوباره باز کنید.":data.error||"خطای ارتباط");return data}
 const launcherApps=[
+  {id:"legal",label:"قوانین و مدارک",icon:"⚖️",theme:"indigo",hint:"منابع معتبر"},
   {id:"candidate",label:"پرونده من",icon:"🗂️",theme:"violet",hint:"مشخصات و مدارک"},
   {id:"lessons",label:"آموزش‌ها",icon:"📚",theme:"aqua",hint:"دوره و مطالعه"},
   {id:"quizzes",label:"آزمون‌ها",icon:"📝",theme:"violet",hint:"پرسش و نتیجه"},
@@ -81,6 +82,7 @@ function openLauncher(id){
     setMain("workspace");return;
   }
   if(id==="candidate"){openCandidateProfile();return}
+  if(id==="legal"){openLegalLibrary();return}
   if(id==="readiness"){openReadiness();return}
   if(id==="ai"){openStudyAssistant();return}
   if(id==="bookmarks"){
@@ -95,6 +97,7 @@ function openLauncher(id){
 }
 // Original vector pictograms, bundled into app.js — no CDN, licensing, or image fetch.
 const iconPaths={
+ legal:'<path d="M24 7v34M9 15h30M13 15l-8 16h16l-8-16Zm22 0-8 16h16l-8-16ZM14 41h20"/>',
  candidate:'<rect x="7" y="8" width="34" height="33" rx="5"/><circle cx="18" cy="20" r="5"/><path d="M11 34c0-6 3-9 7-9s7 3 7 9M29 19h7m-7 7h7m-7 7h5"/>',
  lessons:'<path d="M24 15c-7-4-13-3-17-1v25c6-2 11-2 17 1 6-3 11-3 17-1V14c-5-2-11-3-17 1Z"/><path d="M24 15v25"/><path d="m11 21 9 2m8 0 9-2M11 28l9 2m8 0 9-2"/>',
  quizzes:'<rect x="10" y="8" width="28" height="36" rx="5"/><path d="M18 8v-3h12v3M17 20h13m-13 8h8m-8 7h5"/><path d="m29 33 3 3 6-7"/>',
@@ -157,6 +160,40 @@ function showGettingStarted(){
  ]){const item=el("article",null,"guide-step");item.append(el("strong",title),el("p",description),button(cta,click,"action outline"));root.append(item)}
  root.append(button("بستن راهنما",()=>root.remove(),"action outline"));document.getElementById("app-launcher").before(root);root.scrollIntoView({block:"start",behavior:"smooth"});
 }
+async function openLegalLibrary(){
+ setMain("profile");clear();content.append(el("div","در حال دریافت منابع و مقررات…","loading"));
+ try{
+  const data=await api("legalLibrary");clear();
+  content.append(button("← بازگشت به پرونده",openCandidateProfile,"back"));
+  const head=el("section",null,"card legal-intro");
+  head.append(el("h3","مرکز قوانین و منابع انتخابات"),el("p","منابع مرتبط با نوع انتخابات شما در این بخش گردآوری می‌شوند. پیش از اقدام، متن و تاریخ اطلاعیه را در سایت رسمی بررسی کنید."));content.append(head);
+  const items=data.resources||[];
+  if(!items.length){
+    const box=el("section",null,"card");
+    box.append(el("h3","منبع تأییدشده‌ای هنوز منتشر نشده"),el("p","برای جلوگیری از اطلاعات اشتباه، لینک یا مهلت تأییدنشده به‌عنوان قانون قطعی نمایش داده نمی‌شود. ابتدا در پرونده، نوع انتخابات را ثبت کنید؛ منابع معتبر پس از بررسی مدیر اینجا ظاهر می‌شوند."));
+    box.append(button("ویرایش نوع انتخابات",openCandidateProfile,"action"));content.append(box);return;
+  }
+  const topics={registration:"ثبت‌نام",documents:"مدارک",deadlines:"مهلت‌ها",finance:"مالی",general:"منابع عمومی"};
+  const count=items.filter(x=>x.acknowledged).length;
+  const overview=el("section",null,"card");
+  overview.append(el("h3","مطالعه منابع"),el("p",count.toLocaleString("fa-IR")+" از "+items.length.toLocaleString("fa-IR")+" منبع مرور شده"));
+  const track=el("div",null,"progress-track"),fill=el("div");fill.style.width=Math.round(count/items.length*100)+"%";track.append(fill);overview.append(track);content.append(overview);
+  for(const item of items){
+    const card=el("article",null,"card legal-source");
+    card.append(el("strong",item.title),el("small",(topics[item.topic]||item.topic)+" • "+item.issuer));
+    if(item.source_date)card.append(el("p","تاریخ منبع: "+item.source_date,"meta"));
+    if(item.reviewed_at)card.append(el("p","تاریخ بررسی در برنامه: "+item.reviewed_at,"meta"));
+    if(item.notes)card.append(el("p",item.notes));
+    const link=button("بازکردن منبع",()=>{try{const u=new URL(item.source_url);if(u.protocol!=="https:")throw Error();window.open(u.href,"_blank","noopener,noreferrer")}catch{notify("آدرس منبع معتبر نیست.","error")}},"action outline");
+    const toggle=button(item.acknowledged?"✓ مطالعه شده":"علامت‌گذاری به‌عنوان مطالعه‌شده",async()=>{
+      toggle.disabled=true;
+      try{await api("legalAcknowledge",{id:item.id,acknowledged:!Boolean(item.acknowledged)});await openLegalLibrary()}
+      catch(e){notify(e.message,"error");toggle.disabled=false}
+    },"action");
+    card.append(link,toggle);content.append(card);
+  }
+ }catch(e){fail(e)}
+}
 async function openCandidateProfile(){
  setMain("profile");clear();
  content.append(el("div","در حال دریافت پرونده…","loading"));
@@ -182,7 +219,7 @@ async function openCandidateProfile(){
    save.disabled=true;
    try{await api("saveCandidateProfile",{electionType:controls.electionType.value,stage:controls.stage.value,district:controls.district.value.trim(),professionalSummary:controls.professionalSummary.value.trim()});candidateHomeCache=null;notify("پرونده ذخیره شد.");await openCandidateProfile()}
    catch(e){notify(e.message,"error");save.disabled=false}
-  },"action");panel.append(save);content.append(panel);
+  },"action");panel.append(save);panel.append(button("⚖️ قوانین و منابع مرتبط",openLegalLibrary,"action outline"));content.append(panel);
   if(r.profile){
    const checklist=el("section",null,"card candidate-checklist");
    const items=r.checklist||[],done=items.filter(x=>x.status==="done").length;
