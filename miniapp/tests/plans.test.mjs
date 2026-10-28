@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {PRODUCT_PLANS,resolvePlan,canUse} from '../src/plans.mjs';
+test('free defaults and no privilege escalation',()=>{assert.equal(resolvePlan(null).id,'free');assert.equal(resolvePlan({status:'pending',plan_id:'professional'}).id,'free');assert.equal(resolvePlan({status:'active',plan_id:'team'}).id,'free');assert.equal(canUse(PRODUCT_PLANS.free,'fullReports'),false);});
+test('valid, expired and bounded paid plan',()=>{const now=new Date('2026-10-28');assert.equal(resolvePlan({status:'active',plan_id:'professional',expires_at:'2026-11-01'},now).id,'professional');assert.equal(resolvePlan({status:'active',plan_id:'professional',expires_at:'2026-10-20'},now).id,'free');assert.equal(canUse(PRODUCT_PLANS.professional,'teamMembers',5),false);assert.equal(canUse(PRODUCT_PLANS.professional,'fullReports'),true);});
