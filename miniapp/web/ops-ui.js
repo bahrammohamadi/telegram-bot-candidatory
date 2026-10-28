@@ -135,7 +135,10 @@ async function renderWorkspace(){
   ["ثبت هزینه‌ها",ws.expenses,"createExpense",[["description","شرح هزینه","text"],["amountMinor","مبلغ به ریال","number"],["spentAt","تاریخ میلادی","date"]]]];
   for(const [heading,rows,action,fields] of blocks){
     const card=el("section",null,"card");card.dataset.tool=action==="createTask"?"tasks":action==="createEvent"?"events":action==="createCommitment"?"commitments":"expenses";card.append(el("h3",heading));
-    if(!rows?.length)card.append(el("p","موردی ثبت نشده است."));
+    if(!rows?.length){
+      const help={createTask:"هنوز وظیفه‌ای نیست. با «افزودن»، عنوان یک کار و اولویت آن را ثبت کنید.",createEvent:"جلسه‌ای ثبت نشده. با «افزودن»، عنوان، زمان و مکان جلسه را وارد کنید.",createCommitment:"برنامه‌ای ثبت نشده. ابتدا یک هدف یا تعهد مشخص بنویسید و سپس وضعیت آن را پیگیری کنید.",createExpense:"هزینه‌ای ثبت نشده. مدیر می‌تواند شرح، مبلغ ریالی و تاریخ را ثبت کند."};
+      card.append(el("p",help[action]||"هنوز اطلاعاتی ثبت نشده است.","empty-helper"));
+    }
     else for(const item of rows){const label=item.title||item.description||"",detail=item.status||item.starts_at||(item.amount_minor!=null?Number(item.amount_minor).toLocaleString("fa-IR")+" ریال":"");
       const row=makeRow(label,detail);
       if(action==="createEvent"){
@@ -175,7 +178,7 @@ async function renderWorkspace(){
     content.append(card);
   }
   const library=el("section",null,"card");library.dataset.tool="documents";library.append(el("h3","کتابخانه اسناد و مدارک"));
-  if(!ws.documents?.length)library.append(el("p","هنوز سندی ثبت نشده است."));
+  if(!ws.documents?.length)library.append(el("p","هنوز سندی ثبت نشده است. برای شروع، با «ثبت لینک سند» آدرس HTTPS یک فایل را اضافه کنید. فایل در خود برنامه آپلود نمی‌شود.","empty-helper"));
   for(const doc of ws.documents||[]){const row=makeRow(doc.title,doc.category+" • "+(doc.visibility==="managers"?"فقط مدیران":"اعضای تیم"));
     const open=button("مشاهده سند",()=>{try{const url=new URL(doc.source_url);if(url.protocol==="https:")window.open(url.href,"_blank","noopener,noreferrer")}catch{alert("لینک نامعتبر است")}},"action outline");row.append(open);
     if(manager)row.append(button("حذف پیوند",async()=>{if(!confirm("پیوند این سند حذف شود؟"))return;try{await api("deleteDocument",{workspaceId:opState.id,id:doc.id});await renderWorkspace()}catch(e){alert(e.message)}},"action outline"));
@@ -183,7 +186,7 @@ async function renderWorkspace(){
   if(edit)library.append(detailsForm("＋ ثبت لینک سند",[["title","عنوان سند","text"],["category","گروه سند","text"],["sourceUrl","آدرس امن HTTPS","url"],["visibility","دسترسی","select",manager?[["members","اعضا"],["managers","فقط مدیران"]]:[["members","اعضا"]]]],async x=>{await api("createDocument",{workspaceId:opState.id,...x});await renderWorkspace()}));
   content.append(library);
   const notices=el("section",null,"card");notices.dataset.tool="notices";notices.append(el("h3","اطلاعیه‌های داخلی"));
-  if(!ws.notices?.length)notices.append(el("p","اطلاعیه‌ای ثبت نشده است."));
+  if(!ws.notices?.length)notices.append(el("p","اطلاعیه‌ای ثبت نشده است. مدیر تیم می‌تواند یک پیام داخلی برای اعضا اضافه کند.","empty-helper"));
   for(const item of ws.notices||[])notices.append(makeRow(item.title,item.body));
   if(manager)notices.append(detailsForm("＋ اطلاعیه جدید",[["title","عنوان اطلاعیه","text"],["body","متن اطلاعیه","textarea"]],async x=>{await api("createNotice",{workspaceId:opState.id,...x});await renderWorkspace()}));
   content.append(notices);
