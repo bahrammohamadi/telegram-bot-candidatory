@@ -36,3 +36,14 @@ CREATE TABLE IF NOT EXISTS learning_progress (
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  PRIMARY KEY (telegram_id,course_id)
 );
+
+CREATE TABLE IF NOT EXISTS assessment_attempts_v2 (
+ id TEXT PRIMARY KEY,
+ telegram_id TEXT NOT NULL REFERENCES accounts(telegram_id),
+ assessment_type TEXT NOT NULL,
+ answers_json TEXT NOT NULL,
+ breakdown_json TEXT NOT NULL,
+ score INTEGER NOT NULL CHECK (score BETWEEN 0 AND 100),
+ submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_assessment_attempts_v2_owner ON assessment_attempts_v2(telegram_id,submitted_at);
