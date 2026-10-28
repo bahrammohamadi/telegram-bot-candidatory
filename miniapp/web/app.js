@@ -180,7 +180,7 @@ async function openCandidateProfile(){
   }
   const save=button("ذخیره پرونده و ساخت چک‌لیست",async()=>{
    save.disabled=true;
-   try{await api("saveCandidateProfile",{electionType:controls.electionType.value,stage:controls.stage.value,district:controls.district.value.trim(),professionalSummary:controls.professionalSummary.value.trim()});notify("پرونده ذخیره شد.");await openCandidateProfile()}
+   try{await api("saveCandidateProfile",{electionType:controls.electionType.value,stage:controls.stage.value,district:controls.district.value.trim(),professionalSummary:controls.professionalSummary.value.trim()});candidateHomeCache=null;notify("پرونده ذخیره شد.");await openCandidateProfile()}
    catch(e){notify(e.message,"error");save.disabled=false}
   },"action");panel.append(save);content.append(panel);
   if(r.profile){
@@ -191,7 +191,7 @@ async function openCandidateProfile(){
    for(const item of items){
     const row=el("label",null,"candidate-checklist-row"),box=el("input");box.type="checkbox";box.checked=item.status==="done";
     row.append(box,el("span",item.label));
-    box.addEventListener("change",async()=>{box.disabled=true;try{await api("updateCandidateChecklist",{itemKey:item.item_key,status:box.checked?"done":"todo"});await openCandidateProfile()}catch(e){notify(e.message,"error");box.checked=!box.checked;box.disabled=false}});
+    box.addEventListener("change",async()=>{box.disabled=true;try{await api("updateCandidateChecklist",{itemKey:item.item_key,status:box.checked?"done":"todo"});candidateHomeCache=null;await openCandidateProfile()}catch(e){notify(e.message,"error");box.checked=!box.checked;box.disabled=false}});
     checklist.append(row);
    }
    checklist.append(el("p",r.note||"این موارد پیشنهادهای مدیریتی هستند و فهرست قطعی الزامات قانونی نیستند.","meta"));
@@ -218,12 +218,15 @@ async function openCandidateProfile(){
   }
  }catch(e){fail(e)}
 }
+let candidateHomeCache=null;
+let candidateHomePending=null;
 async function refreshCandidateHome(){
  const slot=document.getElementById("candidate-home-status");if(!slot)return;
  slot.replaceChildren();
  if(state.limitedAccess){const panel=el("div",null,"candidate-home-mini");panel.append(el("strong","پرونده نامزدی من"),el("p","از تلگرام وارد شوید تا پرونده شخصی و چک‌لیست قابل ذخیره داشته باشید."));slot.append(panel);return}
  try{
-  const result=await api("candidateProfile"),p=result.profile,items=result.checklist||[];
+  const result=candidateHomeCache||(candidateHomePending||=api("candidateProfile").then(x=>{candidateHomeCache=x;return x}).finally(()=>{candidateHomePending=null}));
+  const data=await result,p=data.profile,items=data.checklist||[];
   const panel=el("div",null,"candidate-home-mini");
   if(!p){panel.append(el("strong","پرونده نامزدی هنوز ساخته نشده"),el("p","نوع انتخابات و حوزه فعالیت را ثبت کنید تا کارهایتان مرتب شود."));panel.append(button("شروع پرونده شخصی",openCandidateProfile,"action"))}
   else{
