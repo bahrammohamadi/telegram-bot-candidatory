@@ -32,6 +32,49 @@ async function logChange(db,id,workspace,action,kind,record){
 }
 async function handleOps(action,payload,db,user,env){
  const uid=user.id;
+ if(action==="legalLibrary"){
+   const profile=await db.prepare("SELECT election_type FROM candidate_profiles WHERE telegram_id=?").bind(uid).first();
+   const election=profile?.election_type||"other";
+   const rows=await db.prepare("SELECT s.id,s.title,s.topic,s.issuer,s.source_url,s.source_date,s.reviewed_at,s.notes,CASE WHEN a.telegram_id IS NULL THEN 0 ELSE 1 END AS acknowledged FROM election_legal_sources s LEFT JOIN election_legal_personal_checks a ON a.source_id=s.id AND a.telegram_id=? WHERE s.status='approved' AND s.election_type IN (?, 'other') ORDER BY s.election_type DESC,s.topic,s.title LIMIT 100").bind(uid,election).all();
+   return {electionType:election,resources:rows.results,note:"فقط منابع بررسی و منتشرشده نمایش داده می‌شوند؛ وضعیت هر منبع و تاریخ اعتبار آن باید با مرجع رسمی مجدداً کنترل شود."};
+ }
+ if(action==="legalAcknowledge"){
+   const id=clean(payload.id,64),source=await db.prepare("SELECT id FROM election_legal_sources WHERE id=? AND status='approved' AND election_type IN (COALESCE((SELECT election_type FROM candidate_profiles WHERE telegram_id=?),'other'),'other')").bind(id,uid).first();
+   if(!source)return {error:"Source not found",status:404};
+   if(payload.acknowledged===true)await db.prepare("INSERT OR IGNORE INTO election_legal_personal_checks(telegram_id,source_id) VALUES(?,?)").bind(uid,id).run();
+   else if(payload.acknowledged===false)await db.prepare("DELETE FROM election_legal_personal_checks WHERE telegram_id=? AND source_id=?").bind(uid,id).run();
+   else return {error:"Invalid acknowledgement",status:400};
+   return {saved:true};
+ }
+ if(action==="adminLegalSources"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const rows=await db.prepare("SELECT id,election_type,title,topic,issuer,source_url,source_date,reviewed_at,status,notes,updated_at FROM election_legal_sources ORDER BY updated_at DESC LIMIT 150").all();
+   return {resources:rows.results};
+ }
+ if(action==="adminSaveLegalSource"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const type=clean(payload.electionType,20),topic=clean(payload.topic,24),title=clean(payload.title,180),issuer=clean(payload.issuer,140),link=clean(payload.sourceUrl,1500),notes=clean(payload.notes,1200),date=clean(payload.sourceDate,24);
+   if(!["council","parliament","presidency","other"].includes(type)||!["registration","documents","deadlines","finance","general"].includes(topic)||title.length<4||issuer.length<3)return {error:"Invalid resource fields",status:400};
+   let url;try{url=new URL(link)}catch{return {error:"Invalid URL",status:400}}
+   if(url.protocol!=="https:"||url.username||url.password||link.length>1500)return {error:"HTTPS source URL required",status:400};
+   if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))return {error:"Date must be Gregorian YYYY-MM-DD",status:400};
+   const id=clean(payload.id,64)||crypto.randomUUID();
+   const existing=await db.prepare("SELECT id FROM election_legal_sources WHERE id=?").bind(id).first();
+   if(existing){
+     await db.prepare("UPDATE election_legal_sources SET election_type=?,title=?,topic=?,source_url=?,issuer=?,source_date=?,notes=?,status='draft',reviewed_at='',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(type,title,topic,link,issuer,date,notes,id).run();
+   }else{
+     await db.prepare("INSERT INTO election_legal_sources(id,election_type,title,topic,source_url,issuer,source_date,notes,created_by) VALUES(?,?,?,?,?,?,?,?,?)").bind(id,type,title,topic,link,issuer,date,notes,uid).run();
+   }
+   await logChange(db,uid,null,"legalDraft","legal_source",id);return {saved:true,id,status:"draft"};
+ }
+ if(action==="adminReviewLegalSource"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const id=clean(payload.id,64),status=clean(payload.status,12);
+   if(!["approved","archived","draft"].includes(status))return {error:"Invalid status",status:400};
+   const result=await db.prepare("UPDATE election_legal_sources SET status=?,reviewed_at=CASE WHEN ?='approved' THEN CURRENT_TIMESTAMP ELSE '' END,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(status,status,id).run();
+   if(!result.meta.changes)return {error:"Source not found",status:404};
+   await logChange(db,uid,null,"legal:"+status,"legal_source",id);return {saved:true};
+ }
  if(action==="candidateProfile"){
    const profile=await db.prepare("SELECT election_type,district,stage,professional_summary,updated_at FROM candidate_profiles WHERE telegram_id=?").bind(uid).first();
    const rows=await db.prepare("SELECT id,item_key,label,status,source_type FROM candidate_checklist_items WHERE telegram_id=? ORDER BY item_key").bind(uid).all();
@@ -447,7 +490,7 @@ export default {
    if(rl.request_count>60)return reply({error:"Too many requests"},429);
    await env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(id,String(user.first_name||"").slice(0,100),user.username||null).run();
    const action=payload.action;
-   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan","adminSystemHealth","eventRsvp","candidateProfile","saveCandidateProfile","updateCandidateChecklist"].includes(action)){
+   if(["myWorkspaces","createWorkspace","platformSummary","workspaceSummary","auditTrail","addMember","removeMember","createTask","taskStatus","createEvent","createCommitment","commitmentStatus","createExpense","createDraft","draftStatus","adminLessons","adminSaveLesson","adminPublishLesson","adminWorkspaces","myInvites","acceptInvite","adminCreateQuiz","adminAddQuestion","adminPublishQuiz","myPrivacy","requestPrivacy","myDataExport","adminPrivacyQueue","adminPrivacyStatus","createDocument","deleteDocument","createNotice","createSupportTicket","mySupportTickets","adminSupportQueue","adminReplyTicket","availablePlans","adminEntitlements","adminAssignPlan","workspacePlan","adminSystemHealth","eventRsvp","candidateProfile","saveCandidateProfile","updateCandidateChecklist","legalLibrary","legalAcknowledge","adminLegalSources","adminSaveLegalSource","adminReviewLegalSource"].includes(action)){
       const result=await handleOps(action,payload,env.DB,user,env);
       return reply(result,result.status||200);
    }
