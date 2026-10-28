@@ -128,7 +128,33 @@ function renderLauncher(){
     tile.addEventListener("click",()=>{tile.classList.add("launcher-pressed");openLauncher(app.id)});root.append(tile);
   }
 }
-function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher()}
+
+let quickSlideIndex=0;
+const quickSlides=[
+ {title:"یادگیری را آسان شروع کن",description:"اولین درس ناتمام را بخوان و پیشرفت را ثبت کن.",cta:"ادامه مطالعه",icon:"📖",run:()=>{const lesson=state.lessons.find(x=>!state.completed.includes(x.id));lesson?openLesson(lesson.id):setMain("lessons")}},
+ {title:"آزمون و تمرین",description:"آزمون‌های منتشرشده را انجام بده و نتیجه بگیر.",cta:"شروع آزمون",icon:"✅",run:()=>setMain("quizzes")},
+ {title:"کارها را منظم کن",description:"یک فضای کاری بساز و وظایف و جلسات را مدیریت کن.",cta:"ورود به مدیریت",icon:"📋",run:()=>setMain("workspace")}
+];
+function paintQuickSlide(){
+ const host=document.getElementById("quick-slide"),dots=document.getElementById("quick-dots");if(!host||!dots)return;
+ host.replaceChildren();dots.replaceChildren();const x=quickSlides[quickSlideIndex],body=el("div",null,"slide-body");
+ body.append(el("h2",x.title),el("p",x.description),button(x.cta,x.run,"slide-action"));
+ const art=el("span",x.icon,"slide-art");art.setAttribute("aria-hidden","true");host.append(body,art);
+ quickSlides.forEach((slide,i)=>{const dot=button("",()=>{quickSlideIndex=i;paintQuickSlide()},"slide-dot"+(i===quickSlideIndex?" active":""));dot.setAttribute("aria-label","اسلاید "+(i+1));dots.append(dot)});
+ host.classList.remove("slide-enter");void host.offsetWidth;host.classList.add("slide-enter");
+}
+function moveQuickSlide(n){quickSlideIndex=(quickSlideIndex+n+quickSlides.length)%quickSlides.length;paintQuickSlide()}
+function showGettingStarted(){
+ setMain("home");document.querySelector(".getting-started")?.remove();
+ const root=el("section",null,"card getting-started");root.append(el("h3","شروع کار در ۳ قدم"));
+ for(const [title,description,click,cta] of [
+ ["۱. یک درس بخوان","به آموزش‌ها برو و یک درس را کامل کن.",()=>setMain("lessons"),"آموزش‌ها"],
+ ["۲. آزمون بده","چند سؤال جواب بده و نتیجه را ببین.",()=>setMain("quizzes"),"آزمون‌ها"],
+ ["۳. کارها را ثبت کن","یک فضای کاری ایجاد کن و اولین وظیفه را بنویس.",()=>setMain("workspace"),"مدیریت"]
+ ]){const item=el("article",null,"guide-step");item.append(el("strong",title),el("p",description),button(cta,click,"action outline"));root.append(item)}
+ root.append(button("بستن راهنما",()=>root.remove(),"action outline"));document.getElementById("app-launcher").before(root);root.scrollIntoView({block:"start",behavior:"smooth"});
+}
+function renderHome(){document.getElementById("stat-lessons").textContent=state.lessons.length.toLocaleString("fa-IR");document.getElementById("stat-completed").textContent=state.completed.length.toLocaleString("fa-IR");document.getElementById("stat-quizzes").textContent=state.quizzes.length.toLocaleString("fa-IR");clear(featured);const matches=state.lessons.filter(x=>x.title.includes(searchTerm)||x.summary.includes(searchTerm)).slice(0,4);const list=el("div",null,"cards");for(const lesson of matches)list.append(card(lesson.title,lesson.summary,"مطالعه درس",()=>openLesson(lesson.id),lesson.position,state.completed.includes(lesson.id)));featured.append(matches.length?list:empty("موضوعی با این عبارت پیدا نشد."));renderResume();renderLauncher();paintQuickSlide()}
 function render(){clear();const head=inner.querySelector("h2");head.textContent=({lessons:"آموزش‌ها",quizzes:"آزمون‌ها",progress:"پیشرفت من",profile:"پروفایل",workspace:"مدیریت"})[tab]||"آموزش‌ها";
 if(tab==="workspace"){renderWorkspace();return}
 if(tab==="lessons"){const list=el("div",null,"cards");for(const x of state.lessons)list.append(card(x.title,x.summary,"مطالعه درس",()=>openLesson(x.id),x.position,state.completed.includes(x.id)));content.append(state.lessons.length?list:empty("هنوز آموزشی منتشر نشده است."));return}
@@ -295,7 +321,11 @@ async function openQuiz(id){
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.tab)));
 document.querySelectorAll("[data-quick]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.quick)));
 document.querySelectorAll("[data-jump]").forEach(b=>b.addEventListener("click",()=>setMain(b.dataset.jump)));
-document.getElementById("featured-start").addEventListener("click",()=>setMain("lessons"));
+document.getElementById("quick-prev")?.addEventListener("click",()=>moveQuickSlide(-1));
+document.getElementById("quick-next")?.addEventListener("click",()=>moveQuickSlide(1));
+document.getElementById("guided-start")?.addEventListener("click",showGettingStarted);
+const carousel=document.querySelector(".quick-carousel");
+if(carousel){let x0=null;carousel.addEventListener("touchstart",e=>{x0=e.touches[0]?.clientX??null},{passive:true});carousel.addEventListener("touchend",e=>{if(x0===null)return;const dx=(e.changedTouches[0]?.clientX??x0)-x0;if(Math.abs(dx)>55)moveQuickSlide(dx>0?-1:1);x0=null},{passive:true})}
 document.getElementById("search").addEventListener("input",e=>{searchTerm=e.target.value.trim();renderHome()});
 setupUiControls();
 home();
