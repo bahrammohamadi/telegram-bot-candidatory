@@ -10,7 +10,8 @@
 //   crisis | content | educational | plans | history | contact | admin
 // ═══════════════════════════════════════════════════════════════
 
-const { Bot, InlineKeyboard, webhookCallback } = require("grammy");
+const { Bot, InlineKeyboard } = require("grammy");
+const { timingSafeEqual } = require("node:crypto");
 
 // ───────────────────────────────────────────────────────────────
 // ماژول‌ها (ترتیب: utils → flows)
@@ -769,14 +770,21 @@ bot.catch((err) => {
 // تلگرام POSTهای webhook را به این endpoint ارسال می‌کند.
 // ═══════════════════════════════════════════════════════════════
 
-let webhookHandler = null;
-
-function getWebhookHandler() {
-  if (!webhookHandler) {
-    // grammy یک adapter سفارشی برای Appwrite ندارد، پس از adapter استاندارد استفاده می‌کنیم
-    webhookHandler = webhookCallback(bot, "http");
-  }
-  return webhookHandler;
+// Appwrite uses direct handleUpdate; webhookCallback's HTTP adapter is not used.
+let initPromise;
+async function ensureBotReady() {
+  if (bot.botInfo) return;
+  if (!initPromise) initPromise = bot.init().catch(e => { initPromise = null; throw e; });
+  await initPromise;
+}
+function validWebhookSecret(headers) {
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!secret) return false; // fail closed: configure secret on the webhook too
+  const provided = Object.entries(headers || {}).find(([k]) => k.toLowerCase() === "x-telegram-bot-api-secret-token")?.[1];
+  if (typeof provided !== "string") return false;
+  const a = Buffer.from(secret);
+  const b = Buffer.from(provided);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /**
@@ -801,6 +809,10 @@ module.exports = async function ({ req, res, log, error }) {
       return res.json({ error: "Method not allowed" }, 405);
     }
 
+    if (!validWebhookSecret(req.headers)) {
+      return res.json({ error: "Unauthorized" }, 401);
+    }
+
     // اطمینان از init دیتابیس (idempotent)
     try {
       if (typeof initDB === "function") {
@@ -820,25 +832,7 @@ module.exports = async function ({ req, res, log, error }) {
       return res.json({ ok: true });
     }
 
-    // ساخت یک Request شبیه‌سازی‌شده برای grammy webhookCallback
-    const fakeRequest = {
-      method: "POST",
-      headers: req.headers || {},
-      body: () => Promise.resolve(body),
-      json: () => Promise.resolve(body),
-    };
-
-    let responseBody = null;
-    let responseStatus = 200;
-    const fakeResponse = {
-      end: (data) => { responseBody = data; },
-      status: (s) => { responseStatus = s; return fakeResponse; },
-      send: (data) => { responseBody = data; },
-      json: (data) => { responseBody = JSON.stringify(data); },
-      setHeader: () => {},
-    };
-
-    // پردازش مستقیم با bot.handleUpdate (روش ساده‌تر و قابل اعتماد در serverless)
+    await ensureBotReady();
     await bot.handleUpdate(body);
 
     return res.json({ ok: true });
@@ -846,8 +840,8 @@ module.exports = async function ({ req, res, log, error }) {
   } catch (e) {
     error && error("[function] " + (e?.message || e));
     if (e?.stack) error && error(e.stack);
-    // در serverless، خطای 5xx باعث retry تلگرام می‌شود — بهتر است 200 برگردانیم
-    return res.json({ ok: false, error: "internal" });
+    // Return 5xx so Telegram can retry failed delivery.
+    return res.json({ ok: false, error: "internal" }, 500);
   }
 };
 
