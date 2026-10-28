@@ -119,3 +119,14 @@ body:has(#inner-panel:not([hidden])) .top-icon{width:34px;height:34px}
 .guide-step{border-top:1px solid var(--line);padding:12px 0}.guide-step strong{font-size:13px}.guide-step p{font-size:12px;color:var(--ink-soft);margin:6px 0}.guide-step button{margin:0}
 .getting-started{scroll-margin-top:75px}
 @media(prefers-reduced-motion:reduce){.slide-enter .slide-body,.slide-enter .slide-art{animation:none!important}}
+
+/* Candidate profile wizard and practical self-service checklist */
+.candidate-profile,.candidate-checklist{display:flex;flex-direction:column;gap:13px}
+.candidate-profile>p,.candidate-checklist>.meta{font-size:12px;color:var(--ink-soft);line-height:1.9}
+.candidate-field{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:12px}
+.candidate-field input,.candidate-field textarea,.candidate-field select{width:100%;border:1px solid var(--line);background:var(--white);border-radius:12px;color:var(--ink);padding:12px;font:inherit;font-size:13px;min-height:46px}
+.candidate-field textarea{min-height:85px;resize:vertical}
+.candidate-checklist-row{padding:13px 10px;border:1px solid var(--line);border-radius:13px;display:flex;gap:11px;align-items:center;font-size:12px;line-height:1.7;cursor:pointer;background:var(--white)}
+.candidate-checklist-row input{width:19px;height:19px;accent-color:#079e91;flex-shrink:0}
+.candidate-checklist-row:has(input:checked){background:var(--mint)}
+html[data-theme="dark"] .candidate-field :is(input,textarea,select){background:#172a30;border-color:#34525a;color:var(--ink)}
