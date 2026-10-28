@@ -194,62 +194,96 @@ async function openLegalLibrary(){
   }
  }catch(e){fail(e)}
 }
-async function openCandidateProfile(){
+
+const candidateGuides={
+ profile:{why:"اطلاعات ثبت‌شده را بررسی کنید تا نوع انتخابات و حوزه فعالیت اشتباه نباشد.",steps:["نوع انتخابات و نام حوزه را با اطلاعات خودتان تطبیق دهید.","مرحله فعالیت و سوابق را مرور و در صورت نیاز اصلاح کنید.","نسخه نهایی را ذخیره کنید."],output:"پرونده شخصی دقیق و به‌روز"},
+ official_rules:{why:"مقررات، بخشنامه‌ها و تاریخ‌های هر دوره ممکن است تغییر کنند.",steps:["مرکز قوانین و منابع را باز کنید.","آخرین اطلاعیه مرجع رسمی مرتبط با نوع انتخابات را پیدا کنید.","تاریخ، مرجع صادرکننده و اصلاحیه‌های احتمالی را کنترل کنید.","اگر منبعی در برنامه موجود نیست، بررسی را مستقیماً در مرجع رسمی ادامه دهید."],output:"منبع رسمیِ بررسی‌شده با تاریخ بررسی"},
+ eligibility:{why:"شرایط و مدارک بسته به نوع و دوره انتخابات متفاوت است؛ این برنامه صلاحیت افراد را تأیید نمی‌کند.",steps:["نوع انتخابات و دوره مربوط را مشخص کنید.","فهرست شرایط و مدارک را فقط از مرجع رسمی همان انتخابات استخراج کنید.","مدارک خود را با فهرست رسمی تطبیق دهید.","ابهام‌ها را با مرجع مسئول یا کارشناس حقوقی بررسی کنید."],output:"فهرست مدارک موردنیاز و موارد نیازمند پیگیری"},
+ timeline:{why:"از دست دادن مهلت‌ها می‌تواند باعث ناتمام ماندن کار اداری شود.",steps:["مهلت‌ها را از اطلاعیه رسمی همان دوره بخوانید.","تاریخ آغاز و پایان هر مرحله را در تقویم ثبت کنید.","برای هر مهلت مسئول پیگیری و زمان بازبینی تعیین کنید.","در صورت تغییر اطلاعیه، تاریخ ثبت‌شده را اصلاح کنید."],output:"تقویم دارای مهلت‌های تأییدشده"},
+ security:{why:"اطلاعات پرونده و اعضای تیم باید فقط در دسترس افراد مجاز باشد.",steps:["ورود دومرحله‌ای تلگرام و امنیت دستگاه را بررسی کنید.","نقش و دسترسی اعضای فضای کاری را مرور کنید.","مجوز دسترسی افراد غیرضروری را غیرفعال کنید.","از فرستادن رمز و توکن در پیام‌ها خودداری کنید."],output:"فهرست دسترسی‌های بازبینی‌شده"},
+ activity_plan:{why:"کارهای اجرایی وقتی قابل پیگیری‌اند که مسئول و وضعیت مشخص داشته باشند.",steps:["سه فعالیت ضروری و قانونی این هفته را مشخص کنید.","برای هر فعالیت یک وظیفه با عنوان واضح ایجاد کنید.","مسئول انجام و مهلت را تعیین کنید.","در پایان هفته وظایف تکمیل‌شده و باقی‌مانده را مرور کنید."],output:"برنامه کاری قابل پیگیری"}
+};
+const electionNames={council:"شوراهای شهر و روستا",parliament:"مجلس شورای اسلامی",presidency:"ریاست‌جمهوری",other:"سایر انتخابات"};
+const stageNames={planning:"آماده‌سازی",registration:"ثبت‌نام و مدارک",operations:"فعالیت‌های مجاز",report:"گزارش و آرشیو"};
+async function openCandidateProfile(editMode=false){
  setMain("profile");clear();
  content.append(el("div","در حال دریافت پرونده…","loading"));
  try{
   const r=await api("candidateProfile");clear();
   content.append(button("← بازگشت به پروفایل",()=>setMain("profile"),"back"));
-  const panel=el("section",null,"card candidate-profile");
-  panel.append(el("h3","پرونده هوشمند کاندیدا"),el("p","اطلاعات این بخش فقط در حساب تلگرام خودتان ذخیره می‌شود. مقررات قانونی را از منابع رسمی بررسی کنید."));
-  const fields=[
-   ["electionType","نوع انتخابات",[["council","شوراهای شهر و روستا"],["parliament","مجلس شورای اسلامی"],["presidency","ریاست‌جمهوری"],["other","سایر انتخابات"]]],
-   ["stage","مرحله فعالیت",[["planning","آماده‌سازی"],["registration","ثبت‌نام و مدارک"],["operations","فعالیت‌های مجاز"],["report","گزارش و آرشیو"]]]
-  ];
-  const controls={};
-  for(const [key,label,options] of fields){
-   const wrap=el("label",null,"candidate-field");wrap.append(el("span",label));
-   const select=el("select",null,"op-select");for(const [value,name] of options){const option=el("option",name);option.value=value;select.append(option)}select.value=r.profile?.[key==="electionType"?"election_type":key]||options[0][0];wrap.append(select);panel.append(wrap);controls[key]=select;
-  }
-  for(const [key,label,value] of [["district","حوزه فعالیت",r.profile?.district||""],["professionalSummary","توضیح کوتاه درباره سوابق و تخصص",r.profile?.professional_summary||""]]){
-   const wrap=el("label",null,"candidate-field"),input=key==="district"?el("input"):el("textarea");
-   input.value=value;input.maxLength=key==="district"?120:500;input.placeholder=key==="district"?"مثلاً نام شهر یا حوزه انتخابیه":"تجربه‌ها و زمینه تخصصی خود را بنویسید";wrap.append(el("span",label),input);panel.append(wrap);controls[key]=input;
-  }
-  const save=button("ذخیره پرونده و ساخت چک‌لیست",async()=>{
-   save.disabled=true;
-   try{await api("saveCandidateProfile",{electionType:controls.electionType.value,stage:controls.stage.value,district:controls.district.value.trim(),professionalSummary:controls.professionalSummary.value.trim()});candidateHomeCache=null;notify("پرونده ذخیره شد.");await openCandidateProfile()}
-   catch(e){notify(e.message,"error");save.disabled=false}
-  },"action");panel.append(save);panel.append(button("⚖️ قوانین و منابع مرتبط",openLegalLibrary,"action outline"));content.append(panel);
-  if(r.profile){
-   const checklist=el("section",null,"card candidate-checklist");
-   const items=r.checklist||[],done=items.filter(x=>x.status==="done").length;
-   checklist.append(el("h3","اقدام‌های پیشنهادی"),el("p",done.toLocaleString("fa-IR")+" از "+items.length.toLocaleString("fa-IR")+" مورد انجام شده"));
-   const progress=el("div",null,"progress-track"),fill=el("div");fill.style.width=(items.length?done/items.length*100:0)+"%";progress.append(fill);checklist.append(progress);
-   for(const item of items){
-    const row=el("label",null,"candidate-checklist-row"),box=el("input");box.type="checkbox";box.checked=item.status==="done";
-    row.append(box,el("span",item.label));
-    box.addEventListener("change",async()=>{box.disabled=true;try{await api("updateCandidateChecklist",{itemKey:item.item_key,status:box.checked?"done":"todo"});candidateHomeCache=null;await openCandidateProfile()}catch(e){notify(e.message,"error");box.checked=!box.checked;box.disabled=false}});
-    checklist.append(row);
+  const profile=r.profile;
+  if(profile&&!editMode){
+   const card=el("section",null,"card candidate-summary");
+   card.append(el("h3","پرونده هوشمند من"),el("p","پرونده شما ذخیره شده است. برای اصلاح اطلاعات از «ویرایش پرونده» استفاده کنید.","meta"));
+   for(const [label,value] of [["نوع انتخابات",electionNames[profile.election_type]||"نامشخص"],["مرحله فعالیت",stageNames[profile.stage]||"نامشخص"],["حوزه فعالیت",profile.district],["سوابق و تخصص",profile.professional_summary||"ثبت نشده"]]){
+    const row=el("div",null,"candidate-summary-row");row.append(el("small",label),el("strong",value));card.append(row);
    }
-   checklist.append(el("p",r.note||"این موارد پیشنهادهای مدیریتی هستند و فهرست قطعی الزامات قانونی نیستند.","meta"));
+   card.append(button("✎ ویرایش پرونده",()=>openCandidateProfile(true),"action outline"));
+   card.append(button("⚖️ قوانین و منابع مرتبط",openLegalLibrary,"action outline"));
+   content.append(card);
+  }else{
+   const panel=el("section",null,"card candidate-profile");
+   panel.append(el("h3",profile?"ویرایش پرونده کاندیدا":"ساخت پرونده هوشمند کاندیدا"),el("p","فقط اطلاعات ضروری را وارد کنید. این فرم برای ثبت برنامه شخصی است و تأیید صلاحیت قانونی محسوب نمی‌شود."));
+   const controls={};
+   for(const [key,label,options,current] of [
+    ["electionType","نوع انتخابات",Object.entries(electionNames),profile?.election_type],
+    ["stage","مرحله فعالیت",Object.entries(stageNames),profile?.stage]
+   ]){
+    const wrap=el("label",null,"candidate-field"),select=el("select",null,"op-select");wrap.append(el("span",label));
+    for(const [value,name] of options){const option=el("option",name);option.value=value;select.append(option)}
+    select.value=current||options[0][0];wrap.append(select);panel.append(wrap);controls[key]=select;
+   }
+   for(const [key,label,value] of [["district","حوزه فعالیت",profile?.district||""],["professionalSummary","توضیح کوتاه درباره سوابق و تخصص",profile?.professional_summary||""]]){
+    const wrap=el("label",null,"candidate-field"),input=key==="district"?el("input"):el("textarea");
+    input.value=value;input.maxLength=key==="district"?120:500;input.placeholder=key==="district"?"مثلاً نام شهر یا حوزه انتخابیه":"خلاصه تجربه و زمینه تخصصی";wrap.append(el("span",label),input);panel.append(wrap);controls[key]=input;
+   }
+   const save=button(profile?"ذخیره تغییرات پرونده":"ایجاد پرونده و چک‌لیست",async()=>{
+    save.disabled=true;
+    try{await api("saveCandidateProfile",{electionType:controls.electionType.value,stage:controls.stage.value,district:controls.district.value.trim(),professionalSummary:controls.professionalSummary.value.trim()});candidateHomeCache=null;notify("پرونده ذخیره شد.");await openCandidateProfile()}
+    catch(e){notify(e.message,"error");save.disabled=false}
+   },"action");
+   panel.append(save);
+   if(profile)panel.append(button("انصراف از ویرایش",()=>openCandidateProfile(),"action outline"));
+   content.append(panel);
+  }
+  if(profile){
+   const checklist=el("section",null,"card candidate-checklist"),items=r.checklist||[],done=items.filter(x=>x.status==="done").length;
+   checklist.append(el("h3","راهنمای اقدام‌های پرونده"),el("p","روی «جزئیات و راهنما» بزنید، مراحل را بررسی کنید و سپس انجام‌شدن اقدام را ثبت کنید."));
+   checklist.append(el("p",done.toLocaleString("fa-IR")+" از "+items.length.toLocaleString("fa-IR")+" مورد تکمیل شده","meta"));
+   const track=el("div",null,"progress-track"),fill=el("div");fill.style.width=(items.length?done/items.length*100:0)+"%";track.append(fill);checklist.append(track);
+   for(const item of items){
+    const guide=candidateGuides[item.item_key]||{why:"این مورد را طبق رویه معتبر مربوط بررسی کنید.",steps:["شرح فعالیت را بررسی کنید.","مدارک یا خروجی مربوط را آماده کنید."],output:"نتیجه اقدام"};
+    const details=el("details",null,"candidate-guide"),summary=el("summary",null,"candidate-guide-summary");
+    summary.append(el("span",item.status==="done"?"✓":"○","candidate-guide-status"),el("strong",item.label),el("small","جزئیات و راهنما"));
+    details.append(summary);
+    const body=el("div",null,"candidate-guide-body");
+    body.append(el("strong","چرا مهم است؟"),el("p",guide.why));
+    body.append(el("strong","مراحل انجام"));
+    const list=el("ol");for(const step of guide.steps)list.append(el("li",step));body.append(list);
+    body.append(el("strong","خروجی مورد انتظار"),el("p",guide.output));
+    if(item.item_key==="official_rules"||item.item_key==="eligibility")body.append(button("مشاهده مرکز قوانین",openLegalLibrary,"action outline"));
+    const update=button(item.status==="done"?"بازگرداندن به انجام‌نشده":"تأیید می‌کنم این اقدام را انجام داده‌ام",async()=>{
+     const next=item.status==="done"?"todo":"done";
+     if(next==="done"&&!confirm("آیا این اقدام را مطابق راهنما انجام داده‌اید؟"))return;
+     update.disabled=true;
+     try{await api("updateCandidateChecklist",{itemKey:item.item_key,status:next});candidateHomeCache=null;notify("وضعیت اقدام ذخیره شد.");await openCandidateProfile()}
+     catch(e){notify(e.message,"error");update.disabled=false}
+    },"action");
+    body.append(update);details.append(body);checklist.append(details);
+   }
+   checklist.append(el("p",r.note||"این موارد پیشنهادهای مدیریتی‌اند، نه الزامات قطعی قانونی.","meta"));
    checklist.append(button("انتقال اقدام‌های باقی‌مانده به وظایف تیم",async()=>{
-     try{
-       const w=await api("myWorkspaces"),spaces=w.workspaces||[];
-       const eligible=spaces.filter(x=>["owner","admin","editor"].includes(x.role));
-       if(!eligible.length){notify("ابتدا از بخش مدیریت یک فضای کاری بسازید.","error");return}
-       const selected=eligible[0];
-       if(!confirm("اقدام‌های تکمیل‌نشده به فضای کاری «"+selected.name+"» اضافه شوند؟"))return;
-       const summary=await api("workspaceSummary",{workspaceId:selected.id});
-       const existing=new Set((summary.tasks||[]).map(t=>t.title));
-       let added=0;
-       for(const item of items.filter(x=>x.status!=="done")){
-         const title="پرونده کاندیدا: "+item.label;
-         if(existing.has(title))continue;
-         await api("createTask",{workspaceId:selected.id,title,description:"اقدام پیشنهادی پرونده شخصی؛ صحت مقررات مربوط را از منابع رسمی تأیید کنید.",priority:"normal"});
-         added++;
-       }
-       notify(added.toLocaleString("fa-IR")+" وظیفه به فضای کاری افزوده شد.");
-     }catch(e){notify(e.message,"error")}
+    try{
+     const w=await api("myWorkspaces"),spaces=(w.workspaces||[]).filter(x=>["owner","admin","editor"].includes(x.role));
+     if(!spaces.length){notify("ابتدا از بخش مدیریت یک فضای کاری بسازید.","error");return}
+     const selected=spaces[0];if(!confirm("اقدام‌های باقی‌مانده به فضای کاری «"+selected.name+"» اضافه شوند؟"))return;
+     const summary=await api("workspaceSummary",{workspaceId:selected.id}),existing=new Set((summary.tasks||[]).map(t=>t.title));let added=0;
+     for(const item of items.filter(x=>x.status!=="done")){
+      const title="پرونده کاندیدا: "+item.label;if(existing.has(title))continue;
+      await api("createTask",{workspaceId:selected.id,title,description:(candidateGuides[item.item_key]?.steps||[]).join(" | ").slice(0,1200),priority:"normal"});added++;
+     }
+     notify(added.toLocaleString("fa-IR")+" وظیفه اضافه شد.");
+    }catch(e){notify(e.message,"error")}
    },"action outline"));
    content.append(checklist);
   }
