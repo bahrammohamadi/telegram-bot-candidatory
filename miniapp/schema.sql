@@ -28,3 +28,11 @@ CREATE TABLE IF NOT EXISTS assessments (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_assessments_owner ON assessments(telegram_id,created_at);
+
+CREATE TABLE IF NOT EXISTS learning_progress (
+ telegram_id TEXT NOT NULL REFERENCES accounts(telegram_id),
+ course_id TEXT NOT NULL,
+ passed INTEGER NOT NULL DEFAULT 0 CHECK (passed IN (0,1)),
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (telegram_id,course_id)
+);
