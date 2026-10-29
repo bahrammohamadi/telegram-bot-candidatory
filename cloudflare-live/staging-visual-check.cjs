@@ -51,6 +51,7 @@ const fs = require('node:fs');
       const admin=page.locator('.admin-design-preview');
       await admin.locator('.admin-design-metrics article').first().waitFor({timeout:15000});
       if(await admin.locator('[role="tab"]').count()!==5)throw Error('Expected five admin design tabs');
+      if(!(await admin.locator('.admin-design-head h2').textContent()).includes('مرکز فرماندهی'))throw Error('New admin dashboard title not present');
       await admin.locator('[data-admin-view="users"]').click();
       await admin.locator('.admin-design-content h3').filter({hasText:'مدیریت کاربران'}).waitFor();
       await admin.locator('[data-admin-view="reports"]').click();
