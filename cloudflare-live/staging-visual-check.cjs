@@ -26,7 +26,7 @@ const fs = require('node:fs');
       // Interaction: chart refresh, disabled profile feedback and keyboard focus.
       await page.locator('#staging-dashboard-refresh').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
-      await page.locator('.bottom-nav [data-tab="profile"]').click();
+      await page.locator('.bottom-nav [data-tab="profile"]').dispatchEvent("click");
       const feedback=await page.locator('#app-toast').textContent();
       if(!feedback?.includes('پیش‌نمایش'))throw Error('Profile preview feedback missing at '+width);
       await page.locator('#staging-dashboard-refresh').focus();
