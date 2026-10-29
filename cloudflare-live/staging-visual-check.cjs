@@ -38,6 +38,19 @@ const fs = require('node:fs');
       const dark=await page.locator('.staging-dashboard').evaluate(el=>getComputedStyle(el).backgroundColor);
       if(!dark)throw Error('Dark mode did not render');
       await page.evaluate(()=>document.documentElement.removeAttribute('data-theme'));
+      // Audited navigation hit areas: each should be at least 44 CSS pixels tall.
+      const sizes=await page.locator('.bottom-nav [data-tab]').evaluateAll(nodes=>nodes.map(el=>({name:el.getAttribute('data-tab'),w:Math.round(el.getBoundingClientRect().width),h:Math.round(el.getBoundingClientRect().height)})));
+      console.log('navigation hit targets',width,JSON.stringify(sizes));
+      if(sizes.some(x=>x.h<44||x.w<44))throw Error('Small mobile navigation tap target: '+JSON.stringify(sizes));
+      // Check chart error/retry state against a simulated isolated API outage.
+      await page.route('**/api/staging/dashboard',route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":"TEST_OUTAGE"}'}));
+      await page.locator('#staging-dashboard-refresh').click();
+      await page.locator('#staging-dashboard-body .staging-error').waitFor({timeout:12000});
+      const retry=page.locator('#staging-dashboard-body button');
+      if(!await retry.isVisible())throw Error('Missing retry after staging API outage');
+      await page.unroute('**/api/staging/dashboard');
+      await retry.click();
+      await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
       await page.close();
     }
   } finally {await browser.close()}
