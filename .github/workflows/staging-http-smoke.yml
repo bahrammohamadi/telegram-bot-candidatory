@@ -1,8 +1,9 @@
 name: Staging HTTP smoke
 on:
-  push:
-    branches: [feature/cloudflare-parity-audit-2026-10-29]
-    paths: ['.github/workflows/staging-http-smoke.yml']
+  pull_request:
+    paths:
+      - '.github/workflows/staging-http-smoke.yml'
+      - 'cloudflare-live/**'
   workflow_dispatch:
 permissions:
   contents: read
