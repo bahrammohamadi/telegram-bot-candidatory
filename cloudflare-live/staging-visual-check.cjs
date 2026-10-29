@@ -54,6 +54,7 @@ const fs = require('node:fs');
       await admin.locator('[data-admin-view="users"]').click();
       await admin.locator('.admin-design-content h3').filter({hasText:'مدیریت کاربران'}).waitFor();
       await admin.locator('[data-admin-view="reports"]').click();
+      await admin.locator('.admin-design-task-status').waitFor({timeout:15000});
       await admin.locator('.admin-design-metrics article').first().waitFor({timeout:15000});
       await admin.locator('[data-admin-view="overview"]').click();
       // Interaction: chart refresh, disabled profile feedback and keyboard focus.
