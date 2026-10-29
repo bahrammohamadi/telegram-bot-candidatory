@@ -1,0 +1,124 @@
+ements.results};
+ }
+ if(action==="adminAssignPlan"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const workspaceId=clean(payload.workspaceId,64),planId=clean(payload.planId,40);
+   const [ws,plan]=await Promise.all([db.prepare("SELECT id FROM workspaces WHERE id=?").bind(workspaceId).first(),db.prepare("SELECT id FROM service_plans WHERE id=? AND active=1").bind(planId).first()]);
+   if(!ws||!plan)return {error:"Workspace or plan not found",status:404};
+   const expiry=payload.expiresAt||null;
+   if(expiry!==null&&!validDate(expiry))return {error:"Invalid date",status:400};
+   await db.prepare("INSERT INTO workspace_entitlements(workspace_id,plan_id,expires_at,assigned_by) VALUES(?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET plan_id=excluded.plan_id,expires_at=excluded.expires_at,assigned_by=excluded.assigned_by,updated_at=CURRENT_TIMESTAMP").bind(workspaceId,planId,expiry,uid).run();
+   await logChange(db,uid,workspaceId,"assign:"+planId,"entitlement",workspaceId);return {saved:true};
+ }
+ if(action==="myPrivacy"){
+   const requests=await db.prepare("SELECT id,request_type,status,created_at FROM privacy_requests WHERE telegram_id=? ORDER BY created_at DESC LIMIT 30").bind(uid).all();
+   return {requests:requests.results};
+ }
+ if(action==="requestPrivacy"){
+   if(!["export","delete","correct"].includes(payload.requestType))return {error:"Invalid request",status:400};
+   const details=clean(payload.details,1000);
+   const recent=await db.prepare("SELECT COUNT(*) AS n FROM privacy_requests WHERE telegram_id=? AND status IN ('pending','reviewing')").bind(uid).first();
+   if(recent.n>=3)return {error:"Maximum 3 pending requests",status:429};
+   const requestId=crypto.randomUUID();
+   await db.prepare("INSERT INTO privacy_requests(id,telegram_id,request_type,details) VALUES(?,?,?,?)").bind(requestId,uid,payload.requestType,details).run();
+   return {saved:true,id:requestId};
+ }
+ if(action==="myDataExport"){
+   const [user,progress,notes,bookmarks,attempts,candidateProfile,profileDetails]=await Promise.all([
+    db.prepare("SELECT telegram_id,display_name,username,created_at FROM candidate_users WHERE telegram_id=?").bind(uid).first(),
+    db.prepare("SELECT lesson_id,completed_at FROM lesson_progress WHERE telegram_id=? LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT lesson_id,note,updated_at FROM lesson_notes WHERE telegram_id=? LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT lesson_id,created_at FROM lesson_bookmarks WHERE telegram_id=? LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT quiz_id,score,question_count,submitted_at FROM quiz_attempts WHERE telegram_id=? ORDER BY submitted_at DESC LIMIT 500").bind(uid).all(),
+    db.prepare("SELECT election_type,district,stage,professional_summary,updated_at FROM candidate_profiles WHERE telegram_id=?").bind(uid).first(),
+    db.prepare("SELECT details_json,updated_at FROM candidate_profile_details WHERE telegram_id=?").bind(uid).first()
+   ]);
+   return {data:{user,progress:progress.results,notes:notes.results,bookmarks:bookmarks.results,attempts:attempts.results,candidateProfile:candidateProfile||null,professionalDetails:profileDetails?JSON.parse(profileDetails.details_json):{},professionalDetailsUpdatedAt:profileDetails?.updated_at||null},limitedTo:500};
+ }
+ if(action==="adminPrivacyQueue"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const q=await db.prepare("SELECT id,telegram_id,request_type,status,created_at FROM privacy_requests ORDER BY created_at DESC LIMIT 100").all();
+   return {requests:q.results};
+ }
+ if(action==="adminPrivacyStatus"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   if(!["pending","reviewing","rejected"].includes(payload.status))return {error:"Invalid status",status:400};
+   const id=clean(payload.requestId,64);
+   const result=await db.prepare("UPDATE privacy_requests SET status=? WHERE id=? AND status!='done'").bind(payload.status,id).run();
+   if(!result.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,"privacy:"+payload.status,"privacy",id);
+   return {saved:true};
+ }
+ if(action==="myWorkspaces"){
+   const r=await db.prepare("SELECT w.id,w.name,w.jurisdiction,w.status,m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.telegram_id=? AND m.status='active' ORDER BY w.created_at DESC LIMIT 50").bind(uid).all();
+   return {workspaces:r.results,platformAdmin:platformAdmin(env,uid)};
+ }
+ if(action==="createWorkspace"){
+   const name=clean(payload.name,120),jurisdiction=clean(payload.jurisdiction,100);
+   if(name.length<2||name.length>120)return {error:"Invalid workspace name",status:400};
+   const count=await db.prepare("SELECT COUNT(*) AS count FROM workspaces WHERE created_by=? AND status='active'").bind(uid).first();
+   if(count.count>=5)return {error:"Workspace limit reached",status:429};
+   const workspace=crypto.randomUUID();
+   await db.batch([
+      db.prepare("INSERT INTO workspaces(id,name,jurisdiction,created_by) VALUES(?,?,?,?)").bind(workspace,name,jurisdiction,uid),
+      db.prepare("INSERT INTO workspace_members(workspace_id,telegram_id,role) VALUES(?,?,'owner')").bind(workspace,uid)
+   ]);
+   await logChange(db,uid,workspace,"create","workspace",workspace);
+   return {workspace:{id:workspace,name,role:"owner"}};
+ }
+ if(action==="adminLessons"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const lessons=await db.prepare("SELECT id,title,summary,body,position,published FROM lessons ORDER BY position,id LIMIT 100").all();
+   const quizzes=await db.prepare("SELECT id,title,description,published FROM quizzes ORDER BY id LIMIT 100").all();
+   return {lessons:lessons.results,quizzes:quizzes.results};
+ }
+ if(action==="adminSaveLesson"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const title=clean(payload.title),summary=clean(payload.summary,1000),body=clean(payload.body,12000),position=Number(payload.position)||0;
+   if(title.length<2||body.length<5||!Number.isSafeInteger(position)||position<0||position>10000)return {error:"Invalid lesson",status:400};
+   const lessonId=Number(payload.id);
+   if(payload.id!=null){if(!Number.isSafeInteger(lessonId)||lessonId<=0)return {error:"Invalid ID",status:400};
+     const r=await db.prepare("UPDATE lessons SET title=?,summary=?,body=?,position=? WHERE id=?").bind(title,summary,body,position,lessonId).run();
+     if(!r.meta.changes)return {error:"Not found",status:404};
+     await logChange(db,uid,null,"update","lesson",lessonId);return {saved:true,id:lessonId};
+   }
+   const r=await db.prepare("INSERT INTO lessons(title,summary,body,position,published) VALUES(?,?,?,?,0)").bind(title,summary,body,position).run();
+   await logChange(db,uid,null,"create","lesson",r.meta.last_row_id);return {saved:true,id:r.meta.last_row_id};
+ }
+ if(action==="adminPublishLesson"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const id=Number(payload.id);if(!Number.isSafeInteger(id)||id<=0||typeof payload.published!=="boolean")return {error:"Invalid input",status:400};
+   const r=await db.prepare("UPDATE lessons SET published=? WHERE id=?").bind(payload.published?1:0,id).run();
+   if(!r.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,payload.published?"publish":"unpublish","lesson",id);return {saved:true};
+ }
+ if(action==="adminCreateQuiz"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const title=clean(payload.title),description=clean(payload.description,500);
+   if(title.length<2)return {error:"Invalid quiz",status:400};
+   const r=await db.prepare("INSERT INTO quizzes(title,description,published) VALUES(?,?,0)").bind(title,description).run();
+   await logChange(db,uid,null,"create","quiz",r.meta.last_row_id);return {saved:true,id:r.meta.last_row_id};
+ }
+ if(action==="adminAddQuestion"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const quizId=Number(payload.quizId),prompt=clean(payload.prompt,2000),options=payload.options,correct=payload.correctIndex;
+   if(!Number.isSafeInteger(quizId)||quizId<=0||prompt.length<4||!Array.isArray(options)||options.length<2||options.length>8||!options.every(o=>typeof o==="string"&&o.trim().length>0&&o.length<=500)||!Number.isInteger(correct)||correct<0||correct>=options.length)return {error:"Invalid question",status:400};
+   const quiz=await db.prepare("SELECT id,published FROM quizzes WHERE id=?").bind(quizId).first();
+   if(!quiz||quiz.published)return {error:"Quiz unavailable for editing",status:409};
+   const count=await db.prepare("SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id=?").bind(quizId).first();
+   if(count.n>=100)return {error:"Question limit",status:429};
+   const r=await db.prepare("INSERT INTO quiz_questions(quiz_id,prompt,options_json,correct_index,position) VALUES(?,?,?,?,?)").bind(quizId,prompt,JSON.stringify(options),correct,count.n+1).run();
+   await logChange(db,uid,null,"create","quiz_question",r.meta.last_row_id);return {saved:true};
+ }
+ if(action==="adminPublishQuiz"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const quizId=Number(payload.id),published=payload.published;
+   if(!Number.isSafeInteger(quizId)||quizId<=0||typeof published!=="boolean")return {error:"Invalid quiz",status:400};
+   if(published){const c=await db.prepare("SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id=?").bind(quizId).first();if(!c?.n)return {error:"Quiz requires at least one question",status:409}}
+   const result=await db.prepare("UPDATE quizzes SET published=? WHERE id=?").bind(published?1:0,quizId).run();
+   if(!result.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,published?"publish":"unpublish","quiz",quizId);return {saved:true};
+ }
+ if(action==="adminWorkspaces"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const r=await db.prepare("SELECT id,nam
