@@ -23,6 +23,15 @@ const fs = require('node:fs');
       if(result.scroll>result.viewport+2)throw Error('Horizontal overflow at '+width+': '+result.scroll);
       if(result.nav!==5||!result.chart||result.blocked!=='true')throw Error('Missing expected navigation/chart at '+width);
       if(errors.length)throw Error('Runtime JavaScript error at '+width+': '+errors.join('; '));
+      // Status filters should remain usable and restore the complete chart.
+      await page.locator('[data-staging-filter="done"]').click();
+      await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
+      if(await page.locator('[data-staging-filter="done"]').getAttribute('aria-pressed')!=='true')throw Error('Done filter not selected');
+      await page.locator('[data-staging-filter="todo"]').click();
+      await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
+      if(await page.locator('[data-staging-filter="todo"]').getAttribute('aria-pressed')!=='true')throw Error('Remaining filter not selected');
+      await page.locator('[data-staging-filter="all"]').click();
+      await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
       // Interaction: chart refresh, disabled profile feedback and keyboard focus.
       await page.locator('#staging-dashboard-refresh').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
