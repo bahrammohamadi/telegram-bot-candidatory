@@ -32,6 +32,15 @@ const fs = require('node:fs');
       if(await page.locator('[data-staging-filter="todo"]').getAttribute('aria-pressed')!=='true')throw Error('Remaining filter not selected');
       await page.locator('[data-staging-filter="all"]').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
+      // Unified hub: five cards and restricted-state messages.
+      const hub=page.locator('.staging-learning-hub');
+      await hub.locator('[data-hub-tab]').first().waitFor();
+      if(await hub.locator('[data-hub-tab]').count()!==5)throw Error('Expected five unified hub cards');
+      await hub.locator('[data-hub-tab="profile"]').click();
+      if(!(await page.locator('#staging-hub-message').textContent()).includes('حساب آزمایشی'))throw Error('Missing restricted professional profile explanation');
+      await hub.locator('[data-hub-tab="lessons"]').click();
+      if(!(await page.locator('#staging-hub-message').textContent()).includes('آموزش'))throw Error('Lessons hub navigation did not activate');
+      await page.locator('.bottom-nav [data-tab="home"]').click();
       // Interaction: chart refresh, disabled profile feedback and keyboard focus.
       await page.locator('#staging-dashboard-refresh').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
