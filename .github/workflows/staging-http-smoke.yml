@@ -33,6 +33,8 @@ jobs:
           echo 'PASS: public UI, scripts, synthetic API and private guard'
   staging-visual:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +44,6 @@ jobs:
       - name: Install Chromium and Playwright
         run: |
           npm install --no-save playwright@1.56.1
-          npx playwright install --with-deps chromium
       - name: Test mobile viewport, dashboard and interactions
         run: node cloudflare-live/staging-visual-check.cjs
       - name: Upload mobile screenshots
