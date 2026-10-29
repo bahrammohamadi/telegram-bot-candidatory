@@ -16,5 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate complete snapshot without any deployment
+      - name: Reconstruct exact source from verified chunks
+        run: node cloudflare-live/reconstruct.mjs
+      - name: Validate Worker JavaScript syntax
+        run: node --check cloudflare-live/worker.js
+      - name: Validate full source and feature parity
         run: node cloudflare-live/verify-snapshot.mjs
