@@ -47,6 +47,15 @@ const fs = require('node:fs');
       await hub.locator('[data-hub-tab="lessons"]').click();
       if(!(await page.locator('#staging-hub-message').textContent()).includes('آموزش'))throw Error('Lessons hub navigation did not activate');
       await page.locator('.bottom-nav [data-tab="home"]').click();
+      // Approved admin mobile layout and quick navigation.
+      await page.locator('.admin-modern-stats .admin-modern-stat').first().waitFor({timeout:15000});
+      if(await page.locator('.admin-modern-tile').count()!==4)throw Error('Missing four admin shortcuts');
+      await page.locator('[data-admin-modern="users"]').click();
+      await page.locator('#admin-design-detail:not([data-collapsed="true"])').waitFor();
+      await page.locator('#admin-design-detail [data-admin-view="overview"]').click();
+      await page.locator('#admin-modern-search').fill('گزارش');
+      if(await page.locator('.admin-modern-tile:visible').count()!==1)throw Error('Dashboard search filter failed');
+      await page.locator('#admin-modern-search').fill('');
       // Admin UI prototype: tabs, aggregate metrics and restricted functionality labels.
       const admin=page.locator('.admin-design-preview');
       await admin.locator('.admin-design-metrics article').first().waitFor({timeout:15000});
