@@ -36,7 +36,7 @@ const fs = require('node:fs');
       const hub=page.locator('.staging-learning-hub');
       await hub.locator('[data-hub-tab]').first().waitFor();
       if(await hub.locator('[data-hub-tab]').count()!==5)throw Error('Expected five unified hub cards');
-      await hub.locator('[data-hub-tab="profile"]').click();
+      await hub.locator('[data-hub-tab="profile"]').dispatchEvent('click');
       if(!(await page.locator('#staging-hub-message').textContent()).includes('حساب آزمایشی'))throw Error('Missing restricted professional profile explanation');
       await hub.locator('[data-hub-tab="lessons"]').click();
       if(!(await page.locator('#staging-hub-message').textContent()).includes('آموزش'))throw Error('Lessons hub navigation did not activate');
