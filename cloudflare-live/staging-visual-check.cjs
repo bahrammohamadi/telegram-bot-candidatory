@@ -47,6 +47,12 @@ const fs = require('node:fs');
       await hub.locator('[data-hub-tab="lessons"]').click();
       if(!(await page.locator('#staging-hub-message').textContent()).includes('آموزش'))throw Error('Lessons hub navigation did not activate');
       await page.locator('.bottom-nav [data-tab="home"]').click();
+      // Verify a safe aggregate-only CSV export in the admin demo.
+      const [download] = await Promise.all([
+        page.waitForEvent('download',{timeout:15000}),
+        page.locator('#admin-export-summary').click()
+      ]);
+      if(download.suggestedFilename()!=='candidatory-staging-summary.csv')throw Error('Unexpected export filename');
       // Approved admin mobile layout and quick navigation.
       await page.locator('.admin-modern-stats .admin-modern-stat').first().waitFor({timeout:15000});
       if(await page.locator('.admin-modern-tile').count()!==4)throw Error('Missing four admin shortcuts');
