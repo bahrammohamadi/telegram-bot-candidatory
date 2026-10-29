@@ -1,0 +1,20 @@
+name: Cloudflare live source parity
+on:
+  pull_request:
+    paths:
+      - 'cloudflare-live/**'
+      - '.github/workflows/cloudflare-source-parity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate complete snapshot without any deployment
+        run: node cloudflare-live/verify-snapshot.mjs
