@@ -23,6 +23,21 @@ const fs = require('node:fs');
       if(result.scroll>result.viewport+2)throw Error('Horizontal overflow at '+width+': '+result.scroll);
       if(result.nav!==5||!result.chart||result.blocked!=='true')throw Error('Missing expected navigation/chart at '+width);
       if(errors.length)throw Error('Runtime JavaScript error at '+width+': '+errors.join('; '));
+      // Interaction: chart refresh, disabled profile feedback and keyboard focus.
+      await page.locator('#staging-dashboard-refresh').click();
+      await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
+      await page.locator('.bottom-nav [data-tab="profile"]').click();
+      const feedback=await page.locator('#app-toast').textContent();
+      if(!feedback?.includes('پیش‌نمایش'))throw Error('Profile preview feedback missing at '+width);
+      await page.locator('#staging-dashboard-refresh').focus();
+      const focused=await page.evaluate(()=>document.activeElement?.id);
+      if(focused!=='staging-dashboard-refresh')throw Error('Refresh not keyboard focusable');
+      // Dark-mode stylesheet coverage without mutating persistent preferences.
+      await page.evaluate(()=>document.documentElement.setAttribute('data-theme','dark'));
+      await page.screenshot({path:`staging-screenshots/mobile-${width}-dark.png`,fullPage:true});
+      const dark=await page.locator('.staging-dashboard').evaluate(el=>getComputedStyle(el).backgroundColor);
+      if(!dark)throw Error('Dark mode did not render');
+      await page.evaluate(()=>document.documentElement.removeAttribute('data-theme'));
       await page.close();
     }
   } finally {await browser.close()}
