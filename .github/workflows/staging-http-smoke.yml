@@ -31,3 +31,24 @@ jobs:
           test "$status" = "503"
           grep -q 'STAGING_PREVIEW_ONLY' /tmp/private.json
           echo 'PASS: public UI, scripts, synthetic API and private guard'
+  staging-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium and Playwright
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test mobile viewport, dashboard and interactions
+        run: node cloudflare-live/staging-visual-check.cjs
+      - name: Upload mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-mobile-screenshots
+          path: staging-screenshots/
+          if-no-files-found: ignore
