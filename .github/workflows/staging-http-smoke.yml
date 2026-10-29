@@ -27,6 +27,8 @@ jobs:
           python3 -c 'import json;d=json.load(open("/tmp/health.json"));assert d["environment"]=="staging" and d["syntheticOnly"] is True and d["users"]==2 and d["tasks"]==3'
           curl --fail --show-error --location --max-time 20 "$base/api/staging/dashboard" -o /tmp/dashboard.json
           python3 -c 'import json;d=json.load(open("/tmp/dashboard.json"));assert d["syntheticOnly"] is True and len(d["users"])==2'
+          curl --fail --show-error --location --max-time 20 "$base/api/staging/overview" -o /tmp/overview.json
+          python3 -c 'import json;d=json.load(open("/tmp/overview.json"));assert d["syntheticOnly"] is True and d["profiles"]==2 and d["quizAttempts"]==3 and d["averageQuizScore"]==78'
           status=$(curl -sS -o /tmp/private.json -w '%{http_code}' --max-time 20 -X POST -H 'Content-Type: application/json' -d '{}' "$base/api/action")
           test "$status" = "503"
           grep -q 'STAGING_PREVIEW_ONLY' /tmp/private.json
