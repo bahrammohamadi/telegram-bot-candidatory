@@ -10,6 +10,12 @@ const fs = require('node:fs');
       const errors=[];
       page.on('pageerror',e=>errors.push(String(e)));
       await page.goto('https://candidatory-miniapp-staging.lasvaram-candidatory.workers.dev/',{waitUntil:'domcontentloaded',timeout:30000});
+      await page.locator('#first-visit-guide:not([hidden])').waitFor({timeout:10000});
+      await page.locator('#first-visit-next').click();
+      await page.locator('#first-visit-next').click();
+      await page.locator('#first-visit-next').click();
+      if(await page.locator('#first-visit-guide').isVisible())throw Error('Onboarding did not close');
+      await page.locator('.bottom-nav [data-tab="home"]').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
       const result=await page.evaluate(()=>({
         scroll:document.documentElement.scrollWidth,
