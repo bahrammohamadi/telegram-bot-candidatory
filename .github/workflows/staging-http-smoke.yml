@@ -1,0 +1,32 @@
+name: Staging HTTP smoke
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths: ['.github/workflows/staging-http-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test public UI and synthetic API without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://candidatory-miniapp-staging.lasvaram-candidatory.workers.dev"
+          curl --fail --show-error --location --max-time 20 "$base/" -o /tmp/index.html
+          grep -q 'staging-dashboard' /tmp/index.html
+          curl --fail --show-error --location --max-time 20 "$base/style.css" -o /tmp/style.css
+          grep -q 'staging-donut' /tmp/style.css
+          curl --fail --show-error --location --max-time 20 "$base/app.js" -o /tmp/app.js
+          grep -q 'Preview interaction guard' /tmp/app.js
+          curl --fail --show-error --location --max-time 20 "$base/api/staging/health" -o /tmp/health.json
+          python3 -c 'import json;d=json.load(open("/tmp/health.json"));assert d["environment"]=="staging" and d["syntheticOnly"] is True and d["users"]==2 and d["tasks"]==3'
+          curl --fail --show-error --location --max-time 20 "$base/api/staging/dashboard" -o /tmp/dashboard.json
+          python3 -c 'import json;d=json.load(open("/tmp/dashboard.json"));assert d["syntheticOnly"] is True and len(d["users"])==2'
+          status=$(curl -sS -o /tmp/private.json -w '%{http_code}' --max-time 20 -X POST -H 'Content-Type: application/json' -d '{}' "$base/api/action")
+          test "$status" = "503"
+          grep -q 'STAGING_PREVIEW_ONLY' /tmp/private.json
+          echo 'PASS: public UI, scripts, synthetic API and private guard'
