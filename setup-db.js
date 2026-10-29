@@ -95,6 +95,7 @@ const USERS_SCHEMA = {
 
     // پروفایل کاندیدا (JSON) — برای ذخیره پروفایل ۱۵+ فیلدی onboarding
     { key: "profile",            type: "string",   size: 16384, required: false, default: "{}" },
+    { key: "candidateProfile",   type: "string",   size: 16384, required: false, default: "{}" },
 
     // داده‌های مدیریت کمپین (JSON)
     { key: "rivals",             type: "string",   size: 32768, required: false, default: "[]" },

@@ -1,0 +1,15 @@
+name = "candidatory-miniapp-staging"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Create D1 database first and insert its ID below before deployment.
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "candidatory-miniapp-staging"
+# database_id = "REPLACE_WITH_REAL_D1_ID"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true

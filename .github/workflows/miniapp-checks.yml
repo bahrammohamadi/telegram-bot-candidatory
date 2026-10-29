@@ -1,0 +1,29 @@
+name: Mini App checks
+on:
+  push:
+    paths:
+      - 'miniapp/**'
+      - '.github/workflows/miniapp-checks.yml'
+  pull_request:
+    paths:
+      - 'miniapp/**'
+      - '.github/workflows/miniapp-checks.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: miniapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify JavaScript syntax
+        run: |
+          node --check src/worker.mjs
+          node --check src/auth.mjs
+          node --check src/ui.mjs
+          node --check public/app.js
+      - name: Test Telegram initData authentication
+        run: node --test tests/*.test.mjs
