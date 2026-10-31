@@ -38,3 +38,15 @@ jobs:
           node cloudflare-live/build-integration.mjs
           node --check cloudflare-live/dist/integration-worker.mjs
           node cloudflare-live/integration-check.mjs ./dist/integration-worker.mjs --phase3
+  integration-navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/reconstruct.mjs && node cloudflare-live/build-integration.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - run: node cloudflare-live/integration-navigation-check.cjs
