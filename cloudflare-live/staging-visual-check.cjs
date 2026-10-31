@@ -60,6 +60,14 @@ const fs = require('node:fs');
       if(!(await page.locator('#candidate-v2-feedback').textContent()).includes('احرازشده'))throw Error('Missing private profile safeguard');
       await page.locator('.candidate-legacy summary').click();
       await page.locator('.admin-modern-home').waitFor({state:'visible',timeout:8000});
+      // Candidate restricted modules expose descriptive submenus, not writable actions.
+      await page.locator('[data-candidate-target="workspace"]').click();
+      await page.locator('#candidate-section-detail:visible').waitFor({timeout:8000});
+      if(await page.locator('.candidate-section-item').count()!==3)throw Error('Workspace submenu missing items');
+      await page.locator('[data-candidate-target="studio"]').click();
+      if(!(await page.locator('#candidate-section-heading').textContent()).includes('استودیوی محتوا'))throw Error('Studio submenu missing');
+      await page.locator('#candidate-section-close').click();
+      if(await page.locator('#candidate-section-detail').isVisible())throw Error('Candidate submenu did not close');
       // Approved admin mobile layout and quick navigation.
       await page.locator('.admin-modern-stats .admin-modern-stat').first().waitFor({timeout:15000});
       if(await page.locator('.admin-modern-tile').count()!==4)throw Error('Missing four admin shortcuts');
