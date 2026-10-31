@@ -60,7 +60,6 @@ const fs = require('node:fs');
       if(!(await page.locator('#candidate-v2-feedback').textContent()).includes('احرازشده'))throw Error('Missing private profile safeguard');
       await page.locator('.candidate-legacy summary').click();
       await page.locator('.admin-modern-home').waitFor({state:'visible',timeout:8000});
-      await page.locator('.candidate-legacy summary').click();
       // Approved admin mobile layout and quick navigation.
       await page.locator('.admin-modern-stats .admin-modern-stat').first().waitFor({timeout:15000});
       if(await page.locator('.admin-modern-tile').count()!==4)throw Error('Missing four admin shortcuts');
