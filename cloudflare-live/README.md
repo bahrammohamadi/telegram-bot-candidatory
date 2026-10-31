@@ -63,3 +63,7 @@ The build requires the pinned production hash and changes only the profile actio
 Expanded local tests cover workspace task status, cross-workspace mutation denial, manager-only document visibility, HTTPS document links, personal calendar and action-plan ownership. Document storage currently holds external HTTPS links, not uploaded file bytes. The transactional SQLite adapter tests rollback for both existing and first-time profiles, successful retry, partial details preservation and explicit clearing. These tests do not certify real D1, concurrent requests or authenticated Telegram WebViews.
 
 Still pending for Phase 3: isolated authenticated integration deployment, connecting the new navigation to real forms, user-facing error/retry states and live end-to-end tests. A dedicated test bot/signing key is required before exposing authenticated test routes; no production token or user records have been copied.
+
+### Functional navigation candidate
+
+The integration builder now also appends six-section navigation using existing openLauncher routes and forms. Legacy home elements remain in a supplementary disclosure. Backend integration and syntax checks pass; browser interaction and authenticated Telegram verification remain pending. This candidate has not been deployed.
