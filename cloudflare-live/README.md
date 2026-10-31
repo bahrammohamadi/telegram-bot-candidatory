@@ -23,10 +23,13 @@ Run after reconstruction:
 ```sh
 node cloudflare-live/verify-environments.mjs
 node cloudflare-live/auth-check.mjs
+node cloudflare-live/integration-check.mjs
 node cloudflare-live/staging-visual-check.cjs
 ```
 
 The first two checks validate pinned snapshots and local authentication boundaries. The browser check targets the public synthetic Staging UI. None certifies authenticated Telegram use.
+
+`integration-schema.sql` contains schema only (50 application tables plus indexes), exported without user records. `integration-check.mjs` loads it into temporary in-memory SQLite and invokes the reconstructed Worker with locally signed synthetic identities. It checks profile save/read, partial details updates, invalid-input rejection, two-user profile/checklist isolation and both admin ID lists. These local integration checks passed; they do not replace live D1 or Telegram WebView verification. The corrected public mobile suite also passed at 320, 375 and 430 pixels in run `41164445612`.
 
 ### Remaining integration prerequisite
 

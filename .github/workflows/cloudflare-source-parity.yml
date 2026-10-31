@@ -26,3 +26,5 @@ jobs:
         run: node cloudflare-live/verify-environments.mjs
       - name: Validate authentication rejection before database access
         run: node cloudflare-live/auth-check.mjs
+      - name: Validate isolated profile round trips and access controls
+        run: node cloudflare-live/integration-check.mjs
