@@ -33,3 +33,8 @@ jobs:
           node cloudflare-live/build-staging.mjs
           node --check cloudflare-live/dist/staging-worker.mjs
           node --check cloudflare-live/phase2/navigation.js
+      - name: Build integration candidate and verify atomic profile saves
+        run: |
+          node cloudflare-live/build-integration.mjs
+          node --check cloudflare-live/dist/integration-worker.mjs
+          node cloudflare-live/integration-check.mjs ./dist/integration-worker.mjs --phase3
