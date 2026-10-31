@@ -1,0 +1,52 @@
+name: Cloudflare live source parity
+on:
+  pull_request:
+    paths:
+      - 'cloudflare-live/**'
+      - '.github/workflows/cloudflare-source-parity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconstruct exact source from verified chunks
+        run: node cloudflare-live/reconstruct.mjs
+      - name: Validate Worker JavaScript syntax
+        run: node --check cloudflare-live/worker.js
+      - name: Validate full source and feature parity
+        run: node cloudflare-live/verify-snapshot.mjs
+      - name: Validate pinned environment snapshots and database isolation
+        run: node cloudflare-live/verify-environments.mjs
+      - name: Validate authentication rejection before database access
+        run: node cloudflare-live/auth-check.mjs
+      - name: Validate isolated profile round trips and access controls
+        run: node cloudflare-live/integration-check.mjs
+      - name: Build and validate staging navigation bundle
+        run: |
+          node cloudflare-live/build-staging.mjs
+          node --check cloudflare-live/dist/staging-worker.mjs
+          node --check cloudflare-live/phase2/navigation.js
+      - name: Build integration candidate and verify atomic profile saves
+        run: |
+          node cloudflare-live/build-integration.mjs
+          node --check cloudflare-live/dist/integration-worker.mjs
+          node cloudflare-live/integration-check.mjs ./dist/integration-worker.mjs --phase3
+  integration-navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/reconstruct.mjs && node cloudflare-live/build-integration.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - run: node cloudflare-live/integration-navigation-check.cjs

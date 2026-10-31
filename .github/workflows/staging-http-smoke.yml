@@ -1,0 +1,57 @@
+name: Staging HTTP smoke
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/staging-http-smoke.yml'
+      - 'cloudflare-live/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test public UI and synthetic API without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://candidatory-miniapp-staging.lasvaram-candidatory.workers.dev"
+          curl --fail --show-error --location --max-time 20 "$base/" -o /tmp/index.html
+          grep -q 'staging-dashboard' /tmp/index.html
+          curl --fail --show-error --location --max-time 20 "$base/style.css" -o /tmp/style.css
+          grep -q 'staging-donut' /tmp/style.css
+          curl --fail --show-error --location --max-time 20 "$base/app.js" -o /tmp/app.js
+          grep -q 'Preview interaction guard' /tmp/app.js
+          curl --fail --show-error --location --max-time 20 "$base/api/staging/health" -o /tmp/health.json
+          python3 -c 'import json;d=json.load(open("/tmp/health.json"));assert d["environment"]=="staging" and d["syntheticOnly"] is True and d["users"]==2 and d["tasks"]==3'
+          curl --fail --show-error --location --max-time 20 "$base/api/staging/dashboard" -o /tmp/dashboard.json
+          python3 -c 'import json;d=json.load(open("/tmp/dashboard.json"));assert d["syntheticOnly"] is True and len(d["users"])==2'
+          curl --fail --show-error --location --max-time 20 "$base/api/staging/overview" -o /tmp/overview.json
+          python3 -c 'import json;d=json.load(open("/tmp/overview.json"));assert d["syntheticOnly"] is True and d["profiles"]==2 and d["quizAttempts"]==3 and d["averageQuizScore"]==78'
+          status=$(curl -sS -o /tmp/private.json -w '%{http_code}' --max-time 20 -X POST -H 'Content-Type: application/json' -d '{}' "$base/api/action")
+          test "$status" = "503"
+          grep -q 'STAGING_PREVIEW_ONLY' /tmp/private.json
+          echo 'PASS: public UI, scripts, synthetic API and private guard'
+  staging-visual:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium and Playwright
+        run: |
+          npm install --no-save playwright@1.56.1
+      - name: Test mobile viewport, dashboard and interactions
+        run: node cloudflare-live/staging-visual-check.cjs
+      - name: Upload mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-mobile-screenshots
+          path: staging-screenshots/
+          if-no-files-found: ignore
