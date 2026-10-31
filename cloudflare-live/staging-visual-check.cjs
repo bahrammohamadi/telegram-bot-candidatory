@@ -53,6 +53,14 @@ const fs = require('node:fs');
         page.locator('#admin-export-summary').click()
       ]);
       if(download.suggestedFilename()!=='candidatory-staging-summary.csv')throw Error('Unexpected export filename');
+      // Candidate-oriented six-card home and preserved legacy access.
+      await page.locator('.candidate-six-grid button').first().waitFor({timeout:12000});
+      if(await page.locator('.candidate-six-grid button').count()!==6)throw Error('Candidate home must have exactly six primary actions');
+      await page.locator('[data-candidate-target="profile"]').click();
+      if(!(await page.locator('#candidate-v2-feedback').textContent()).includes('احرازشده'))throw Error('Missing private profile safeguard');
+      await page.locator('.candidate-legacy summary').click();
+      await page.locator('.admin-modern-home').waitFor({state:'visible',timeout:8000});
+      await page.locator('.candidate-legacy summary').click();
       // Approved admin mobile layout and quick navigation.
       await page.locator('.admin-modern-stats .admin-modern-stat').first().waitFor({timeout:15000});
       if(await page.locator('.admin-modern-tile').count()!==4)throw Error('Missing four admin shortcuts');
