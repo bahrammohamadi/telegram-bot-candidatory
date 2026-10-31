@@ -22,3 +22,7 @@ jobs:
         run: node --check cloudflare-live/worker.js
       - name: Validate full source and feature parity
         run: node cloudflare-live/verify-snapshot.mjs
+      - name: Validate pinned environment snapshots and database isolation
+        run: node cloudflare-live/verify-environments.mjs
+      - name: Validate authentication rejection before database access
+        run: node cloudflare-live/auth-check.mjs

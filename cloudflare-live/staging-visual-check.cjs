@@ -38,6 +38,11 @@ const fs = require('node:fs');
       if(await page.locator('[data-staging-filter="todo"]').getAttribute('aria-pressed')!=='true')throw Error('Remaining filter not selected');
       await page.locator('[data-staging-filter="all"]').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
+      // Legacy tools are intentionally collapsed on the six-card home.
+      // Open them through the same disclosure a user operates; never force hidden clicks.
+      const legacy=page.locator('.candidate-legacy');
+      if(await legacy.getAttribute('open')===null)await legacy.locator('summary').click();
+      await page.locator('.staging-learning-hub').waitFor({state:'visible',timeout:8000});
       // Unified hub: five cards and restricted-state messages.
       const hub=page.locator('.staging-learning-hub');
       await hub.locator('[data-hub-tab]').first().waitFor();
@@ -58,7 +63,7 @@ const fs = require('node:fs');
       if(await page.locator('.candidate-six-grid button').count()!==6)throw Error('Candidate home must have exactly six primary actions');
       await page.locator('[data-candidate-target="profile"]').click();
       if(!(await page.locator('#candidate-v2-feedback').textContent()).includes('احرازشده'))throw Error('Missing private profile safeguard');
-      await page.locator('.candidate-legacy summary').click();
+      if(await legacy.getAttribute('open')===null)await legacy.locator('summary').click();
       await page.locator('.admin-modern-home').waitFor({state:'visible',timeout:8000});
       // Candidate restricted modules expose descriptive submenus, not writable actions.
       await page.locator('[data-candidate-target="workspace"]').click();
@@ -116,6 +121,7 @@ const fs = require('node:fs');
       await page.unroute('**/api/staging/dashboard');
       await retry.click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
+      if(errors.length)throw Error('Runtime JavaScript error after interactions at '+width+': '+errors.join('; '));
       await page.close();
     }
   } finally {await browser.close()}
