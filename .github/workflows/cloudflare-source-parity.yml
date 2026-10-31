@@ -28,3 +28,8 @@ jobs:
         run: node cloudflare-live/auth-check.mjs
       - name: Validate isolated profile round trips and access controls
         run: node cloudflare-live/integration-check.mjs
+      - name: Build and validate staging navigation bundle
+        run: |
+          node cloudflare-live/build-staging.mjs
+          node --check cloudflare-live/dist/staging-worker.mjs
+          node --check cloudflare-live/phase2/navigation.js

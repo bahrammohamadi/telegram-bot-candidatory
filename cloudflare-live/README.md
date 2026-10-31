@@ -14,6 +14,14 @@ See `docs/LIVE-CLOUDFLARE-RELEASE-GATE.md` and `design-system/candidatory/MASTER
 
 ## Phase 1 baseline — 2026-10-31
 
+## Phase 2 navigation release — 2026-10-31
+
+The current Staging release is recorded in `phase2-release.json`. `environment-manifest.json` continues to pin the unchanged Phase 1 source snapshots for reconstruction and rollback; its Staging version is the baseline, not the current deployment.
+
+Run `node cloudflare-live/build-staging.mjs` to reproduce the deployed Phase 2 bundle from `staging-worker.js` plus the reviewed `phase2/` navigation files. Only bundled client JavaScript/CSS are changed; the API and read-only preview guard remain intact.
+
+All six home cards now open consistent submenus. Available links open sample lists, the sample report or the restartable guide. Private features have explicit unavailable labels. Previous dashboards and admin previews remain reachable inside the collapsed supplementary section. SVG icons, larger labels, dark-mode styling and keyboard focus/escape handling are included. Telegram authentication and live integration remain separate prerequisites.
+
 The live Production source was downloaded and hashed again: it still matches the canonical snapshot above. The exact current Staging source is now preserved in `staging-worker.js`. `environment-manifest.json` records both source hashes, distinct database IDs and Cloudflare deployment/version IDs for rollback identification.
 
 The development baseline is `feature/cloudflare-parity-audit-2026-10-29` (PR #4). `main` remains historical Appwrite code and must not replace either Worker. No automatic Production deployment is enabled here.

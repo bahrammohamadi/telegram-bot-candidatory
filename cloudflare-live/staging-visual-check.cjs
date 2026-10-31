@@ -16,6 +16,32 @@ const fs = require('node:fs');
       await page.locator('#first-visit-next').click();
       if(await page.locator('#first-visit-guide').isVisible())throw Error('Onboarding did not close');
       await page.locator('.bottom-nav [data-tab="home"]').click();
+      const legacy=page.locator('.candidate-legacy');
+      if(await legacy.getAttribute('open')!==null)throw Error('Legacy panels should start collapsed');
+      if(await page.locator('.admin-modern-home').isVisible())throw Error('Admin demo visible on candidate home');
+      if(await page.locator('#staging-dashboard').isVisible())throw Error('Duplicate dashboard visible');
+      if(await page.locator('.candidate-six-grid svg').count()!==6)throw Error('Expected six SVG icons');
+      await page.screenshot({path:`staging-screenshots/candidate-home-${width}.png`,fullPage:true});
+      for(const key of ['profile','workspace','assistant','quizzes','progress','studio']){
+        const card=page.locator('[data-candidate-target="'+key+'"]');
+        await card.click();
+        await page.locator('#candidate-section-detail').waitFor({state:'visible'});
+        if(await card.getAttribute('aria-expanded')!=='true')throw Error('Section not expanded: '+key);
+        await page.locator('#candidate-section-heading').press('Escape');
+        if(await page.locator('#candidate-section-detail').isVisible())throw Error('Escape failed');
+        if(!await card.evaluate(el=>document.activeElement===el))throw Error('Focus not restored');
+      }
+      await page.locator('[data-candidate-target="assistant"]').click();
+      await page.locator('[data-candidate-route="guide"]').click();
+      if(!(await page.locator('.first-visit-top span').textContent()).includes('۱'))throw Error('Guide failed to reset');
+      await page.locator('#first-visit-skip').click();
+      await page.locator('[data-candidate-target="quizzes"]').click();
+      if(await page.locator('#candidate-section-links [data-unavailable]').count()!==3)throw Error('Missing practice statuses');
+      await page.locator('[data-candidate-route="lessons"]').click();
+      await page.locator('#inner-panel').waitFor({state:'visible'});
+      await page.locator('.bottom-nav [data-tab="home"]').click();
+      await page.locator('[data-candidate-target="progress"]').click();
+      await page.locator('[data-candidate-route="dashboard"]').click();
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
       const result=await page.evaluate(()=>({
         scroll:document.documentElement.scrollWidth,
@@ -40,7 +66,6 @@ const fs = require('node:fs');
       await page.locator('#staging-dashboard-body .staging-kpis').waitFor({timeout:15000});
       // Legacy tools are intentionally collapsed on the six-card home.
       // Open them through the same disclosure a user operates; never force hidden clicks.
-      const legacy=page.locator('.candidate-legacy');
       if(await legacy.getAttribute('open')===null)await legacy.locator('summary').click();
       await page.locator('.staging-learning-hub').waitFor({state:'visible',timeout:8000});
       // Unified hub: five cards and restricted-state messages.
