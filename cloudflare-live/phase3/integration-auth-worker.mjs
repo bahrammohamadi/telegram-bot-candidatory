@@ -1,0 +1,56 @@
+// Isolated authenticated integration API. Never deploy to production or public preview.
+const json=(obj,status=200)=>new Response(JSON.stringify(obj),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"}});
+const enc=new TextEncoder();
+const hex=b=>[...new Uint8Array(b)].map(n=>n.toString(16).padStart(2,"0")).join("");
+async function telegramUser(initData,token){
+  if(typeof initData!=="string"||initData.length<30||initData.length>8192||!token)return null;
+  const p=new URLSearchParams(initData);
+  if([...p.keys()].length!==new Set(p.keys()).size||!p.has("hash")||!p.has("auth_date")||!p.has("user"))return null;
+  const expected=p.get("hash");
+  if(!/^[a-f0-9]{64}$/i.test(expected))return null;
+  p.delete("hash");p.delete("signature");
+  const check=[...p.entries()].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>k+"="+v).join("\n");
+  const key=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const secret=await crypto.subtle.sign("HMAC",key,enc.encode(token));
+  const signing=await crypto.subtle.importKey("raw",secret,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const actual=hex(await crypto.subtle.sign("HMAC",signing,enc.encode(check)));
+  let difference=0;for(let i=0;i<64;i++)difference|=actual.charCodeAt(i)^expected.toLowerCase().charCodeAt(i);
+  if(difference)return null;
+  const auth=Number(p.get("auth_date")),now=Math.floor(Date.now()/1000);
+  if(!Number.isSafeInteger(auth)||auth>now+60||now-auth>3600)return null;
+  let user;try{user=JSON.parse(p.get("user"))}catch{return null}
+  if(!Number.isSafeInteger(user?.id)||user.id<=0)return null;
+  return {id:user.id,name:typeof user.first_name==="string"?user.first_name.slice(0,100):"",username:typeof user.username==="string"?user.username.slice(0,100):null};
+}
+export default {async fetch(request,env){
+  const url=new URL(request.url);
+  if(request.method==="GET"&&url.pathname==="/health"){
+    try{const x=await env.DB.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name='candidate_users'").first();
+      return json({service:"candidatory-integration",mode:"authenticated-test",schemaReady:x?.n===1,telegramSecretConfigured:!!env.TELEGRAM_BOT_TOKEN,production:false});
+    }catch{return json({error:"DB_UNAVAILABLE"},503)}
+  }
+  if(url.pathname!=="/api/profile"||request.method!=="POST")return json({error:"NOT_FOUND"},404);
+  if(Number(request.headers.get("content-length")||0)>12000)return json({error:"REQUEST_TOO_LARGE"},413);
+  let body;try{body=await request.json()}catch{return json({error:"BAD_JSON"},400)}
+  const user=await telegramUser(body?.initData,env.TELEGRAM_BOT_TOKEN);
+  if(!user)return json({error:"TELEGRAM_AUTH_REQUIRED"},401);
+  if(body.action==="get"){
+    try{const p=await env.DB.prepare("SELECT election_type,district,stage,professional_summary FROM candidate_profiles WHERE telegram_id=?").bind(user.id).first();
+      const d=await env.DB.prepare("SELECT details_json FROM candidate_profile_details WHERE telegram_id=?").bind(user.id).first();
+      return json({ok:true,profile:p||null,details:d?JSON.parse(d.details_json):{}});
+    }catch{return json({error:"DB_ERROR"},503)}
+  }
+  if(body.action!=="save")return json({error:"UNKNOWN_ACTION"},400);
+  const p=body.profile,d=body.details;
+  if(!p||typeof p!=="object"||Array.isArray(p)||!["council","parliament","presidency","other"].includes(p.election_type)||!["planning","registration","operations","report"].includes(p.stage)||typeof p.district!=="string"||p.district.length>200||typeof p.professional_summary!=="string"||p.professional_summary.length>2000||!d||typeof d!=="object"||Array.isArray(d))return json({error:"INVALID_PROFILE"},400);
+  const keys=Object.keys(d);if(keys.length>30||keys.some(k=>k==="__proto__"||k==="constructor"||k.length>64||typeof d[k]!=="string"||d[k].length>1000))return json({error:"INVALID_DETAILS"},400);
+  const details=JSON.stringify(d);if(details.length>5000)return json({error:"INVALID_DETAILS"},400);
+  try{
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(user.id,user.name,user.username),
+      env.DB.prepare("INSERT INTO candidate_profiles(telegram_id,election_type,district,stage,professional_summary) VALUES(?,?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET election_type=excluded.election_type,district=excluded.district,stage=excluded.stage,professional_summary=excluded.professional_summary,updated_at=CURRENT_TIMESTAMP").bind(user.id,p.election_type,p.district,p.stage,p.professional_summary),
+      env.DB.prepare("INSERT INTO candidate_profile_details(telegram_id,details_json) VALUES(?,?) ON CONFLICT(telegram_id) DO UPDATE SET details_json=json_patch(candidate_profile_details.details_json,excluded.details_json),updated_at=CURRENT_TIMESTAMP").bind(user.id,details)
+    ]);
+    return json({ok:true,saved:true});
+  }catch{return json({error:"SAVE_FAILED"},503)}
+}};
