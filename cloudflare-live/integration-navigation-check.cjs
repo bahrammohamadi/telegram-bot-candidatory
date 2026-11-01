@@ -15,6 +15,12 @@ const fs=require('node:fs');
  return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Test: authentication unavailable'})});
  });
  await page.goto('https://candidate.test/');
+ // A client without signed Telegram initData must not expose the private home.
+ const guarded=await page.locator('#home-panel').evaluate(el=>{
+  const style=getComputedStyle(el);
+  return el.hidden || style.display==='none' || style.visibility==='hidden' || !!el.closest('[hidden]');
+ });
+ if(!guarded)throw Error('Unauthenticated private home unexpectedly visible');
  // This is a navigation-component smoke test, not an authenticated Telegram E2E test.
  // The synthetic API returns 503 by design, so the app's auth gate keeps home hidden.
  // Reveal only the already-rendered home ancestors for isolated navigation testing.
