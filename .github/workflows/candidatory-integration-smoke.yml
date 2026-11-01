@@ -45,5 +45,8 @@ jobs:
           curl -fsS "$URL/" -o integration-form.html
           grep -q 'پرونده آزمایشی کاندیداتوری' integration-form.html
           grep -q 'telegram-web-app.js' integration-form.html
+          grep -q 'ذخیره و ادامه' integration-form.html
+          grep -q 'go-dashboard' integration-form.html
+          grep -q 'data-module' integration-form.html
           echo 'PASS: RTL integration form served with Telegram WebApp SDK'
           echo 'PASS: D1 schema ready, test secret present, anonymous/forged access rejected'
