@@ -31,6 +31,8 @@ jobs:
           test "$result" = "401"
           result=$(curl -sS -o unknown.json -w "%{http_code}" "$URL/api/profile")
           test "$result" = "404"
+          curl -fsS "$URL/api/bot-info" -o bot-info.json
+          node -e 'const b=require("./bot-info.json");console.log("CONFIGURED_TEST_BOT_USERNAME="+(b.botUsername||"NONE"));console.log("BOT_TOKEN_VALID="+b.telegramTokenValid);if(b.telegramTokenValid!==true)process.exit(1)'
           curl -fsS "$URL/" -o integration-form.html
           grep -q 'پرونده آزمایشی کاندیداتوری' integration-form.html
           grep -q 'telegram-web-app.js' integration-form.html
