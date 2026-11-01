@@ -10,7 +10,9 @@ async function telegramUser(initData,token,trace={}){
   if([...p.keys()].length!==new Set(p.keys()).size||!p.has("hash")||!p.has("auth_date")||!p.has("user"))return fail("INVALID_INIT_DATA_FIELDS");
   const expected=p.get("hash");
   if(!/^[a-f0-9]{64}$/i.test(expected))return fail("INVALID_HASH_FORMAT");
-  p.delete("hash");p.delete("signature");
+  // Bot-token HMAC includes the signature field when Telegram supplies it.
+  // Excluding signature applies only to third-party Ed25519 verification.
+  p.delete("hash");
   const check=[...p.entries()].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>k+"="+v).join("\n");
   const key=await crypto.subtle.importKey("raw",enc.encode("WebAppData"),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   const secret=await crypto.subtle.sign("HMAC",key,enc.encode(token));
