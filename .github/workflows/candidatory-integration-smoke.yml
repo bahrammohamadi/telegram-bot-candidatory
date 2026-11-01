@@ -7,6 +7,7 @@ on:
     paths:
       - 'cloudflare-live/phase3/integration-auth-worker.mjs'
       - '.github/workflows/candidatory-integration-smoke.yml'
+      - 'cloudflare-live/phase4/**'
 permissions:
   contents: read
 jobs:
@@ -53,6 +54,15 @@ jobs:
           node -e 'if(require("./calendar-anon.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
           grep -q 'calendar-form' integration-form.html
           grep -q 'calendar-list' integration-form.html
+          result=$(curl -sS -o goals-anon.json -w "%{http_code}" -X POST "$URL/api/goals" -H 'Content-Type: application/json' --data '{"action":"list","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./goals-anon.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          result=$(curl -sS -o goals-forged.json -w "%{http_code}" -X POST "$URL/api/goals" -H 'Content-Type: application/json' --data '{"action":"create","initData":"auth_date=123&user=%7B%22id%22%3A123%7D&hash=0000000000000000000000000000000000000000000000000000000000000000","title":"Forged","details":"","target_date":""}')
+          test "$result" = "401"
+          grep -q 'id="goals-panel"' integration-form.html
+          grep -q 'id="goals-form"' integration-form.html
+          grep -q 'goals-progress' integration-form.html
+          echo 'PASS: goals UI served; unauthenticated and forged goals requests denied'
           echo 'PASS: calendar UI served and anonymous calendar reads denied'
           echo 'PASS: RTL integration form served with Telegram WebApp SDK'
           echo 'PASS: D1 schema ready, test secret present, anonymous/forged access rejected'
