@@ -21,3 +21,8 @@ jobs:
         run: node --check cloudflare-live/phase4/goals-api.mjs
       - name: Validate goal ownership and inputs
         run: node cloudflare-live/phase4/goals-api-check.mjs
+      - name: Build integration candidate and syntax-check
+        run: |
+          node cloudflare-live/phase4/build-goals.mjs
+          node --check cloudflare-live/phase4/dist/integration-goals-worker.mjs
+          grep -q 'goals-panel' cloudflare-live/phase4/dist/integration-goals-worker.mjs
