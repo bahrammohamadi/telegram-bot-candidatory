@@ -8,12 +8,20 @@ const html=process.env.GOALS_HTML_FILE?fs.readFileSync(process.env.GOALS_HTML_FI
 const browser=await chromium.launch();
 try{for(const width of [320,375,430]){
 const page=await browser.newPage({viewport:{width,height:800}});
-const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const errors=[];const goals=[];page.on('pageerror',e=>errors.push(e.message));
 await page.route('**/*',route=>{
 const request=route.request(),url=new URL(request.url());
 if(url.hostname==='telegram.org')return route.abort();
 if(url.pathname==='/api/profile')return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,profile:{election_type:'council',stage:'planning',district:'Synthetic',professional_summary:''},details:{}})});
-if(url.pathname==='/api/goals')return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,goals:[]})});
+if(url.pathname==='/api/goals'){
+const args=request.postDataJSON(),action=args.action;
+let data={ok:true,goals:[]};
+if(action==='create'){goals.push({id:'00000000-0000-4000-8000-000000000001',title:args.title,details:args.details,target_date:args.target_date,status:'open'});data={ok:true,id:goals.at(-1).id}}
+if(action==='status'){const goal=goals.find(g=>g.id===args.id);if(goal)goal.status=args.status}
+if(action==='delete'){const i=goals.findIndex(g=>g.id===args.id);if(i>=0)goals.splice(i,1)}
+if(action==='list')data={ok:true,goals:goals.map(g=>({...g}))};
+return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+}
 if(url.pathname==='/api/calendar')return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,events:[]})});
 return route.fulfill({contentType:'text/html',body:html});
 });
@@ -29,6 +37,15 @@ await page.locator('[data-module="گزارش عملکرد"]').click();
 await page.locator('#goals-panel').waitFor({state:'visible'});
 if(!await page.locator('#goals-form').isVisible())throw Error('Goals form missing');
 if(await page.locator('.modules').isVisible())throw Error('Dashboard buttons should be hidden inside goals');
+await page.locator('#goals-form [name="title"]').fill('Synthetic goal UI test');
+await page.locator('#goals-form [name="details"]').fill('Test-only data');
+await page.locator('#goals-form button[type="submit"]').click();
+await page.locator('#goals-list article').waitFor({state:'visible'});
+if(!await page.locator('#goals-list').getByText('Synthetic goal UI test').count())throw Error('Saved goal missing from list');
+await page.locator('#goals-list article button').first().click();
+await page.waitForFunction(()=>document.querySelector('#goals-progress').textContent.includes('1 از 1'));
+await page.locator('#goals-list article button').last().click();
+await page.waitForFunction(()=>document.querySelector('#goals-progress').textContent.includes('0 از 0'));
 await page.locator('#goals-close').click();
 if(await page.locator('#goals-panel').isVisible())throw Error('Goal panel did not close');
 if(errors.length)throw Error(errors.join('; '));
