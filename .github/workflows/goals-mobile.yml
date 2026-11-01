@@ -16,3 +16,8 @@ jobs:
       - run: npm install --no-save playwright@1.51.1
       - run: npx playwright install --with-deps chromium
       - run: node cloudflare-live/phase4/goals-visual-check.cjs
+      - run: curl -fsS https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev/ -o goals-live.html
+      - name: Test deployed goals UI at three viewport sizes
+        env:
+          GOALS_HTML_FILE: goals-live.html
+        run: node cloudflare-live/phase4/goals-visual-check.cjs
