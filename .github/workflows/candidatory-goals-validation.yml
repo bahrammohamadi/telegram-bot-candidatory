@@ -26,3 +26,6 @@ jobs:
           node cloudflare-live/phase4/build-goals.mjs
           node --check cloudflare-live/phase4/dist/integration-goals-worker.mjs
           grep -q 'goals-panel' cloudflare-live/phase4/dist/integration-goals-worker.mjs
+
+      - name: Authenticated CRUD and cross-user isolation with SQLite
+        run: node --experimental-sqlite cloudflare-live/phase4/goals-worker-e2e.mjs
