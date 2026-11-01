@@ -39,7 +39,8 @@ jobs:
           node --check cloudflare-live/dist/integration-worker.mjs
           node cloudflare-live/integration-check.mjs ./dist/integration-worker.mjs --phase3
   integration-navigation:
-    runs-on: ubuntu-latest
+    # Playwright 1.51.1 does not support ubuntu-26.04 runners.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
