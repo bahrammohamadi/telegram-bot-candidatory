@@ -31,4 +31,8 @@ jobs:
           test "$result" = "401"
           result=$(curl -sS -o unknown.json -w "%{http_code}" "$URL/api/profile")
           test "$result" = "404"
+          curl -fsS "$URL/" -o integration-form.html
+          grep -q 'پرونده آزمایشی کاندیداتوری' integration-form.html
+          grep -q 'telegram-web-app.js' integration-form.html
+          echo 'PASS: RTL integration form served with Telegram WebApp SDK'
           echo 'PASS: D1 schema ready, test secret present, anonymous/forged access rejected'
