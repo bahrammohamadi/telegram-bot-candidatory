@@ -1,0 +1,23 @@
+name: Candidate goals module validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase4/**'
+      - '.github/workflows/candidatory-goals-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  goals-regression:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: node --check cloudflare-live/phase4/goals-api.mjs
+      - name: Validate goal ownership and inputs
+        run: node cloudflare-live/phase4/goals-api-check.mjs
