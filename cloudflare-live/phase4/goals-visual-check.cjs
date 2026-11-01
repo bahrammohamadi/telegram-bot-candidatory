@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const src=fs.readFileSync(__dirname+'/dist/integration-goals-worker.mjs','utf8');
 const marker='const TEST_PAGE=',begin=src.indexOf(marker)+marker.length;
 if(begin<marker.length)throw Error('HTML bundle missing');
-const html=JSON.parse(src.slice(begin,src.indexOf(';\n',begin)));
+const html=process.env.GOALS_HTML_FILE?fs.readFileSync(process.env.GOALS_HTML_FILE,'utf8'):JSON.parse(src.slice(begin,src.indexOf(';\n',begin)));
 const browser=await chromium.launch();
 try{for(const width of [320,375,430]){
 const page=await browser.newPage({viewport:{width,height:800}});
