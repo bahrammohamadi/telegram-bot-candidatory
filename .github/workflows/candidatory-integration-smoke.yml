@@ -48,5 +48,11 @@ jobs:
           grep -q 'ذخیره و ادامه' integration-form.html
           grep -q 'go-dashboard' integration-form.html
           grep -q 'data-module' integration-form.html
+          result=$(curl -sS -o calendar-anon.json -w "%{http_code}" -X POST "$URL/api/calendar" -H 'Content-Type: application/json' --data '{"action":"list","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./calendar-anon.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          grep -q 'calendar-form' integration-form.html
+          grep -q 'calendar-list' integration-form.html
+          echo 'PASS: calendar UI served and anonymous calendar reads denied'
           echo 'PASS: RTL integration form served with Telegram WebApp SDK'
           echo 'PASS: D1 schema ready, test secret present, anonymous/forged access rejected'
