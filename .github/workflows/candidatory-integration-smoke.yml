@@ -1,0 +1,34 @@
+name: Isolated Telegram integration API smoke
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase3/integration-auth-worker.mjs'
+      - '.github/workflows/candidatory-integration-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  integration-auth-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate health and reject anonymous access
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$URL/health" -o health.json; then break; fi
+            sleep 3
+          done
+          node -e 'const h=require("./health.json");if(h.production!==false||h.schemaReady!==true||h.telegramSecretConfigured!==true)process.exit(1)'
+          result=$(curl -sS -o anonymous.json -w "%{http_code}" -X POST "$URL/api/profile" -H 'Content-Type: application/json' --data '{"action":"get","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./anonymous.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          result=$(curl -sS -o forged.json -w "%{http_code}" -X POST "$URL/api/profile" -H 'Content-Type: application/json' --data '{"action":"save","initData":"auth_date=123&user=%7B%22id%22%3A123%7D&hash=0000000000000000000000000000000000000000000000000000000000000000","profile":{"election_type":"council","stage":"planning","district":"forged","professional_summary":""},"details":{}}')
+          test "$result" = "401"
+          result=$(curl -sS -o unknown.json -w "%{http_code}" "$URL/api/profile")
+          test "$result" = "404"
+          echo 'PASS: D1 schema ready, test secret present, anonymous/forged access rejected'
