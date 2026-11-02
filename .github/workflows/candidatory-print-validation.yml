@@ -28,3 +28,34 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test RTL PDF, offline privacy, and mobile layout
         run: node cloudflare-live/phase8/print-mobile-check.cjs
+      - name: Retrieve live Worker HTML
+        run: curl -fsS https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev/ -o print-live.html
+      - name: Verify print/PDF on live HTML at mobile viewports
+        env:
+          PRINT_HTML_FILE: print-live.html
+        run: node cloudflare-live/phase8/print-mobile-check.cjs
+
+
+  print-live-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Confirm private isolated Worker and report controls
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/health" -o health.json
+          node -e 'const x=require("./health.json");if(x.production!==false||x.telegramSecretConfigured!==true||x.schemaReady!==true)process.exit(1)'
+          curl -fsS "$URL/" -o deployed.html
+          grep -q 'id="progress-print-button"' deployed.html
+          grep -q 'id="progress-download-html"' deployed.html
+          grep -q 'id="progress-panel"' deployed.html
+          grep -q 'id="quiz-panel"' deployed.html
+          grep -q 'id="practice-panel"' deployed.html
+          grep -q 'id="goals-panel"' deployed.html
+          grep -q 'id="calendar-panel"' deployed.html
+          result=$(curl -sS -o auth.json -w "%{http_code}" -X POST "$URL/api/progress" -H "Content-Type: application/json" --data '{"action":"overview","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./auth.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          echo 'PASS: live report controls, all prior modules and Telegram auth guard'
