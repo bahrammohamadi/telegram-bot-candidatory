@@ -108,4 +108,15 @@ export default {async fetch(request,env){
   }
   if(body.action!=="save")return json({error:"UNKNOWN_ACTION"},400);
   const p=body.profile,d=body.details;
-  if(!p||typeof p!=="object"||Array.isArray(p)||!["council","parliament","presidency","oth --- TRUNCATED --- 24,783 chars
+  if(!p||typeof p!=="object"||Array.isArray(p)||!["council","parliament","presidency","other"].includes(p.election_type)||!["planning","registration","operations","report"].includes(p.stage)||typeof p.district!=="string"||p.district.length>200||typeof p.professional_summary!=="string"||p.professional_summary.length>2000||!d||typeof d!=="object"||Array.isArray(d))return json({error:"INVALID_PROFILE"},400);
+  const keys=Object.keys(d);if(keys.length>30||keys.some(k=>k==="__proto__"||k==="constructor"||k.length>64||typeof d[k]!=="string"||d[k].length>1000))return json({error:"INVALID_DETAILS"},400);
+  const details=JSON.stringify(d);if(details.length>5000)return json({error:"INVALID_DETAILS"},400);
+  try{
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO candidate_users(telegram_id,display_name,username) VALUES(?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP").bind(user.id,user.name,user.username),
+      env.DB.prepare("INSERT INTO candidate_profiles(telegram_id,election_type,district,stage,professional_summary) VALUES(?,?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET election_type=excluded.election_type,district=excluded.district,stage=excluded.stage,professional_summary=excluded.professional_summary,updated_at=CURRENT_TIMESTAMP").bind(user.id,p.election_type,p.district,p.stage,p.professional_summary),
+      env.DB.prepare("INSERT INTO candidate_profile_details(telegram_id,details_json) VALUES(?,?) ON CONFLICT(telegram_id) DO UPDATE SET details_json=json_patch(candidate_profile_details.details_json,excluded.details_json),updated_at=CURRENT_TIMESTAMP").bind(user.id,details)
+    ]);
+    return json({ok:true,saved:true});
+  }catch{return json({error:"SAVE_FAILED"},503)}
+}};
