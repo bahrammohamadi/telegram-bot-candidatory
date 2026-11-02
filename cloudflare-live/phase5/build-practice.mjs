@@ -2,6 +2,7 @@
 import {readFileSync,writeFileSync,mkdirSync} from "node:fs";
 const read=p=>readFileSync(new URL(p,import.meta.url),"utf8");
 let source=read("../phase4/integration-deployed-snapshot-2026-11-01.mjs");
+if(!source.endsWith("}};\n")||source.includes("--- TRUNCATED ---"))throw Error("Worker snapshot incomplete; recover full source from Cloudflare before build");
 const module=read("./practice-api.mjs").replace("export const PRACTICE_EXERCISES","const PRACTICE_EXERCISES").replace("export async function handlePractice","async function handlePractice");
 const route=`
   if(url.pathname==="/api/practice"&&request.method==="POST"){
