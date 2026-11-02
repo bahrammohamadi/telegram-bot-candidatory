@@ -26,3 +26,17 @@ jobs:
           node --check cloudflare-live/phase7/dist/integration-progress-worker.mjs
       - name: Test real Worker progress API with signed synthetic Telegram identities
         run: node --experimental-sqlite cloudflare-live/phase7/progress-worker-e2e.mjs
+
+  progress-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase7/build-progress.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Verify progress cards and charts across mobile viewport sizes
+        run: node cloudflare-live/phase7/progress-mobile-check.cjs
