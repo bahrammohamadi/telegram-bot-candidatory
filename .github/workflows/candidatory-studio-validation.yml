@@ -1,0 +1,39 @@
+name: Isolated factual content studio validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase9/**'
+      - '.github/workflows/candidatory-studio-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  studio-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build studio module from exact deployed source
+        run: |
+          node cloudflare-live/phase9/build-studio.mjs
+          node --check cloudflare-live/phase9/dist/integration-studio-worker.mjs
+      - name: Run actual studio API handler with signed synthetic Telegram users
+        run: node --experimental-sqlite cloudflare-live/phase9/studio-worker-e2e.mjs
+  studio-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase9/build-studio.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise studio on mobile with synthetic drafts
+        run: node cloudflare-live/phase9/studio-mobile-check.cjs
