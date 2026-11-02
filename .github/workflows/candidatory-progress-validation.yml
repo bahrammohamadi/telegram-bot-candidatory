@@ -1,0 +1,28 @@
+name: Isolated progress dashboard tests
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase7/**'
+      - '.github/workflows/candidatory-progress-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  progress-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate progress API syntax
+        run: node --check cloudflare-live/phase7/progress-api.mjs
+      - name: Build complete isolated Mini App
+        run: |
+          node cloudflare-live/phase7/build-progress.mjs
+          node --check cloudflare-live/phase7/dist/integration-progress-worker.mjs
+      - name: Test real Worker progress API with signed synthetic Telegram identities
+        run: node --experimental-sqlite cloudflare-live/phase7/progress-worker-e2e.mjs
