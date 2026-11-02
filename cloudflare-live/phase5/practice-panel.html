@@ -1,0 +1,35 @@
+<section id="practice-panel" class="panel" hidden>
+<h3>تمرین سخنرانی و پرسش‌وپاسخ</h3>
+<p>تمرین آموزشی با ارزیابی شخصی؛ فعلاً صدایی ضبط یا تحلیل نمی‌شود و هیچ امتیازی توسط هوش مصنوعی تولید نمی‌شود.</p>
+<form id="practice-form">
+<label>تمرین موردنظر
+<select name="exercise_key" id="practice-exercise">
+<option value="speech_clear">سخنرانی: بیان روشن یک مسئله عمومی</option>
+<option value="speech_evidence">سخنرانی: گزارش پروژه با داده و منبع</option>
+<option value="qa_unknown">پرسش‌وپاسخ: وقتی اطلاعات کافی نیست</option>
+<option value="qa_followup">پرسش‌وپاسخ: پیگیری درخواست شهروندان</option>
+</select></label>
+<p id="practice-prompt"></p>
+<div><strong>زمان‌سنج تمرین: </strong><span id="practice-clock" aria-live="off">۰۰:۰۰</span></div>
+<div style="display:flex;gap:8px"><button type="button" id="practice-start">شروع زمان‌سنج</button><button type="button" id="practice-stop" class="secondary">توقف</button></div>
+<input type="hidden" name="duration_seconds" value="0"/>
+<label>نکات سخنرانی یا پیش‌نویس پاسخ
+<textarea name="response_text" maxlength="3000" placeholder="چند جمله درباره پاسخ یا نکات کلیدی بنویسید..."></textarea></label>
+<label>بازنگری شخصی و نکته قابل بهبود
+<textarea name="reflection" maxlength="1000" placeholder="دفعه بعد چه چیزی را روشن‌تر بیان می‌کنید؟"></textarea></label>
+<label>ارزیابی شخصی وضوح و پاسخگویی (نه ارزیابی هوش مصنوعی)
+<select name="self_score">
+<option value="3">۳ از ۵ — متوسط</option>
+<option value="1">۱ از ۵ — نیاز به تمرین زیاد</option>
+<option value="2">۲ از ۵ — نیاز به بهبود</option>
+<option value="4">۴ از ۵ — خوب</option>
+<option value="5">۵ از ۵ — بسیار خوب</option>
+</select></label>
+<button type="submit" id="practice-save">ثبت نتیجه تمرین</button>
+<small>حداقل ۵ نویسه در پیش‌نویس یا بازنگری وارد کنید؛ اطلاعات واقعی و محرمانه وارد نکنید.</small>
+</form>
+<p id="practice-feedback" role="status" aria-live="polite"></p>
+<div id="practice-summary"></div>
+<div id="practice-list" role="list"></div>
+<button type="button" id="practice-close" class="secondary">بازگشت به میزکار</button>
+</section>
