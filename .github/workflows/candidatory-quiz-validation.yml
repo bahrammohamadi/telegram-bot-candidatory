@@ -1,0 +1,26 @@
+name: Civic quiz integration validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase6/**'
+      - '.github/workflows/candidatory-quiz-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quiz-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build complete quiz miniapp
+        run: |
+          node cloudflare-live/phase6/build-quiz.mjs
+          node --check cloudflare-live/phase6/dist/integration-quiz-worker.mjs
+      - name: Grade on server and check privacy with synthetic Telegram identities
+        run: node --experimental-sqlite cloudflare-live/phase6/quiz-worker-e2e.mjs
