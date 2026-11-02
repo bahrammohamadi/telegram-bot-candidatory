@@ -1,0 +1,32 @@
+name: Isolated civic assistant validation
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths: ['cloudflare-live/phase13/**','.github/workflows/candidatory-assistant-checks.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  assistant-handler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase13/build-assistant.mjs
+      - run: node --check cloudflare-live/phase13/dist/integration-assistant-worker.mjs
+      - run: node --experimental-sqlite cloudflare-live/phase13/assistant-e2e.mjs
+  assistant-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase13/build-assistant.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - run: node cloudflare-live/phase13/assistant-mobile.cjs
