@@ -1,0 +1,30 @@
+name: Isolated Persian PDF report validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase8/**'
+      - '.github/workflows/candidatory-print-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  print-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build private print/PDF integration
+        run: |
+          node cloudflare-live/phase8/build-print.mjs
+          node --check cloudflare-live/phase8/dist/integration-print-worker.mjs
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.51.1
+          npx playwright install --with-deps chromium
+      - name: Test RTL PDF, offline privacy, and mobile layout
+        run: node cloudflare-live/phase8/print-mobile-check.cjs
