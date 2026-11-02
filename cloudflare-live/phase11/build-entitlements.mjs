@@ -25,8 +25,10 @@ function guardRoute(path,variable,action,key){
  const anchor='  if(url.pathname==="/api/'+path+'"&&request.method==="POST"){';
  const start=src.indexOf(anchor);
  if(start<0)throw Error('Missing API route '+path);
- const next=src.indexOf('\n  if(url.pathname===',start+anchor.length);
- if(next<0)throw Error('Missing route boundary '+path);
+ let next=src.indexOf('\n  if(url.pathname===',start+anchor.length);
+ if(next<0)next=src.indexOf('\n  if(url.pathname!==',start+anchor.length);
+ if(next<0)next=src.lastIndexOf('\n}};');
+ if(next<start)throw Error('Missing route boundary '+path);
  let body=src.slice(start,next);
  const auth='if(!user)return json({error:"TELEGRAM_AUTH_REQUIRED"},401);';
  if(body.split(auth).length!==2)throw Error('Expected exactly one signed auth check in '+path);
