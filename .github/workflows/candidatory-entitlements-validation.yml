@@ -1,0 +1,39 @@
+name: Isolated demo entitlements security and UI
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase11/**'
+      - '.github/workflows/candidatory-entitlements-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  entitlements-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reproducible isolated Worker build and syntax test
+        run: |
+          node cloudflare-live/phase11/build-entitlements.mjs
+          node --check cloudflare-live/phase11/dist/integration-entitlements-worker.mjs
+      - name: Signed HMAC free/pro and atomic trigger quota tests
+        run: node --experimental-sqlite cloudflare-live/phase11/demo-entitlements-e2e.mjs
+  entitlements-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase11/build-entitlements.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Free plan usage dashboard on 3 mobile viewports
+        run: node cloudflare-live/phase11/demo-entitlements-mobile.cjs
