@@ -1,0 +1,31 @@
+name: Admin console integration checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths: ['cloudflare-live/phase12/**', '.github/workflows/admin-console-checks.yml']
+permissions:
+  contents: read
+jobs:
+  api:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase12/build-admin-console.mjs
+      - run: node --check cloudflare-live/phase12/dist/integration-admin-console-worker.mjs
+      - run: node --experimental-sqlite cloudflare-live/phase12/admin-console-e2e.mjs
+  mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase12/build-admin-console.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - run: node cloudflare-live/phase12/admin-console-mobile.cjs
