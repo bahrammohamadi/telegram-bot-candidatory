@@ -24,3 +24,17 @@ jobs:
           node --check cloudflare-live/phase6/dist/integration-quiz-worker.mjs
       - name: Grade on server and check privacy with synthetic Telegram identities
         run: node --experimental-sqlite cloudflare-live/phase6/quiz-worker-e2e.mjs
+
+  quiz-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase6/build-quiz.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise quiz review and feedback on mobile
+        run: node cloudflare-live/phase6/quiz-mobile-check.cjs
