@@ -51,6 +51,14 @@ const snapshot=await page.locator('#progress-print').innerHTML();
 assert.ok(!snapshot.includes('VERY_PRIVATE_SYNTHETIC_INIT_DATA_FOR_TESTING_ONLY'),'Telegram initData must not leak to printed document');
 assert.ok(!snapshot.includes('9100030101'),'Telegram id must not leak');
 await page.emulateMedia({media:'print'});
+const visibility=await page.evaluate(()=>{
+ const root=document.getElementById('progress-print'),page=root?.querySelector('.print-page');
+ if(!root||!page)return {visible:false,width:0,height:0};
+ const computed=getComputedStyle(root),rect=page.getBoundingClientRect();
+ return {visible:computed.display!=='none'&&computed.visibility==='visible',width:rect.width,height:rect.height};
+});
+assert.equal(visibility.visible,true,'Printed report must be visible in print media');
+assert.ok(visibility.width>200&&visibility.height>200,'Printed report content has no page area');
 const pdfPath=join(out,'progress-'+width+'.pdf');
 await page.pdf({path:pdfPath,format:'A4',printBackground:true});
 assert.ok(statSync(pdfPath).size>4000,'PDF appears empty');
