@@ -1,0 +1,28 @@
+name: Civic practice module validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase5/**'
+      - '.github/workflows/candidatory-practice-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  practice-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check API syntax
+        run: node --check cloudflare-live/phase5/practice-api.mjs
+      - name: Build isolated integration worker
+        run: |
+          node cloudflare-live/phase5/build-practice.mjs
+          node --check cloudflare-live/phase5/dist/integration-practice-worker.mjs
+      - name: Run real Worker handler with synthetic Telegram signed initData and SQLite
+        run: node --experimental-sqlite cloudflare-live/phase5/practice-worker-e2e.mjs
