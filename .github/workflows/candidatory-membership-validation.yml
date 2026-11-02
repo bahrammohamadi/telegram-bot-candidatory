@@ -1,0 +1,39 @@
+name: Isolated demo subscriptions and admin security
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase10/**'
+      - '.github/workflows/candidatory-membership-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  membership-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build complete demo subscription miniapp
+        run: |
+          node cloudflare-live/phase10/build-membership.mjs
+          node --check cloudflare-live/phase10/dist/integration-membership-worker.mjs
+      - name: Test signed Telegram identity, deny unconfigured admin, admin audit and simulated grants
+        run: node --experimental-sqlite cloudflare-live/phase10/membership-worker-e2e.mjs
+  membership-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase10/build-membership.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Test mobile membership demo and closed admin panel
+        run: node cloudflare-live/phase10/membership-mobile-check.cjs
