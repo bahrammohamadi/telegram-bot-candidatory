@@ -1,0 +1,26 @@
+@media print {
+@page{size:A4;margin:14mm}
+html,body{background:#fff!important;color:#182c35!important}
+body *{visibility:hidden!important}
+#progress-print,#progress-print *{visibility:visible!important}
+#progress-print{display:block!important;position:absolute!important;inset:0 auto auto 0!important;width:100%!important;max-width:none!important;min-height:auto!important;margin:0!important;padding:0!important;background:#fff!important;color:#182c35!important;box-shadow:none!important;direction:rtl!important;font-family:Tahoma,Arial,sans-serif!important}
+#progress-print .print-page{border:0!important}
+#progress-print .print-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
+#progress-print .print-card,#progress-print .print-section{break-inside:avoid;page-break-inside:avoid;border:1px solid #d2dce2!important;border-radius:9px!important;padding:12px!important;margin:0 0 10px!important}
+#progress-print .print-footer{border-top:1px solid #d2dce2!important;padding-top:8px!important;font-size:10px!important}
+#progress-print h1{font-size:21px!important;margin:0 0 10px!important}
+#progress-print h2{font-size:14px!important;margin:0 0 8px!important}
+#progress-print p,#progress-print span,#progress-print strong{font-size:11px!important;line-height:1.9!important}
+#progress-print .print-value{font-size:22px!important;font-weight:bold!important;display:block!important}
+#progress-print progress{accent-color:#24554c!important;width:100%!important}
+}
+.progress-export-tools{display:grid;gap:8px}
+.print-page{direction:rtl;line-height:1.8;color:#182c35;background:#fff}
+.print-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.print-card,.print-section{border:1px solid #d2dce2;border-radius:10px;padding:13px;overflow-wrap:anywhere}
+.print-card h2,.print-section h2{margin:0 0 8px;font-size:14px}
+.print-card .print-value{font-size:22px;font-weight:bold;display:block}
+.print-header{border-bottom:2px solid #24554c;padding:0 0 14px}
+.print-header h1{margin:0 0 6px}
+.print-footer{font-size:11px;color:#556a72;margin-top:18px;border-top:1px solid #d2dce2;padding-top:12px}
+@media(max-width:340px){.print-grid{grid-template-columns:1fr}}
