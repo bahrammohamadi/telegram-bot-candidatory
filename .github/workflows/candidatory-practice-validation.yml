@@ -26,3 +26,17 @@ jobs:
           node --check cloudflare-live/phase5/dist/integration-practice-worker.mjs
       - name: Run real Worker handler with synthetic Telegram signed initData and SQLite
         run: node --experimental-sqlite cloudflare-live/phase5/practice-worker-e2e.mjs
+
+  practice-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase5/build-practice.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise timed practice on three mobile viewports
+        run: node cloudflare-live/phase5/practice-mobile-check.cjs
