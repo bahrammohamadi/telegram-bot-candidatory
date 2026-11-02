@@ -28,7 +28,7 @@ async function call(id,action,details={},override=env){
 }
 for(const i of Object.values(ids))sqlite.prepare('INSERT INTO candidate_users(telegram_id,display_name) VALUES(?,?)').run(i,'Synthetic account');
 function makeRequest(id,user,status,created,admin=null){
- sqlite.prepare('INSERT INTO manual_payment_requests_v2(id,telegram_id,plan_id,reference,receipt_file_id,status,admin_id,reviewed_at,created_at) VALUES(?,?,"professional",?,"SIMULATED_NO_FILE",?,?,?,?)').run(id,user,'DEMO-'+id.slice(-6),status,admin,status==='pending'?null:created,created);
+ sqlite.prepare(`INSERT INTO manual_payment_requests_v2(id,telegram_id,plan_id,reference,receipt_file_id,status,admin_id,reviewed_at,created_at) VALUES(?,?,'professional',?,'SIMULATED_NO_FILE',?,?,?,?)`).run(id,user,'DEMO-'+id.slice(-6),status,admin,status==='pending'?null:created,created);
 }
 const r1='00000000-0000-4000-8000-000000002201',r2='00000000-0000-4000-8000-000000002202',r3='00000000-0000-4000-8000-000000002203';
 makeRequest(r1,ids.user,'pending','2026-11-02 09:00:00');
