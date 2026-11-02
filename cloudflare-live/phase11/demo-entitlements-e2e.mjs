@@ -83,7 +83,7 @@ assert.equal((await call(freeId,'quiz','submit',{quiz_id:91002,answers:quizB})).
 assertLimited(await call(freeId,'quiz','submit',{quiz_id:91001,answers:quizA}),'quiz_daily');
 assert.equal((await call(freeId,'quiz','history')).data.attempts.length,2);
 assert.equal((await call(otherId,'entitlements','status')).data.usage.goals,0,'cross-user stats private');
-assert.equal((await call(otherId,'goals','list')).data.goals.length,0,'other user's data never listed');
+assert.equal((await call(otherId,'goals','list')).data.goals.length,0,'other account data never listed');
 
 sqlite.prepare("INSERT INTO candidate_users(telegram_id,display_name) VALUES(?,'Synthetic professional user')").run(proId);
 sqlite.prepare("INSERT INTO candidate_subscriptions_v2(telegram_id,plan_id,status,expires_at,source) VALUES(?,'professional','active',datetime('now','+30 days'),'admin')").run(proId);
