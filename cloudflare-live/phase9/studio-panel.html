@@ -1,0 +1,30 @@
+<section id="studio-panel" class="panel" hidden>
+<h3>استودیوی محتوای اطلاع‌رسانی عمومی</h3>
+<p>تهیه و مدیریت پیش‌نویس‌های factual و آموزشی. محتوای پیشنهادی صرفاً قالب اولیه است؛ ادعاها، تاریخ‌ها و منابع را پیش از انتشار بررسی کنید. انتشار خودکار وجود ندارد.</p>
+<form id="studio-form">
+<label>نوع محتوا<select name="kind" id="studio-kind">
+<option value="service_update">گزارش وضعیت خدمات عمومی</option>
+<option value="meeting_notice">اطلاعیه جلسه عمومی</option>
+<option value="fact_correction">اصلاح یا تکمیل اطلاعات منتشرشده</option>
+<option value="civic_education">نکته آموزشی حقوق شهروندی</option>
+</select></label>
+<label>عنوان محتوا<input name="title" maxlength="160" minlength="3" required placeholder="مثلاً وضعیت پیگیری پروژه خدماتی"></label>
+<label>اطلاعات تأییدشده و نکات کلیدی<textarea id="studio-facts" maxlength="1500" placeholder="فقط موارد قابل استناد؛ از درج اطلاعات حساس خودداری کنید."></textarea></label>
+<label>منبع (اختیاری، لینک HTTPS)<input name="source_url" type="url" maxlength="800" inputmode="url" placeholder="https://..."></label>
+<label>متن پیش‌نویس<textarea name="body" id="studio-body" maxlength="4000" minlength="10" required placeholder="متن پیش‌نویس را تولید یا ویرایش کنید."></textarea></label>
+<label>مرحله بازبینی<select name="status">
+<option value="draft">پیش‌نویس — نیازمند بررسی</option>
+<option value="reviewed">بررسی‌شده توسط خودم</option>
+</select></label>
+<input id="studio-edit-id" type="hidden" value="">
+<button type="button" id="studio-compose" class="secondary">ساخت قالب اولیه از اطلاعات واردشده</button>
+<button type="submit" id="studio-save">ذخیره پیش‌نویس</button>
+<button type="button" id="studio-copy" class="secondary">کپی متن ویرایش‌شده</button>
+<button type="button" id="studio-reset" class="secondary">پیش‌نویس تازه</button>
+<small>اطلاعات این فرم روی محیط آزمایشی ذخیره می‌شود. این بخش هوش مصنوعی ندارد، به شبکه اجتماعی متصل نیست و خودکار چیزی منتشر نمی‌کند.</small>
+</form>
+<div id="studio-message" role="status" aria-live="polite"></div>
+<h4>پیش‌نویس‌های ذخیره‌شده من</h4>
+<div id="studio-list" role="list"></div>
+<button type="button" id="studio-close" class="secondary">بازگشت به میزکار</button>
+</section>
