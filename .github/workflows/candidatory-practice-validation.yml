@@ -40,3 +40,22 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Exercise timed practice on three mobile viewports
         run: node cloudflare-live/phase5/practice-mobile-check.cjs
+
+      - name: Check deployed practice API and UI without credentials
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/health" -o practice-health.json
+          node -e 'const x=require("./practice-health.json");if(x.production!==false||x.schemaReady!==true||x.telegramSecretConfigured!==true)process.exit(1)'
+          curl -fsS "$URL/" -o practice-live.html
+          grep -q 'id="practice-panel"' practice-live.html
+          grep -q 'id="practice-form"' practice-live.html
+          code=$(curl -sS -o practice-anon.json -w "%{http_code}" -X POST "$URL/api/practice" -H "Content-Type: application/json" --data '{"action":"list","initData":"invalid"}')
+          test "$code" = "401"
+          node -e 'const x=require("./practice-anon.json");if(x.error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          echo 'PASS live worker: interface served and unsigned practice request rejected'
+      - name: Browser-test the deployed HTML on three mobile viewports
+        env:
+          PRACTICE_HTML_FILE: practice-live.html
+        run: node cloudflare-live/phase5/practice-mobile-check.cjs
