@@ -46,7 +46,9 @@ try{
  await Promise.all([runManualPublishOutbox(env),runManualPublishOutbox(env)]);
  assert.equal(requests.length,1,'concurrent runs must not publish twice');
  let row=db.prepare('SELECT status,attempts,message_id FROM manual_publish_outbox WHERE id=?').get('news-announcement-2026-11-03');
- assert.deepEqual(row,{status:'published',attempts:1,message_id:997111});
+ assert.equal(row.status,'published');
+ assert.equal(row.attempts,1);
+ assert.equal(row.message_id,997111);
  await runManualPublishOutbox(env);
  assert.equal(requests.length,1,'published record must never replay');
  insert.run('news-announcement-second',notice+'\nنسخه دوم آزمایشی');
