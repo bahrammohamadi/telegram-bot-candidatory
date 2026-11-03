@@ -68,3 +68,5 @@ try{
  assert.equal(worker.includes("u.pathname==='/test-publish'"),true,'existing protected test endpoint lost');
  console.log('PASS manual outbox: one-shot success, concurrent claim, no replay, no retry after ambiguity, news cron unchanged');
 }finally{globalThis.fetch=originalFetch;db.close()}
+
+// Individual SQL-column assertions avoid SQLite null-prototype object mismatch.
