@@ -1,0 +1,35 @@
+name: Isolated personal tasks validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase14/**'
+      - '.github/workflows/candidatory-tasks-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  task-api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase14/build-tasks.mjs
+      - run: node --check cloudflare-live/phase14/dist/integration-tasks-worker.mjs
+      - run: node --experimental-sqlite cloudflare-live/phase14/tasks-e2e.mjs
+  task-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase14/build-tasks.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - run: node cloudflare-live/phase14/tasks-mobile.cjs
