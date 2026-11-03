@@ -33,3 +33,38 @@ jobs:
       - run: npm install --no-save playwright@1.51.1
       - run: npx playwright install --with-deps chromium
       - run: node cloudflare-live/phase14/tasks-mobile.cjs
+      - name: Fetch actual isolated Worker page
+        run: curl -fsS https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev/ -o tasks-live.html
+      - name: Browser-test deployed mobile task UI
+        env:
+          TASKS_HTML_FILE: tasks-live.html
+        run: node cloudflare-live/phase14/tasks-mobile.cjs
+
+  task-live-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Verify isolated live tasks module and Telegram authentication
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/health" -o health.json
+          node -e 'const x=require("./health.json");if(x.production!==false||x.schemaReady!==true||x.telegramSecretConfigured!==true)process.exit(1)'
+          curl -fsS "$URL/" -o tasks-live.html
+          grep -q 'id="tasks-panel"' tasks-live.html
+          grep -q 'id="tasks-list"' tasks-live.html
+          grep -q 'id="assistant-panel"' tasks-live.html
+          grep -q 'id="admin-console-dashboard"' tasks-live.html
+          grep -q 'id="studio-panel"' tasks-live.html
+          grep -q 'id="progress-panel"' tasks-live.html
+          grep -q 'id="quiz-panel"' tasks-live.html
+          grep -q 'id="practice-panel"' tasks-live.html
+          grep -q 'id="goals-panel"' tasks-live.html
+          grep -q 'id="calendar-panel"' tasks-live.html
+          code=$(curl -sS -o invalid.json -w "%{http_code}" -X POST "$URL/api/tasks" -H "Content-Type: application/json" --data '{"action":"list","initData":"invalid"}')
+          test "$code" = "401"
+          node -e 'if(require("./invalid.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          code=$(curl -sS -o forged.json -w "%{http_code}" -X POST "$URL/api/tasks" -H "Content-Type: application/json" --data '{"action":"create","title":"Forged task","details":"No data","priority":"normal","due_date":"","initData":"auth_date=123&user=%7B%22id%22%3A1%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}')
+          test "$code" = "401"
+          echo 'PASS isolated tasks live UI and signed-user API guard'
