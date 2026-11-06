@@ -28,7 +28,7 @@ jobs:
           if [ "$health_status" != "200" ]; then
             case "$status" in
               503|500|429)
-                echo "::error title=Integration unavailable::Health HTTP $status; service availability is NOT verified. Inspect Cloudflare D1 quota and Worker logs. Authentication assertions were NOT executed."
+                echo "::error title=Integration unavailable::Health HTTP $status; service availability is NOT verified. Inspect Cloudflare D1 quota and Worker logs. Independent authentication probes will run but may remain unverified."
                 ;;
               *)
                 echo "::error title=Integration health::Unexpected HTTP $status; authentication assertions were NOT executed."
