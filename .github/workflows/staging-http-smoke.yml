@@ -23,7 +23,21 @@ jobs:
           grep -q 'staging-donut' /tmp/style.css
           curl --fail --show-error --location --max-time 20 "$base/app.js" -o /tmp/app.js
           grep -q 'Preview interaction guard' /tmp/app.js
-          curl --fail --show-error --location --max-time 20 "$base/api/staging/health" -o /tmp/health.json
+          health_status=$(curl --silent --show-error --location --max-time 20 --output /tmp/health.json --write-out '%{http_code}' "$base/api/staging/health")
+          if [ "$health_status" != "200" ]; then
+            echo "::error title=Staging synthetic health failed::HTTP $health_status. Check isolated staging D1 read quota, binding, and table availability before any redeploy."
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          raw=Path('/tmp/health.json').read_text(errors='replace')
+          try:
+              data=json.loads(raw)
+              print('Response error code:', str(data.get('error', data.get('code','unknown')))[:120])
+          except (ValueError, AttributeError):
+              print('Response is not JSON; body withheld to avoid leaking data')
+          PY
+            exit 1
+          fi
           python3 -c 'import json;d=json.load(open("/tmp/health.json"));assert d["environment"]=="staging" and d["syntheticOnly"] is True and d["users"]==2 and d["tasks"]==3'
           curl --fail --show-error --location --max-time 20 "$base/api/staging/dashboard" -o /tmp/dashboard.json
           python3 -c 'import json;d=json.load(open("/tmp/dashboard.json"));assert d["syntheticOnly"] is True and len(d["users"])==2'
