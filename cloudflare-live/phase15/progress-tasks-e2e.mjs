@@ -43,3 +43,30 @@ assert.ok(src.includes('وظایف: '));
 assert.ok(src.includes('/api/tasks'));
 assert.ok(src.includes('/api/assistant'));
 console.log('PASS phase15: signed auth, forged identity rejection, owner-isolated task progress, Tehran overdue, UI/export integration');
+
+
+// Outage regression: invalid Telegram identity must fail before any D1 access,
+// even when the database is unavailable. Valid signed requests must not return
+// a fabricated success or leak SQL/driver internals when D1 reads fail.
+let outageReads=0;
+const outageDB={prepare(){outageReads++;throw new Error('SYNTHETIC_D1_READ_LIMIT_PRIVATE_MARKER')}};
+const outageEnv={DB:outageDB,TELEGRAM_BOT_TOKEN:token};
+async function outageProbe(initData){
+ const response=await worker.fetch(new Request('https://phase15.synthetic/api/progress',{
+  method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({initData,action:'overview'})
+ }),outageEnv);
+ return {status:response.status,body:await response.text()};
+}
+const anonymousOutage=await outageProbe('');
+assert.equal(anonymousOutage.status,401,'anonymous identity must be rejected independently of D1');
+const forgedOutage=await outageProbe(forged.toString());
+assert.equal(forgedOutage.status,401,'forged identity must be rejected independently of D1');
+assert.equal(outageReads,0,'invalid identity must not touch unavailable D1');
+const signedOutage=await outageProbe(signed(uid1));
+assert.ok(outageReads>0,'valid identity must reach D1 before an outage is reported');
+assert.ok(signedOutage.status>=500 && signedOutage.status<=599,
+ 'D1 failure must fail closed, not return fabricated progress or HTTP 200');
+assert.ok(!signedOutage.body.includes('SYNTHETIC_D1_READ_LIMIT_PRIVATE_MARKER'),
+ 'database exception details must not leak into the API response');
+console.log('PASS phase15 outage: anonymous/forged auth rejected before D1, signed D1 failure fails closed without leaking driver error');
