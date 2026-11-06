@@ -41,7 +41,10 @@ jobs:
               payload=json.loads(Path('/tmp/integration-health').read_text())
               code=payload.get('error')
               if code=='DB_UNAVAILABLE':
-                  print('::warning title=D1 readiness failure::Worker health returned DB_UNAVAILABLE; auth API probes may still return 401 because they reject before DB reads.')
+                  # A D1 outage must fail closed without exposing SQL, stack traces or secrets.
+                  assert set(payload).issubset({'error'}), 'Unexpected fields in health error'
+                  assert isinstance(payload['error'], str), 'Invalid error type'
+                  print('::warning title=D1 readiness failure::Worker health returned DB_UNAVAILABLE with a minimal error payload; auth API probes may still return 401.')
               else:
                   print('::warning title=Health 503::Health returned 503 without the expected D1 error code.')
           except (ValueError, OSError, TypeError, AttributeError):
