@@ -25,6 +25,18 @@ jobs:
           # Never supply a real token, identity, private data, or signing key.
           status=$(curl --silent --show-error --max-time 20 --output /tmp/integration-health --write-out '%{http_code}' "$base/health")
           health_status="$status"
+          # Collect three independent, non-sensitive availability samples to distinguish
+          # persistent outages from intermittent 5xx. Every sample must pass; no masking.
+          availability_failures=0
+          if [ "$health_status" != "200" ]; then availability_failures=1; fi
+          echo "Health sample 1/3: HTTP $health_status"
+          for sample in 2 3; do
+            sleep 2
+            sample_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$base/health" || true)
+            echo "Health sample $sample/3: HTTP $sample_status"
+            if [ "$sample_status" != "200" ]; then availability_failures=$((availability_failures+1)); fi
+          done
+          echo "Health unavailable samples: $availability_failures/3"
           if [ "$health_status" != "200" ]; then
             case "$status" in
               503|500|429)
@@ -69,7 +81,7 @@ jobs:
             fi
           fi
           echo "Health: HTTP $health_status; unexpected auth responses: $auth_failures; unavailable auth probes: $auth_unverified"
-          if [ "$health_status" != "200" ] || [ "$auth_failures" -gt 0 ] || [ "$auth_unverified" -gt 0 ]; then
+          if [ "$availability_failures" -gt 0 ] || [ "$auth_failures" -gt 0 ] || [ "$auth_unverified" -gt 0 ]; then
             echo "::error title=Integration gate not passed::Health and all 11 auth checks must pass independently before release."
             exit 1
           fi
