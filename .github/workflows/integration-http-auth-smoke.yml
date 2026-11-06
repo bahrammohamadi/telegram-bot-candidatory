@@ -80,14 +80,14 @@ jobs:
               if [ "$sample_status" != "200" ]; then availability_failures=$((availability_failures+1)); fi
             done
           fi
-          echo "Health unavailable samples: $availability_failures/3"
+          echo "Health failed samples: $availability_failures (503 short-circuits remaining D1-backed samples)"
           if [ "$health_status" != "200" ]; then
             case "$status" in
               503|500|429)
                 echo "::error title=Integration unavailable::Health HTTP $status; service availability is NOT verified. Inspect Cloudflare D1 quota and Worker logs. Independent authentication probes will run but may remain unverified."
                 ;;
               *)
-                echo "::error title=Integration health::Unexpected HTTP $status; authentication assertions were NOT executed."
+                echo "::error title=Integration health::Unexpected HTTP $status; independent authentication assertions will still execute."
                 ;;
             esac
             echo "::warning title=Independent auth probe::Health failed; continuing independent unauthenticated API checks to distinguish outage from an auth bypass."
@@ -125,6 +125,17 @@ jobs:
             fi
           fi
           echo "Health: HTTP $health_status; unexpected auth responses: $auth_failures; unavailable auth probes: $auth_unverified"
+          # Persist only aggregate, non-sensitive diagnostics even when the gate fails.
+          {
+            echo '### Isolated integration security gate'
+            echo "- Public shell HTTP: $shell_status (reachability only)"
+            echo "- D1-backed health HTTP: $health_status"
+            echo "- Failed health samples: $availability_failures"
+            echo "- Health contract failures: $health_payload_failures"
+            echo "- Unexpected auth responses: $auth_failures / 11"
+            echo "- Unverified auth probes: $auth_unverified / 11"
+            echo '- Production deployment: not performed'
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$availability_failures" -gt 0 ] || [ "$health_payload_failures" -gt 0 ] || [ "$auth_failures" -gt 0 ] || [ "$auth_unverified" -gt 0 ]; then
             echo "::error title=Integration gate not passed::Health and all 11 auth checks must pass independently before release."
             exit 1
