@@ -1,0 +1,39 @@
+name: Isolated integration HTTP auth smoke
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - '.github/workflows/integration-http-auth-smoke.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/integration-http-auth-smoke.yml'
+      - 'cloudflare-live/phase15/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration-http-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe isolated Worker and reject unauthenticated requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev"
+          # Never supply a real token, identity, private data, or signing key.
+          status=$(curl --silent --show-error --max-time 20 --output /tmp/integration-health --write-out '%{http_code}' "$base/health")
+          test "$status" = "200" || { echo "::error title=Integration health::HTTP $status"; exit 1; }
+          for route in progress tasks assistant admin-console membership studio quiz practice goals calendar; do
+            status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
+              --request POST --header 'Content-Type: application/json' \
+              --data '{"action":"overview","initData":""}' "$base/api/$route")
+            test "$status" = "401" || { echo "::error title=Unsigned identity accepted or API unavailable::/api/$route HTTP $status (expected 401)"; exit 1; }
+          done
+          # Forged Telegram hash must fail before any database reads.
+          status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{"action":"overview","initData":"auth_date=1760000000&user=%7B%22id%22%3A123456%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}' "$base/api/progress")
+          test "$status" = "401" || { echo "::error title=Forged identity not rejected::HTTP $status (expected 401)"; exit 1; }
+          echo 'PASS: isolated health, unsigned access denied for 10 routes, forged Telegram hash rejected.'
