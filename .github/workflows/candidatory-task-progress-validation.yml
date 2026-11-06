@@ -1,0 +1,24 @@
+name: Isolated task progress integration
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/phase15/**'
+      - 'cloudflare-live/phase14/integration-deployed-snapshot-2026-11-03.mjs'
+      - '.github/workflows/candidatory-task-progress-validation.yml'
+  workflow_dispatch:
+jobs:
+  phase15:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assemble isolated candidate
+        run: node cloudflare-live/phase15/build-progress-tasks.mjs
+      - name: Syntax check
+        run: node --check cloudflare-live/phase15/dist/integration-progress-tasks-worker.mjs
+      - name: Signed-user integration regression
+        run: node cloudflare-live/phase15/progress-tasks-e2e.mjs
