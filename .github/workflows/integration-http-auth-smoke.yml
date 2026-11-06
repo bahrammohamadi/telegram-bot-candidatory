@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           base="https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev"
           # Never supply a real token, identity, private data, or signing key.
-          status=$(curl --silent --show-error --max-time 20 --output /tmp/integration-health --write-out '%{http_code}' "$base/health")
+          status=$(curl --silent --show-error --max-time 20 --output /tmp/integration-health --write-out '%{http_code}' "$base/health" || true)
           health_status="$status"
           # Collect three independent, non-sensitive availability samples to distinguish
           # persistent outages from intermittent 5xx. Every sample must pass; no masking.
@@ -53,14 +53,14 @@ jobs:
           for route in progress tasks assistant admin-console membership studio quiz practice goals calendar; do
             status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
               --request POST --header 'Content-Type: application/json' \
-              --data '{"action":"overview","initData":""}' "$base/api/$route")
+              --data '{"action":"overview","initData":""}' "$base/api/$route" || true)
             if [ "$status" != "401" ]; then
-              if [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
+              if [ "$status" = "000" ] || [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
                 echo "::error title=API unavailable::/api/$route HTTP $status; cannot establish authentication behavior."
               else
                 echo "::error title=Unexpected authentication response::/api/$route HTTP $status (expected 401)."
               fi
-              if [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
+              if [ "$status" = "000" ] || [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
                 auth_unverified=$((auth_unverified+1))
               else
                 auth_failures=$((auth_failures+1))
@@ -70,9 +70,9 @@ jobs:
           # Forged Telegram hash must fail before any database reads.
           status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
             --request POST --header 'Content-Type: application/json' \
-            --data '{"action":"overview","initData":"auth_date=1760000000&user=%7B%22id%22%3A123456%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}' "$base/api/progress")
+            --data '{"action":"overview","initData":"auth_date=1760000000&user=%7B%22id%22%3A123456%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}' "$base/api/progress" || true)
           if [ "$status" != "401" ]; then
-            if [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
+            if [ "$status" = "000" ] || [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
               echo "::error title=Forged identity not verified::HTTP $status; service unavailable, signature rejection NOT proven."
               auth_unverified=$((auth_unverified+1))
             else
