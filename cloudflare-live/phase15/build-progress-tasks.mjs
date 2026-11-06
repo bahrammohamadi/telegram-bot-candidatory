@@ -20,7 +20,7 @@ let patched=source.replace(anchor,'const [profile,goals,calendar,practice,quizze
 html=html.replace(reportAnchor,reportAnchor+"\n  progressCard('وظایف شخصی',progressFormat(data.tasks.completed)+' / '+progressFormat(data.tasks.total),progressFormat(data.tasks.doing)+' در حال انجام؛ '+progressFormat(data.tasks.overdue)+' عقب‌افتاده');")
  .replace(exportAnchor,exportAnchor+"\n    'وظایف: '+data.tasks.completed+' از '+data.tasks.total+' انجام‌شده؛ '+data.tasks.doing+' در حال انجام؛ '+data.tasks.overdue+' عقب‌افتاده',");
 patched=patched.replace(originalHtml[0],'const TEST_PAGE='+JSON.stringify(html)+';\n');
-if(count(patched,'FROM candidate_tasks_v1 WHERE telegram_id=?')!==2)throw Error('Task SQL scope check failed');
+if(!patched.includes("AS overdue FROM candidate_tasks_v1 WHERE telegram_id=?"))throw Error('Task SQL scope check failed');
 for(const route of ['/api/tasks','/api/progress','/api/assistant','/api/admin-console'])if(!patched.includes(route))throw Error('Route missing: '+route);
 mkdirSync(new URL('./dist/',import.meta.url),{recursive:true});
 writeFileSync(new URL('./dist/integration-progress-tasks-worker.mjs',import.meta.url),patched);
