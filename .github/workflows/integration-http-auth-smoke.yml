@@ -62,12 +62,19 @@ jobs:
           availability_failures=0
           if [ "$health_status" != "200" ]; then availability_failures=1; fi
           echo "Health sample 1/3: HTTP $health_status"
-          for sample in 2 3; do
-            sleep 2
-            sample_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$base/health" || true)
-            echo "Health sample $sample/3: HTTP $sample_status"
-            if [ "$sample_status" != "200" ]; then availability_failures=$((availability_failures+1)); fi
-          done
+          # If D1 is already unavailable, do not repeat database-backed health
+          # reads: they cannot turn this run green and may aggravate quota exhaustion.
+          # Independent unsigned/forged-identity probes still execute below.
+          if [ "$health_status" = "503" ]; then
+            echo "::warning title=Quota-safe probe::Skipping two redundant D1-backed health requests after HTTP 503; readiness remains FAILED."
+          else
+            for sample in 2 3; do
+              sleep 2
+              sample_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$base/health" || true)
+              echo "Health sample $sample/3: HTTP $sample_status"
+              if [ "$sample_status" != "200" ]; then availability_failures=$((availability_failures+1)); fi
+            done
+          fi
           echo "Health unavailable samples: $availability_failures/3"
           if [ "$health_status" != "200" ]; then
             case "$status" in
