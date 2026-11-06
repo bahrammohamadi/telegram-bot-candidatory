@@ -24,12 +24,29 @@ jobs:
           base="https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev"
           # Never supply a real token, identity, private data, or signing key.
           status=$(curl --silent --show-error --max-time 20 --output /tmp/integration-health --write-out '%{http_code}' "$base/health")
-          test "$status" = "200" || { echo "::error title=Integration health::HTTP $status"; exit 1; }
+          if [ "$status" != "200" ]; then
+            case "$status" in
+              503|500|429)
+                echo "::error title=Integration unavailable::Health HTTP $status; service availability is NOT verified. Inspect Cloudflare D1 quota and Worker logs. Authentication assertions were NOT executed."
+                ;;
+              *)
+                echo "::error title=Integration health::Unexpected HTTP $status; authentication assertions were NOT executed."
+                ;;
+            esac
+            exit 1
+          fi
           for route in progress tasks assistant admin-console membership studio quiz practice goals calendar; do
             status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
               --request POST --header 'Content-Type: application/json' \
               --data '{"action":"overview","initData":""}' "$base/api/$route")
-            test "$status" = "401" || { echo "::error title=Unsigned identity accepted or API unavailable::/api/$route HTTP $status (expected 401)"; exit 1; }
+            if [ "$status" != "401" ]; then
+              if [ "$status" = "500" ] || [ "$status" = "503" ] || [ "$status" = "429" ]; then
+                echo "::error title=API unavailable::/api/$route HTTP $status; cannot establish authentication behavior."
+              else
+                echo "::error title=Unexpected authentication response::/api/$route HTTP $status (expected 401)."
+              fi
+              exit 1
+            fi
           done
           # Forged Telegram hash must fail before any database reads.
           status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
