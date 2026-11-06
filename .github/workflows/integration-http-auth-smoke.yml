@@ -23,8 +23,14 @@ jobs:
           set -euo pipefail
           base="https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev"
           # Never supply a real token, identity, private data, or signing key.
-          status=$(curl --silent --show-error --max-time 20 --output /tmp/integration-health --write-out '%{http_code}' "$base/health" || true)
+          status=$(curl --silent --show-error --max-time 20 --dump-header /tmp/integration-health-headers --output /tmp/integration-health --write-out '%{http_code}' "$base/health" || true)
           health_status="$status"
+          # CF-Ray is a non-secret request correlation ID; never print cookies or auth headers.
+          # It helps correlate an intermittent 503 with Cloudflare Worker traces.
+          if [ "$status" != "200" ]; then
+            ray=$(awk 'BEGIN{IGNORECASE=1} tolower($1)=="cf-ray:" {print $2}' /tmp/integration-health-headers 2>/dev/null | tr -cd 'A-Za-z0-9-' | head -c 80 || true)
+            if [ -n "$ray" ]; then echo "Health failure CF-Ray: $ray"; fi
+          fi
           # Distinguish Worker reachability from D1-backed readiness. Do not log response bodies.
           shell_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$base/" || true)
           echo "Public shell reachability: HTTP $shell_status (not a readiness pass)"
