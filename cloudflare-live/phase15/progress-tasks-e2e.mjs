@@ -110,3 +110,28 @@ const fresh=await progress(signed(uid1,nowSeconds-30));
 assert.equal(fresh.status,200,'fresh signed Telegram identity should pass');
 assert.deepEqual(fresh.data.tasks,data.get(uid1));
 console.log('PASS phase15 replay window: expired/future/zero auth_date fail before D1; fresh signed identity succeeds');
+
+
+// Regression: a payload signed with a different bot token must never authenticate.
+// Also reject malformed user JSON even if its hash is cryptographically valid.
+const wrongToken='987654321:OTHER_SYNTHETIC_BOT_TOKEN';
+function signFields(fields, signingToken){
+ const params=new URLSearchParams(fields);
+ const check=[...params.entries()].filter(([key])=>key!=='hash').sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>key+'='+value).join('\n');
+ const secret=createHmac('sha256','WebAppData').update(signingToken).digest();
+ params.set('hash',createHmac('sha256',secret).update(check).digest('hex'));
+ return params.toString();
+}
+const wrongBotData=signFields([
+ ['auth_date',String(nowSeconds)],['user',JSON.stringify({id:uid1,first_name:'Synthetic'})]
+],wrongToken);
+const malformedUserData=signFields([
+ ['auth_date',String(nowSeconds)],['user','{not-json']
+],token);
+for(const [label,initData] of [['wrong-bot-token',wrongBotData],['malformed-user-json',malformedUserData]]){
+ const before=outageReads;
+ const response=await outageProbe(initData);
+ assert.equal(response.status,401,label+' must fail authentication');
+ assert.equal(outageReads,before,label+' must fail before D1 access');
+}
+console.log('PASS phase15 negative auth: wrong bot token and malformed signed user JSON fail before D1');
