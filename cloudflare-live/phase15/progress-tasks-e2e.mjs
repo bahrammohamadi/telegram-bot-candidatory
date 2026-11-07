@@ -145,3 +145,12 @@ const missingHashResult=await outageProbe(missingHash.toString());
 assert.equal(missingHashResult.status,401,'missing Telegram hash must fail authentication');
 assert.equal(outageReads,readsBeforeMissingHash,'missing hash must be rejected before D1');
 console.log('PASS phase15 missing hash: rejected before D1 access');
+
+// Regression: missing user identity must be rejected before any database read,
+// even when the remaining Telegram fields carry a valid HMAC.
+const missingUserData=signFields([['auth_date',String(nowSeconds)]],token);
+const readsBeforeMissingUser=outageReads;
+const missingUserResult=await outageProbe(missingUserData);
+assert.equal(missingUserResult.status,401,'signed initData without user must fail authentication');
+assert.equal(outageReads,readsBeforeMissingUser,'missing user must not access D1');
+console.log('PASS phase15 missing user: signed payload rejected before D1');
