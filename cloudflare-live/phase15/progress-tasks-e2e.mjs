@@ -135,3 +135,13 @@ for(const [label,initData] of [['wrong-bot-token',wrongBotData],['malformed-user
  assert.equal(outageReads,before,label+' must fail before D1 access');
 }
 console.log('PASS phase15 negative auth: wrong bot token and malformed signed user JSON fail before D1');
+
+// Missing hash is an unauthenticated request even when user/auth_date look valid.
+// The check must execute before attempting any D1 query.
+const missingHash=new URLSearchParams(signed(uid1));
+missingHash.delete('hash');
+const readsBeforeMissingHash=outageReads;
+const missingHashResult=await outageProbe(missingHash.toString());
+assert.equal(missingHashResult.status,401,'missing Telegram hash must fail authentication');
+assert.equal(outageReads,readsBeforeMissingHash,'missing hash must be rejected before D1');
+console.log('PASS phase15 missing hash: rejected before D1 access');
