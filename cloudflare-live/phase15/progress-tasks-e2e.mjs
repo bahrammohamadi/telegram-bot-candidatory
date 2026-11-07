@@ -3,8 +3,8 @@ import {createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import worker from './dist/integration-progress-tasks-worker.mjs';
 const token='123456789:SYNTHETIC_PROGRESS_TOKEN';
-function signed(id){
- const p=new URLSearchParams({auth_date:String(Math.floor(Date.now()/1000)),user:JSON.stringify({id,first_name:'Synthetic'}),signature:'synthetic'});
+function signed(id,authDate=Math.floor(Date.now()/1000)){
+ const p=new URLSearchParams({auth_date:String(authDate),user:JSON.stringify({id,first_name:'Synthetic'}),signature:'synthetic'});
  const msg=[...p.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+'='+v).join('\n');
  const key=createHmac('sha256','WebAppData').update(token).digest();
  p.set('hash',createHmac('sha256',key).update(msg).digest('hex'));return p.toString();
@@ -77,3 +77,23 @@ assert.ok(signedOutage.status>=500 && signedOutage.status<=599,
 assert.ok(!signedOutage.body.includes('SYNTHETIC_D1_READ_LIMIT_PRIVATE_MARKER'),
  'database exception details must not leak into the API response');
 console.log('PASS phase15 outage: anonymous/forged auth rejected before D1, signed D1 failure fails closed without leaking driver error');
+
+// Replay-window regression: even a cryptographically valid Telegram payload
+// must be rejected when auth_date is too old or too far in the future.
+// A rejected identity must not cause any D1 query, including during outages.
+const nowSeconds=Math.floor(Date.now()/1000);
+for(const [label,authDate] of [
+ ['expired',nowSeconds-3601],
+ ['future',nowSeconds+61],
+ ['invalid-zero',0]
+]){
+ const before=outageReads;
+ const result=await outageProbe(signed(uid1,authDate));
+ assert.equal(result.status,401,label+' signed initData must be rejected');
+ assert.equal(outageReads,before,label+' signed initData must not reach D1');
+}
+// An identity well inside the allowed one-hour window remains valid.
+const fresh=await progress(signed(uid1,nowSeconds-30));
+assert.equal(fresh.status,200,'fresh signed Telegram identity should pass');
+assert.deepEqual(fresh.data.tasks,data.get(uid1));
+console.log('PASS phase15 replay window: expired/future/zero auth_date fail before D1; fresh signed identity succeeds');
