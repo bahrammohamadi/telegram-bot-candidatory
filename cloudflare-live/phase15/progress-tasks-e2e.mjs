@@ -62,7 +62,14 @@ const anonymousOutage=await outageProbe('');
 assert.equal(anonymousOutage.status,401,'anonymous identity must be rejected independently of D1');
 const forgedOutage=await outageProbe(forged.toString());
 assert.equal(forgedOutage.status,401,'forged identity must be rejected independently of D1');
-assert.equal(outageReads,0,'invalid identity must not touch unavailable D1');
+// A valid-looking payload with a corrupted HMAC must never query D1.
+// This guards the fail-before-database boundary separately from user-field forgery.
+const badHash=new URLSearchParams(signed(uid2));
+const validHash=badHash.get('hash');
+badHash.set('hash',(validHash[0]==='a'?'b':'a')+validHash.slice(1));
+const tamperedHashOutage=await outageProbe(badHash.toString());
+assert.equal(tamperedHashOutage.status,401,'tampered Telegram HMAC must be rejected');
+assert.equal(outageReads,0,'anonymous, forged and tampered identities must not touch unavailable D1');
 const signedOutage=await outageProbe(signed(uid1));
 assert.ok(outageReads>0,'valid identity must reach D1 before an outage is reported');
 assert.ok(signedOutage.status>=500 && signedOutage.status<=599,
