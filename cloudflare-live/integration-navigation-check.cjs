@@ -38,9 +38,14 @@ const fs=require('node:fs');
  const skip=page.locator('#first-visit-skip');if(await skip.isVisible())await skip.click();
  const cards=page.locator('.functional-grid>button');
  if(await cards.count()!==6)throw Error('Expected six sections');
+ const group=page.getByRole('group',{name:'بخش‌های اصلی کاندیداتوری'});
+ if(await group.count()!==1)throw Error('Main navigation lacks accessible group label');
+ const region=page.getByRole('region',{name:'',includeHidden:true});
+ if(await page.locator('#functional-section[role="region"][aria-labelledby="functional-heading"]').count()!==1)throw Error('Section region lacks accessible heading association');
  for(let i=0;i<6;i++){
  await cards.nth(i).click();
  await page.locator('#functional-section').waitFor({state:'visible'});
+ if(await page.locator('#functional-section').getAttribute('role')!=='region')throw Error('Expanded section lacks region role');
  if(await page.locator('[data-functional-route]').count()<3)throw Error('Missing tool routes');
  await page.locator('#functional-heading').press('Escape');
  if(!await cards.nth(i).evaluate(el=>el===document.activeElement))throw Error('Focus not restored');
