@@ -4,7 +4,7 @@ const fs=require('node:fs');
  const source=fs.readFileSync(__dirname+'/dist/integration-worker.mjs','utf8');
  const asset=name=>{const marker='const '+name+'=',start=source.indexOf(marker)+marker.length;return JSON.parse(source.slice(start,source.indexOf(';\n',start)))};
  const browser=await chromium.launch({headless:true});
- try{for(const width of [320,375,430]){
+ try{for(const width of [320,375,430,768,1024]){
  const page=await browser.newPage({viewport:{width,height:850}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
@@ -48,7 +48,7 @@ const fs=require('node:fs');
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);
  if(overflow)throw Error('Horizontal overflow '+width);
  if(errors.length)throw Error(errors.join('\n'));
- console.log('PASS six sections, routes, keyboard focus and mobile width '+width);
+ console.log('PASS six sections, routes, keyboard focus and responsive viewport '+width);
  await page.close();
  }}finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});
