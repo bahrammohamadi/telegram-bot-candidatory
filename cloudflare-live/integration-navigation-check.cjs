@@ -44,9 +44,13 @@ const fs=require('node:fs');
  for(let i=0;i<6;i++){
  await cards.nth(i).click();
  await page.locator('#functional-section').waitFor({state:'visible'});
+ if(await cards.nth(i).getAttribute('aria-expanded')!=='true')throw Error('Selected section is not announced expanded');
+ if(await page.locator('.functional-grid>button[aria-expanded="true"]').count()!==1)throw Error('Multiple navigation sections announced expanded');
  if(await page.locator('#functional-section').getAttribute('role')!=='region')throw Error('Expanded section lacks region role');
  if(await page.locator('[data-functional-route]').count()<3)throw Error('Missing tool routes');
  await page.locator('#functional-heading').press('Escape');
+ if(!await page.locator('#functional-section').isHidden())throw Error('Section remains visible after Escape');
+ if(await cards.nth(i).getAttribute('aria-expanded')!=='false')throw Error('Closed section remains announced expanded');
  if(!await cards.nth(i).evaluate(el=>el===document.activeElement))throw Error('Focus not restored');
  }
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);
