@@ -53,6 +53,15 @@ const fs=require('node:fs');
  if(await cards.nth(i).getAttribute('aria-expanded')!=='false')throw Error('Closed section remains announced expanded');
  if(!await cards.nth(i).evaluate(el=>el===document.activeElement))throw Error('Focus not restored');
  }
+ // Keyboard-only route: Enter opens the section and Escape returns focus.
+ await cards.first().focus();
+ await page.keyboard.press('Enter');
+ await page.locator('#functional-section').waitFor({state:'visible'});
+ if(!await page.locator('#functional-heading').evaluate(el=>el===document.activeElement))throw Error('Keyboard opening did not focus section heading');
+ if(await cards.first().getAttribute('aria-expanded')!=='true')throw Error('Keyboard opening did not update expanded state');
+ await page.keyboard.press('Escape');
+ if(!await page.locator('#functional-section').isHidden())throw Error('Keyboard Escape did not close section');
+ if(!await cards.first().evaluate(el=>el===document.activeElement))throw Error('Keyboard Escape did not restore focus');
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);
  if(overflow)throw Error('Horizontal overflow '+width);
  if(errors.length)throw Error(errors.join('\n'));
