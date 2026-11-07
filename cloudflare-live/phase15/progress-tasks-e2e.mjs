@@ -154,3 +154,15 @@ const missingUserResult=await outageProbe(missingUserData);
 assert.equal(missingUserResult.status,401,'signed initData without user must fail authentication');
 assert.equal(outageReads,readsBeforeMissingUser,'missing user must not access D1');
 console.log('PASS phase15 missing user: signed payload rejected before D1');
+
+// Security regression: a correctly signed but non-numeric Telegram user id
+// must not be treated as a trusted owner or reach the D1 query layer.
+const invalidOwnerData=signFields([
+ ['auth_date',String(nowSeconds)],
+ ['user',JSON.stringify({id:'1 OR 1=1',first_name:'Synthetic'})]
+],token);
+const readsBeforeInvalidOwner=outageReads;
+const invalidOwnerResult=await outageProbe(invalidOwnerData);
+assert.equal(invalidOwnerResult.status,401,'non-numeric signed Telegram owner must be rejected');
+assert.equal(outageReads,readsBeforeInvalidOwner,'invalid owner must be rejected before D1');
+console.log('PASS phase15 invalid owner: signed non-numeric user id rejected before D1');
