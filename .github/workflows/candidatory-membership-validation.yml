@@ -1,0 +1,72 @@
+name: Isolated demo subscriptions and admin security
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase10/**'
+      - '.github/workflows/candidatory-membership-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  membership-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build complete demo subscription miniapp
+        run: |
+          node cloudflare-live/phase10/build-membership.mjs
+          node --check cloudflare-live/phase10/dist/integration-membership-worker.mjs
+      - name: Test signed Telegram identity, deny unconfigured admin, admin audit and simulated grants
+        run: node --experimental-sqlite cloudflare-live/phase10/membership-worker-e2e.mjs
+  membership-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase10/build-membership.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Test mobile membership demo and closed admin panel
+        run: node cloudflare-live/phase10/membership-mobile-check.cjs
+      - name: Download live test Worker HTML
+        run: curl -fsS https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev/ -o membership-live.html
+      - name: Test mobile flows against live HTML
+        env:
+          MEMBERSHIP_HTML_FILE: membership-live.html
+        run: node cloudflare-live/phase10/membership-mobile-check.cjs
+
+  membership-live-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Verify environment isolation and reject forged requests
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/health" -o health.json
+          node -e 'const r=require("./health.json");if(r.production!==false||r.schemaReady!==true||r.telegramSecretConfigured!==true)process.exit(1)'
+          curl -fsS "$URL/" -o membership-live.html
+          grep -q 'id="membership-panel"' membership-live.html
+          grep -q 'id="membership-admin"' membership-live.html
+          grep -q 'id="studio-panel"' membership-live.html
+          grep -q 'id="progress-panel"' membership-live.html
+          grep -q 'id="quiz-panel"' membership-live.html
+          grep -q 'id="practice-panel"' membership-live.html
+          grep -q 'id="goals-panel"' membership-live.html
+          grep -q 'id="calendar-panel"' membership-live.html
+          code=$(curl -sS -o invalid.json -w '%{http_code}' -X POST "$URL/api/membership" -H 'Content-Type: application/json' --data '{"action":"status","initData":"invalid"}')
+          test "$code" = "401"
+          node -e 'if(require("./invalid.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          code=$(curl -sS -o forged.json -w '%{http_code}' -X POST "$URL/api/membership" -H 'Content-Type: application/json' --data '{"action":"admin_queue","initData":"auth_date=123&user=%7B%22id%22%3A1%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}')
+          test "$code" = "401"
+          echo 'PASS live isolated demo subscription Worker and HMAC guard'

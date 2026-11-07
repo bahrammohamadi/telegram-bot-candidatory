@@ -1,0 +1,71 @@
+name: Civic quiz integration validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase6/**'
+      - '.github/workflows/candidatory-quiz-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quiz-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build complete quiz miniapp
+        run: |
+          node cloudflare-live/phase6/build-quiz.mjs
+          node --check cloudflare-live/phase6/dist/integration-quiz-worker.mjs
+      - name: Grade on server and check privacy with synthetic Telegram identities
+        run: node --experimental-sqlite cloudflare-live/phase6/quiz-worker-e2e.mjs
+
+  quiz-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase6/build-quiz.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise quiz review and feedback on mobile
+        run: node cloudflare-live/phase6/quiz-mobile-check.cjs
+      - name: Fetch actual deployed test miniapp HTML
+        run: curl -fsS https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev/ -o quiz-live.html
+      - name: Exercise mobile quiz journey using deployed HTML
+        env:
+          QUIZ_HTML_FILE: quiz-live.html
+        run: node cloudflare-live/phase6/quiz-mobile-check.cjs
+
+
+  quiz-live-api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check deployed API remains isolated and rejects unsigned requests
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/health" -o quiz-health.json
+          node -e 'const a=require("./quiz-health.json");if(a.production!==false||a.schemaReady!==true||a.telegramSecretConfigured!==true)process.exit(1)'
+          curl -fsS "$URL/" -o quiz-live.html
+          grep -q 'id="quiz-panel"' quiz-live.html
+          grep -q 'id="quiz-form"' quiz-live.html
+          grep -q 'id="practice-panel"' quiz-live.html
+          grep -q 'id="goals-panel"' quiz-live.html
+          grep -q 'id="calendar-panel"' quiz-live.html
+          result=$(curl -sS -o quiz-anon.json -w "%{http_code}" "$URL/api/quiz" -X POST -H "Content-Type: application/json" --data '{"action":"catalog","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'const a=require("./quiz-anon.json");if(a.error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          result=$(curl -sS -o quiz-forged.json -w "%{http_code}" "$URL/api/quiz" -X POST -H "Content-Type: application/json" --data '{"action":"submit","quiz_id":91001,"answers":{"9100101":1},"initData":"auth_date=123&user=%7B%22id%22%3A1%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}')
+          test "$result" = "401"
+          echo 'PASS: live quiz miniapp and protected quiz API'

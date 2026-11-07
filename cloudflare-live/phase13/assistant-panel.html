@@ -1,0 +1,29 @@
+<section id="assistant-panel" class="panel" hidden>
+<h3>راهنمای آموزشی و مدیریتی کاندیداتوری</h3>
+<p>چک‌لیست‌های کاربردی برای مدیریت جلسات، خدمات عمومی، گزارش پروژه، راستی‌آزمایی و تمرین. راهنمای پایه بدون اتصال به مدل AI کار می‌کند.</p>
+<div id="assistant-status" role="status" aria-live="polite"></div>
+<section id="assistant-ai-state" class="panel" aria-label="وضعیت مدل هوش مصنوعی"></section>
+<form id="assistant-form">
+<label>موضوع راهنمایی
+<select name="task" id="assistant-task">
+<option value="agenda">دستور جلسه خدمات عمومی</option>
+<option value="project">گزارش پیشرفت یک پروژه</option>
+<option value="verification">بررسی یک ادعای عمومی</option>
+<option value="learning">برنامه آموزش و تمرین</option>
+<option value="citizen">پیگیری درخواست‌های عمومی</option>
+</select></label>
+<label>موضوع یا عنوان (اختیاری، برای چک‌لیست)
+<input name="topic" id="assistant-topic" maxlength="180" placeholder="مثلاً پیگیری کیفیت روشنایی یک معبر عمومی"></label>
+<label>پرسش عمومی برای مدل AI (فقط پس از فعال‌سازی)
+<textarea name="question" id="assistant-question" maxlength="700" placeholder="یک سؤال عمومی و بدون داده شخصی درباره موضوع انتخاب‌شده بنویسید."></textarea></label>
+<button type="button" id="assistant-guide">ساخت چک‌لیست رایگان بدون مدل AI</button>
+<button type="button" id="assistant-ask" class="secondary" disabled>پرسیدن از مدل AI (در حال حاضر غیرفعال)</button>
+<small>نام افراد، شماره تماس، کد ملی، پیام خصوصی و اطلاعات محرمانه را وارد نکنید. پاسخ هوش مصنوعی نیاز به راستی‌آزمایی دارد؛ هیچ متن یا پرسشی در سوابق ذخیره نمی‌شود.</small>
+</form>
+<section id="assistant-result" class="panel" hidden>
+<h4 id="assistant-result-title">پاسخ</h4>
+<div id="assistant-result-text" aria-live="polite"></div>
+<button type="button" id="assistant-copy" class="secondary">کپی پاسخ</button>
+</section>
+<button id="assistant-close" type="button" class="secondary">بازگشت به میزکار</button>
+</section>

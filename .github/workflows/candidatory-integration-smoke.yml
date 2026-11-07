@@ -1,0 +1,68 @@
+name: Isolated Telegram integration API smoke
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase3/integration-auth-worker.mjs'
+      - '.github/workflows/candidatory-integration-smoke.yml'
+      - 'cloudflare-live/phase4/**'
+permissions:
+  contents: read
+jobs:
+  telegram-hmac-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase3/telegram-hmac-check.mjs
+  integration-auth-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate health and reject anonymous access
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$URL/health" -o health.json; then break; fi
+            sleep 3
+          done
+          node -e 'const h=require("./health.json");if(h.production!==false||h.schemaReady!==true||h.telegramSecretConfigured!==true)process.exit(1)'
+          result=$(curl -sS -o anonymous.json -w "%{http_code}" -X POST "$URL/api/profile" -H 'Content-Type: application/json' --data '{"action":"get","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./anonymous.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          result=$(curl -sS -o forged.json -w "%{http_code}" -X POST "$URL/api/profile" -H 'Content-Type: application/json' --data '{"action":"save","initData":"auth_date=123&user=%7B%22id%22%3A123%7D&hash=0000000000000000000000000000000000000000000000000000000000000000","profile":{"election_type":"council","stage":"planning","district":"forged","professional_summary":""},"details":{}}')
+          test "$result" = "401"
+          result=$(curl -sS -o unknown.json -w "%{http_code}" "$URL/api/profile")
+          test "$result" = "404"
+          curl -fsS "$URL/api/bot-info" -o bot-info.json
+          node -e 'const b=require("./bot-info.json");console.log("CONFIGURED_TEST_BOT_USERNAME="+(b.botUsername||"NONE"));console.log("BOT_TOKEN_VALID="+b.telegramTokenValid);if(b.telegramTokenValid!==true)process.exit(1)'
+          curl -fsS "$URL/" -o integration-form.html
+          grep -q 'پرونده آزمایشی کاندیداتوری' integration-form.html
+          grep -q 'telegram-web-app.js' integration-form.html
+          grep -q 'ذخیره و ادامه' integration-form.html
+          grep -q 'go-dashboard' integration-form.html
+          grep -q 'data-module' integration-form.html
+          result=$(curl -sS -o calendar-anon.json -w "%{http_code}" -X POST "$URL/api/calendar" -H 'Content-Type: application/json' --data '{"action":"list","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./calendar-anon.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          grep -q 'calendar-form' integration-form.html
+          grep -q 'calendar-list' integration-form.html
+          result=$(curl -sS -o goals-anon.json -w "%{http_code}" -X POST "$URL/api/goals" -H 'Content-Type: application/json' --data '{"action":"list","initData":"invalid"}')
+          test "$result" = "401"
+          node -e 'if(require("./goals-anon.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          result=$(curl -sS -o goals-forged.json -w "%{http_code}" -X POST "$URL/api/goals" -H 'Content-Type: application/json' --data '{"action":"create","initData":"auth_date=123&user=%7B%22id%22%3A123%7D&hash=0000000000000000000000000000000000000000000000000000000000000000","title":"Forged","details":"","target_date":""}')
+          test "$result" = "401"
+          grep -q 'id="goals-panel"' integration-form.html
+          grep -q 'id="goals-form"' integration-form.html
+          grep -q 'goals-progress' integration-form.html
+          echo 'PASS: goals UI served; unauthenticated and forged goals requests denied'
+          echo 'PASS: calendar UI served and anonymous calendar reads denied'
+          echo 'PASS: RTL integration form served with Telegram WebApp SDK'
+          echo 'PASS: D1 schema ready, test secret present, anonymous/forged access rejected'

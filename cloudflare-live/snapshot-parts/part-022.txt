@@ -1,0 +1,96 @@
+edged===false)await db.prepare("DELETE FROM election_legal_personal_checks WHERE telegram_id=? AND source_id=?").bind(uid,id).run();
+   else return {error:"Invalid acknowledgement",status:400};
+   return {saved:true};
+ }
+ if(action==="adminLegalSources"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const rows=await db.prepare("SELECT id,election_type,title,topic,issuer,source_url,source_date,reviewed_at,status,notes,updated_at FROM election_legal_sources ORDER BY updated_at DESC LIMIT 150").all();
+   return {resources:rows.results};
+ }
+ if(action==="adminSaveLegalSource"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const type=clean(payload.electionType,20),topic=clean(payload.topic,24),title=clean(payload.title,180),issuer=clean(payload.issuer,140),link=clean(payload.sourceUrl,1500),notes=clean(payload.notes,1200),date=clean(payload.sourceDate,24);
+   if(!["council","parliament","presidency","other"].includes(type)||!["registration","documents","deadlines","finance","general"].includes(topic)||title.length<4||issuer.length<3)return {error:"Invalid resource fields",status:400};
+   let url;try{url=new URL(link)}catch{return {error:"Invalid URL",status:400}}
+   if(url.protocol!=="https:"||url.username||url.password||link.length>1500)return {error:"HTTPS source URL required",status:400};
+   if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))return {error:"Date must be Gregorian YYYY-MM-DD",status:400};
+   const id=clean(payload.id,64)||crypto.randomUUID();
+   const existing=await db.prepare("SELECT id FROM election_legal_sources WHERE id=?").bind(id).first();
+   if(existing){
+     await db.prepare("UPDATE election_legal_sources SET election_type=?,title=?,topic=?,source_url=?,issuer=?,source_date=?,notes=?,status='draft',reviewed_at='',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(type,title,topic,link,issuer,date,notes,id).run();
+   }else{
+     await db.prepare("INSERT INTO election_legal_sources(id,election_type,title,topic,source_url,issuer,source_date,notes,created_by) VALUES(?,?,?,?,?,?,?,?,?)").bind(id,type,title,topic,link,issuer,date,notes,uid).run();
+   }
+   await logChange(db,uid,null,"legalDraft","legal_source",id);return {saved:true,id,status:"draft"};
+ }
+ if(action==="adminReviewLegalSource"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const id=clean(payload.id,64),status=clean(payload.status,12);
+   if(!["approved","archived","draft"].includes(status))return {error:"Invalid status",status:400};
+   const result=await db.prepare("UPDATE election_legal_sources SET status=?,reviewed_at=CASE WHEN ?='approved' THEN CURRENT_TIMESTAMP ELSE '' END,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(status,status,id).run();
+   if(!result.meta.changes)return {error:"Source not found",status:404};
+   await logChange(db,uid,null,"legal:"+status,"legal_source",id);return {saved:true};
+ }
+ if(action==="candidateProfile"){
+   const profile=await db.prepare("SELECT election_type,district,stage,professional_summary,updated_at FROM candidate_profiles WHERE telegram_id=?").bind(uid).first();
+   const detailsRow=await db.prepare("SELECT details_json FROM candidate_profile_details WHERE telegram_id=?").bind(uid).first();const rows=await db.prepare("SELECT id,item_key,label,status,source_type FROM candidate_checklist_items WHERE telegram_id=? ORDER BY item_key").bind(uid).all();
+   return {profile:profile||null,details:detailsRow?JSON.parse(detailsRow.details_json):{},checklist:rows.results,note:"این چک‌لیست پیشنهاد مدیریتی است و جایگزین قوانین رسمی یا مشاوره حقوقی نیست."};
+ }
+ if(action==="saveCandidateProfile"){
+   const election=clean(payload.electionType,22),stage=clean(payload.stage,22),district=clean(payload.district,120),summary=clean(payload.professionalSummary,500);
+   if(!["council","parliament","presidency","other"].includes(election)||!["planning","registration","operations","report"].includes(stage)||district.length<2)return {error:"نوع انتخابات، حوزه و مرحله فعالیت را بررسی کنید.",status:400};
+   if(payload.details!==undefined){if(!payload.details||typeof payload.details!=="object"||Array.isArray(payload.details))return {error:"ساختار اطلاعات تکمیلی معتبر نیست.",status:400};const allowed=new Set(["displayName","education","workExperience","skills","managementExperience","communityExperience","interests","availability","objectives","strengths","developmentNeeds","teamRoles","resources","communicationPreference","languages","profileVisibility"]);for(const [k,v] of Object.entries(payload.details)){if(!allowed.has(k)||typeof v!=="string"||v.length>1000)return {error:"اطلاعات تکمیلی نامعتبر یا بیش از حد مجاز است.",status:400}}}
+   await db.prepare("INSERT INTO candidate_profiles(telegram_id,election_type,district,stage,professional_summary) VALUES(?,?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET election_type=excluded.election_type,district=excluded.district,stage=excluded.stage,professional_summary=excluded.professional_summary,updated_at=CURRENT_TIMESTAMP").bind(uid,election,district,stage,summary).run();
+   const allowedFields=["displayName","education","workExperience","skills","managementExperience","communityExperience","interests","availability","objectives","strengths","developmentNeeds","teamRoles","resources","communicationPreference","languages","profileVisibility"];const details={};if(payload.details&&typeof payload.details==="object"&&!Array.isArray(payload.details)){for(const key of allowedFields){if(Object.prototype.hasOwnProperty.call(payload.details,key)){const v=payload.details[key];if(typeof v!=="string")return {error:"نوع اطلاعات واردشده معتبر نیست.",status:400};details[key]=clean(v,1000);}}}if(Object.keys(details).length){const existing=await db.prepare("SELECT details_json FROM candidate_profile_details WHERE telegram_id=?").bind(uid).first();const merged={...(existing?JSON.parse(existing.details_json):{}),...details};await db.prepare("INSERT INTO candidate_profile_details(telegram_id,details_json) VALUES(?,?) ON CONFLICT(telegram_id) DO UPDATE SET details_json=excluded.details_json,updated_at=CURRENT_TIMESTAMP").bind(uid,JSON.stringify(merged)).run();} 
+   const tasks=[["profile","بررسی مشخصات پرونده"],["official_rules","مطالعه آخرین اطلاعیه رسمی انتخابات مربوط"],["eligibility","بررسی شرایط و مدارک موردنیاز از منبع رسمی"],["timeline","ثبت مهلت‌های رسمی در تقویم"],["security","بررسی امنیت حساب و دسترسی تیم"],["activity_plan","تنظیم برنامه اجرایی و مسئولیت‌ها"]];
+   for(const [key,label] of tasks){
+     await db.prepare("INSERT OR IGNORE INTO candidate_checklist_items(id,telegram_id,item_key,label,source_type) VALUES(?,?,?,?,'recommended')").bind(crypto.randomUUID(),uid,key,label).run();
+   }
+   const profile=await db.prepare("SELECT election_type,district,stage,professional_summary,updated_at FROM candidate_profiles WHERE telegram_id=?").bind(uid).first();
+   return {saved:true,profile,note:"الزامات قانونی باید از مرجع رسمی انتخابات و متناسب با نوع و زمان انتخابات تأیید شوند."};
+ }
+ if(action==="updateCandidateChecklist"){
+   const key=clean(payload.itemKey,40),status=payload.status;
+   if(!["todo","done"].includes(status))return {error:"Invalid status",status:400};
+   const r=await db.prepare("UPDATE candidate_checklist_items SET status=?,updated_at=CURRENT_TIMESTAMP WHERE telegram_id=? AND item_key=?").bind(status,uid,key).run();
+   if(!r.meta.changes)return {error:"Checklist item not found",status:404};
+   return {saved:true};
+ }
+ if(action==="createSupportTicket"){
+   const subject=clean(payload.subject,200),message=clean(payload.message,3000);
+   if(subject.length<3||message.length<5)return {error:"Invalid ticket",status:400};
+   const count=await db.prepare("SELECT COUNT(*) AS n FROM support_tickets WHERE telegram_id=? AND status IN ('open','reviewing')").bind(uid).first();
+   if(count.n>=5)return {error:"Too many open tickets",status:429};
+   const ticket=crypto.randomUUID();
+   await db.prepare("INSERT INTO support_tickets(id,telegram_id,subject,message) VALUES(?,?,?,?)").bind(ticket,uid,subject,message).run();
+   return {saved:true,id:ticket};
+ }
+ if(action==="mySupportTickets"){
+   const r=await db.prepare("SELECT id,subject,message,status,admin_reply,created_at,updated_at FROM support_tickets WHERE telegram_id=? ORDER BY created_at DESC LIMIT 50").bind(uid).all();
+   return {tickets:r.results};
+ }
+ if(action==="adminSupportQueue"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const r=await db.prepare("SELECT id,telegram_id,subject,message,status,admin_reply,created_at FROM support_tickets ORDER BY created_at DESC LIMIT 100").all();
+   return {tickets:r.results};
+ }
+ if(action==="adminReplyTicket"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const ticket=clean(payload.ticketId,64),status=clean(payload.status,16),reply=clean(payload.reply,3000);
+   if(!["open","reviewing","resolved","closed"].includes(status))return {error:"Invalid status",status:400};
+   const r=await db.prepare("UPDATE support_tickets SET status=?,admin_reply=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(status,reply,ticket).run();
+   if(!r.meta.changes)return {error:"Not found",status:404};
+   await logChange(db,uid,null,"reply","support",ticket);
+   return {saved:true};
+ }
+ if(action==="availablePlans"){
+   const plans=await db.prepare("SELECT id,name,description,max_members FROM service_plans WHERE active=1 ORDER BY max_members ASC").all();
+   return {plans:plans.results};
+ }
+ if(action==="adminEntitlements"){
+   if(!platformAdmin(env,uid))return {error:"Forbidden",status:403};
+   const [plans,entitlements]=await Promise.all([
+     db.prepare("SELECT id,name,description,max_members FROM service_plans WHERE active=1").all(),
+     db.prepare("SELECT e.workspace_id,w.name AS workspace_name,e.plan_id,e.expires_at FROM workspace_entitlements e JOIN workspaces w ON w.id=e.workspace_id ORDER BY e.updated_at DESC LIMIT 100").all()
+   ]);
+   return {plans:plans.results,entitlements:entitl
