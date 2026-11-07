@@ -166,3 +166,22 @@ const invalidOwnerResult=await outageProbe(invalidOwnerData);
 assert.equal(invalidOwnerResult.status,401,'non-numeric signed Telegram owner must be rejected');
 assert.equal(outageReads,readsBeforeInvalidOwner,'invalid owner must be rejected before D1');
 console.log('PASS phase15 invalid owner: signed non-numeric user id rejected before D1');
+
+
+// Boundary regression: signed but invalid Telegram IDs must never reach D1.
+// Avoid assuming that a valid HMAC implies a valid owner identity.
+for (const [label, id] of [
+ ['zero', 0], ['negative', -1], ['fractional', 1.5],
+ ['null', null], ['boolean', true], ['empty-string', ''],
+ ['array', [uid1]], ['object', {id: uid1}]
+]) {
+ const payload=signFields([
+  ['auth_date',String(nowSeconds)],
+  ['user',JSON.stringify({id,first_name:'Synthetic'})]
+ ],token);
+ const readsBefore=outageReads;
+ const response=await outageProbe(payload);
+ assert.equal(response.status,401,'signed invalid owner '+label+' must be rejected');
+ assert.equal(outageReads,readsBefore,'signed invalid owner '+label+' must not query D1');
+}
+console.log('PASS phase15 signed owner boundaries: eight invalid ID shapes rejected before D1');
