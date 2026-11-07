@@ -53,6 +53,23 @@ const fs=require('node:fs');
  if(await cards.nth(i).getAttribute('aria-expanded')!=='false')throw Error('Closed section remains announced expanded');
  if(!await cards.nth(i).evaluate(el=>el===document.activeElement))throw Error('Focus not restored');
  }
+ // Regression: tasks and performance reports must remain reachable from their distinct sections.
+ const expectedRoutes=[
+  {section:'برنامه و وظایف',route:'tasks'},
+  {section:'گزارش عملکرد',route:'reports'},
+  {section:'گزارش عملکرد',route:'progress'}
+ ];
+ for(const {section,route} of expectedRoutes){
+  const card=cards.filter({hasText:section});
+  if(await card.count()!==1)throw Error('Missing primary section '+section);
+  await card.click();
+  await page.locator('#functional-section').waitFor({state:'visible'});
+  if(await page.locator('#functional-heading').textContent()!==section)throw Error('Wrong heading for '+section);
+  const target=page.locator('#functional-section [data-functional-route="'+route+'"]');
+  if(await target.count()!==1 || !await target.isVisible())throw Error('Missing visible route '+route);
+  await page.keyboard.press('Escape');
+  if(!await card.evaluate(el=>el===document.activeElement))throw Error('Route focus restoration failed '+route);
+ }
  // Keyboard-only route: Enter opens the section and Escape returns focus.
  await cards.first().focus();
  await page.keyboard.press('Enter');
