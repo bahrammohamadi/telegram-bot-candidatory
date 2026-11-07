@@ -70,6 +70,14 @@ const fs=require('node:fs');
   await page.keyboard.press('Escape');
   if(!await card.evaluate(el=>el===document.activeElement))throw Error('Route focus restoration failed '+route);
  }
+ // The tasks panel must offer a direct, visible shortcut to existing performance reports.
+ const taskSection=cards.filter({hasText:'برنامه و وظایف'});
+ await taskSection.click();
+ const reportShortcut=page.locator('#functional-section [data-cross-section="tasks-to-reports"][data-functional-route="reports"]');
+ if(await reportShortcut.count()!==1 || !await reportShortcut.isVisible())throw Error('Missing tasks-to-reports shortcut');
+ if((await reportShortcut.textContent()).trim()!=='مشاهده گزارش عملکرد وظایف')throw Error('Incorrect report shortcut label');
+ await page.keyboard.press('Escape');
+ if(!await taskSection.evaluate(el=>el===document.activeElement))throw Error('Task shortcut section did not restore focus');
  // Keyboard-only route: Enter opens the section and Escape returns focus.
  await cards.first().focus();
  await page.keyboard.press('Enter');
