@@ -136,7 +136,16 @@ jobs:
               malformed_failures=$((malformed_failures+1))
             fi
           done
-          echo "Malformed Telegram initData failures: $malformed_failures / 2"
+          # Non-string initData is an untrusted type-confusion attempt, not a session.
+          # This synthetic payload must be rejected without a 500 or database access.
+          typed_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{"action":"overview","initData":{"auth_date":"1760000000","hash":"invalid"}}' "$base/api/progress" || true)
+          if [ "$typed_status" != "401" ]; then
+            echo "::error title=Non-string Telegram initData::HTTP $typed_status (expected 401)."
+            malformed_failures=$((malformed_failures+1))
+          fi
+          echo "Malformed Telegram initData failures: $malformed_failures / 3"
           echo "Health: HTTP $health_status; unexpected auth responses: $auth_failures; unavailable auth probes: $auth_unverified"
           # Persist only aggregate, non-sensitive diagnostics even when the gate fails.
           {
@@ -147,11 +156,11 @@ jobs:
             echo "- Health contract failures: $health_payload_failures"
             echo "- Unexpected auth responses: $auth_failures / 11"
             echo "- Unverified auth probes: $auth_unverified / 11"
-            echo "- Malformed initData failures: $malformed_failures / 2"
+            echo "- Malformed initData failures: $malformed_failures / 3"
             echo '- Production deployment: not performed'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$availability_failures" -gt 0 ] || [ "$health_payload_failures" -gt 0 ] || [ "$auth_failures" -gt 0 ] || [ "$auth_unverified" -gt 0 ] || [ "$malformed_failures" -gt 0 ]; then
-            echo "::error title=Integration gate not passed::Health and all 13 auth checks must pass independently before release."
+            echo "::error title=Integration gate not passed::Health and all 14 auth checks must pass independently before release."
             exit 1
           fi
-          echo 'PASS: isolated health, unsigned access denied for 10 routes, forged hash and two malformed initData payloads rejected.'
+          echo 'PASS: isolated health, unsigned access denied for 10 routes, forged hash and three malformed initData payloads rejected.'
