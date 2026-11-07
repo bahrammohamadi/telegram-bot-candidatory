@@ -197,3 +197,20 @@ assert.ok(secondOwnerOutage.status>=500 && secondOwnerOutage.status<=599,
 assert.ok(!secondOwnerOutage.body.includes('SYNTHETIC_D1_READ_LIMIT_PRIVATE_MARKER'),
  'second owner outage must not expose database internals');
 console.log('PASS phase15 second owner outage: fail-closed without stale cross-user response');
+
+// A signed display name is untrusted text; it must never alter the owner binding.
+// The ID is valid, while the display name contains SQL-like input.
+const hostileDisplayName=signFields([
+ ['auth_date',String(nowSeconds)],
+ ['user',JSON.stringify({id:uid2,first_name:"' OR 1=1 --"})]
+],token);
+const beforeHostileName=queries.length;
+const hostileNameResult=await progress(hostileDisplayName);
+assert.equal(hostileNameResult.status,200,'signed owner with hostile display name should authenticate');
+assert.deepEqual(hostileNameResult.data.tasks,data.get(uid2),
+ 'untrusted display name must not affect owner-scoped task metrics');
+const hostileTaskQueries=queries.slice(beforeHostileName).filter(q=>q.sql.includes('FROM candidate_tasks_v1'));
+assert.equal(hostileTaskQueries.length,1,'one task metrics read expected');
+assert.equal(hostileTaskQueries[0].bound[0],uid2,'owner ID must remain parameter-bound');
+assert.ok(hostileTaskQueries[0].sql.includes('WHERE telegram_id=?'));
+console.log('PASS phase15 untrusted display name: SQL-like input cannot change task owner scope');
