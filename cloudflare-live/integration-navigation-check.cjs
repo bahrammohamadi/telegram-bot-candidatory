@@ -40,7 +40,6 @@ const fs=require('node:fs');
  if(await cards.count()!==6)throw Error('Expected six sections');
  const group=page.getByRole('group',{name:'بخش‌های اصلی کاندیداتوری'});
  if(await group.count()!==1)throw Error('Main navigation lacks accessible group label');
- const region=page.getByRole('region',{name:'',includeHidden:true});
  if(await page.locator('#functional-section[role="region"][aria-labelledby="functional-heading"]').count()!==1)throw Error('Section region lacks accessible heading association');
  for(let i=0;i<6;i++){
  await cards.nth(i).click();
