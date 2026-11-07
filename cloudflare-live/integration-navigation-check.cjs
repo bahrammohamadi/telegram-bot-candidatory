@@ -76,6 +76,7 @@ const fs=require('node:fs');
  const reportShortcut=page.locator('#functional-section [data-cross-section="tasks-to-reports"][data-functional-route="reports"]');
  if(await reportShortcut.count()!==1 || !await reportShortcut.isVisible())throw Error('Missing tasks-to-reports shortcut');
  if((await reportShortcut.textContent()).trim()!=='رفتن به گزارش‌های تیم')throw Error('Incorrect report shortcut label');
+ if(!(await reportShortcut.getAttribute('aria-description')||'').includes('محاسبه خودکار عملکرد وظایف نیست'))throw Error('Shortcut accessibility description misrepresents task analytics');
  await page.keyboard.press('Escape');
  if(!await taskSection.evaluate(el=>el===document.activeElement))throw Error('Task shortcut section did not restore focus');
  // Keyboard-only route: Enter opens the section and Escape returns focus.
