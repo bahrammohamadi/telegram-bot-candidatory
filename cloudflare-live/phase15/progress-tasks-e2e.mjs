@@ -185,3 +185,15 @@ for (const [label, id] of [
  assert.equal(outageReads,readsBefore,'signed invalid owner '+label+' must not query D1');
 }
 console.log('PASS phase15 signed owner boundaries: eight invalid ID shapes rejected before D1');
+
+// Regression: an outage on a second valid signed account must not fall back
+// to the first account's cached result or silently report success.
+const readsBeforeSecondOwnerOutage=outageReads;
+const secondOwnerOutage=await outageProbe(signed(uid2));
+assert.ok(outageReads>readsBeforeSecondOwnerOutage,
+ 'second signed owner must attempt its own D1 read during outage');
+assert.ok(secondOwnerOutage.status>=500 && secondOwnerOutage.status<=599,
+ 'second signed owner must fail closed during D1 outage');
+assert.ok(!secondOwnerOutage.body.includes('SYNTHETIC_D1_READ_LIMIT_PRIVATE_MARKER'),
+ 'second owner outage must not expose database internals');
+console.log('PASS phase15 second owner outage: fail-closed without stale cross-user response');
