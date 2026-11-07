@@ -30,12 +30,25 @@ for(const id of [uid1,uid2]){
  assert.deepEqual(r.data.tasks,data.get(id));
  assert.equal(r.data.scope,'authenticated_test_account');
 }
+// Regression: alternating signed accounts must never reuse the previous owner's
+// cached metrics or query parameters across requests in one Worker isolate.
+const alternatingOwners=[uid2,uid1,uid2,uid1];
+for(const id of alternatingOwners){
+ const result=await progress(signed(id));
+ assert.equal(result.status,200,'alternating owner request must succeed');
+ assert.deepEqual(result.data.tasks,data.get(id),'cross-account task metrics leaked');
+}
+const alternatingQueries=queries.filter(q=>q.sql.includes('FROM candidate_tasks_v1'));
+assert.deepEqual(alternatingQueries.map(q=>q.bound[0]),[uid1,uid2,...alternatingOwners],
+ 'task queries must bind the currently authenticated owner on every request');
+console.log('PASS phase15 alternating accounts: no stale owner metrics across sequential signed requests');
+
 const forged=new URLSearchParams(signed(uid1));forged.set('user',JSON.stringify({id:uid2,first_name:'Synthetic'}));
 assert.equal((await progress(forged.toString())).status,401);
 const taskQueries=queries.filter(q=>q.sql.includes('FROM candidate_tasks_v1'));
-assert.equal(taskQueries.length,2);
+assert.equal(taskQueries.length,6);
 assert.ok(taskQueries.every(q=>q.sql.includes('WHERE telegram_id=?')),'task metrics must be owner-scoped');
-assert.deepEqual(taskQueries.map(q=>q.bound[0]),[uid1,uid2]);
+assert.deepEqual(taskQueries.map(q=>q.bound[0]),[uid1,uid2,...alternatingOwners]);
 assert.ok(taskQueries.every(q=>q.sql.includes("date('now','+210 minutes')")),'Tehran overdue cutoff');
 const src=readFileSync(new URL('./dist/integration-progress-tasks-worker.mjs',import.meta.url),'utf8');
 assert.ok(src.includes('وظایف شخصی'));
