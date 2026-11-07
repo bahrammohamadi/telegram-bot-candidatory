@@ -62,6 +62,16 @@ const fs=require('node:fs');
  await page.keyboard.press('Escape');
  if(!await page.locator('#functional-section').isHidden())throw Error('Keyboard Escape did not close section');
  if(!await cards.first().evaluate(el=>el===document.activeElement))throw Error('Keyboard Escape did not restore focus');
+ // Space must activate the same native button, and focus must return on Escape.
+ await cards.last().focus();
+ await page.keyboard.press('Space');
+ await page.locator('#functional-section').waitFor({state:'visible'});
+ if(await cards.last().getAttribute('aria-expanded')!=='true')throw Error('Space activation did not expand final section');
+ if(await page.locator('#functional-heading').textContent()!=='استودیوی محتوا')throw Error('Space activated the wrong section');
+ await page.keyboard.press('Escape');
+ if(!await page.locator('#functional-section').isHidden())throw Error('Space-opened section did not close');
+ if(await cards.last().getAttribute('aria-expanded')!=='false')throw Error('Space-opened section remains expanded');
+ if(!await cards.last().evaluate(el=>el===document.activeElement))throw Error('Space route did not restore focus');
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);
  if(overflow)throw Error('Horizontal overflow '+width);
  if(errors.length)throw Error(errors.join('\n'));
