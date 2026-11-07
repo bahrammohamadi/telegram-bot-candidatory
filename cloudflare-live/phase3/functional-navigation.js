@@ -25,7 +25,7 @@
  for(const [label,items] of sections){
   const card=button(label,()=>{for(const b of grid.children)b.setAttribute('aria-expanded','false');origin=card;card.setAttribute('aria-expanded','true');heading.textContent=label;rows.replaceChildren();
    for(const [text,route] of items){const link=button(text,()=>openLauncher(route),'action outline');link.dataset.functionalRoute=route;rows.append(link)}
-   if(label==='برنامه و وظایف'){const reportLink=button('رفتن به گزارش‌های تیم',()=>openLauncher('reports'),'action outline');reportLink.dataset.functionalRoute='reports';reportLink.dataset.crossSection='tasks-to-reports';rows.append(reportLink)}
+   if(label==='برنامه و وظایف'){const reportLink=button('رفتن به گزارش‌های تیم',()=>openLauncher('reports'),'action outline');reportLink.dataset.functionalRoute='reports';reportLink.dataset.crossSection='tasks-to-reports';reportLink.setAttribute('aria-description','این مسیر گزارش‌های موجود تیم را باز می‌کند و محاسبه خودکار عملکرد وظایف نیست.');rows.append(reportLink)}
    panel.hidden=false;heading.focus();
   },'action outline');card.setAttribute('aria-controls',panel.id);card.setAttribute('aria-expanded','false');grid.append(card);
  }
