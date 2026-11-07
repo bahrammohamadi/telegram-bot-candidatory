@@ -15,8 +15,8 @@
  const shell=document.createElement('section');shell.className='functional-home';
  const title=document.createElement('h2');title.textContent='امروز از کجا شروع می‌کنید؟';shell.append(title);
  const note=document.createElement('p');note.textContent='ثبت اطلاعات و امکانات شخصی به ورود معتبر از تلگرام نیاز دارد.';shell.append(note);
- const grid=document.createElement('div');grid.className='functional-grid';shell.append(grid);
- const panel=document.createElement('section');panel.id='functional-section';panel.hidden=true;
+ const grid=document.createElement('div');grid.className='functional-grid';grid.setAttribute('role','group');grid.setAttribute('aria-label','بخش‌های اصلی کاندیداتوری');shell.append(grid);
+ const panel=document.createElement('section');panel.id='functional-section';panel.hidden=true;panel.setAttribute('role','region');
  const heading=document.createElement('h3');heading.id='functional-heading';heading.tabIndex=-1;
  panel.setAttribute('aria-labelledby',heading.id);
  const rows=document.createElement('div');let origin;
