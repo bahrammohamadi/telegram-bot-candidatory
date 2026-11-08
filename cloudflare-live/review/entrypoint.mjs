@@ -8,7 +8,7 @@ const ENTRY_CSS=`
 .candidatory-review-entry{display:block;text-align:center;min-height:44px;padding:12px;margin:10px 12px 4px;border:1px solid #168677;border-radius:12px;background:#eef9f5;color:#064f47;font-size:14px;font-weight:700;text-decoration:none;line-height:1.7}
 .candidatory-review-entry:hover,.candidatory-review-entry:focus-visible{outline:3px solid #168677;outline-offset:2px}
 @media(prefers-color-scheme:dark){.candidatory-review-entry{background:#18372f;color:#d9f9ec;border-color:#6cc5ad}}
-\`;
+`;
 const onlyReviewPaths=(p)=>p==='/review'||p==='/review/'||p.startsWith('/review/api/');
 
 export default {
