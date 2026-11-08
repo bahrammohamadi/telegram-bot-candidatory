@@ -26,3 +26,5 @@ jobs:
         run: python3 cloudflare-live/phase15/test_task_performance_sql.py
       - name: Live task count edge-case regression
         run: python3 cloudflare-live/phase15/test_live_task_count_edge_cases.py
+      - name: Quota-light D1 health SQL regression
+        run: python3 cloudflare-live/phase15/test_health_readiness_sql.py
