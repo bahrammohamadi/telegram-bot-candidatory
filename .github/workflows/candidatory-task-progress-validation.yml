@@ -32,3 +32,6 @@ jobs:
         run: python3 cloudflare-live/phase15/test_assembled_task_sql_parity.py
       - name: Quota-light D1 health SQL regression
         run: python3 cloudflare-live/phase15/test_health_readiness_sql.py
+
+      - name: Fail-closed production release evidence gate regression
+        run: node cloudflare-live/phase15/release-evidence-gate.test.mjs
