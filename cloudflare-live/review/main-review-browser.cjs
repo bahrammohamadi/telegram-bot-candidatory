@@ -22,14 +22,13 @@ const {DatabaseSync}=require('node:sqlite');
   p.set('hash',createHmac('sha256',secret).update(msg).digest('hex'));
   return p.toString();
  }
- const initData=signed(9107124111);
  const env={TELEGRAM_BOT_TOKEN:token,REVIEW_DB,DB:new Proxy({}, {get(){throw Error('MAIN_DB_ACCESS_DURING_PREVIEW_TEST')}})};
  const browser=await chromium.launch();
  try{
   for(const width of [320,375,430]){
    const page=await browser.newPage({viewport:{width,height:850}}),jsErrors=[];
    page.on('pageerror',err=>jsErrors.push(err.message));
-   await page.addInitScript(id=>{window.Telegram={WebApp:{initData:id,ready(){},expand(){}}}},initData);
+   await page.addInitScript(id=>{window.Telegram={WebApp:{initData:id,ready(){},expand(){}}}},signed(9107124111+width));
    await page.route('**/*',async route=>{
     const request=route.request(),url=new URL(request.url());
     if(url.hostname==='telegram.org')return route.fulfill({status:200,contentType:'application/javascript',body:''});
