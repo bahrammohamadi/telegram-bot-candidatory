@@ -1,0 +1,41 @@
+name: Main-bot preview canary live HTTP
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - '.github/workflows/candidatory-main-canary-http.yml'
+      - 'cloudflare-live/review/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deployed-canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Verify real Cloudflare multi-module preview without touching production
+        env:
+          URL: https://candidatory-main-review-smoke.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 15 "$URL/" -o home.html
+          grep -q 'کاندیداتوری هوشمند' home.html
+          grep -q 'href="/review"' home.html
+          grep -q 'class="candidatory-review-entry"' home.html
+          curl --fail --show-error --silent --max-time 15 "$URL/style.css" -o main.css
+          grep -q 'candidatory-review-entry' main.css
+          curl --fail --show-error --silent --max-time 15 "$URL/app.js" -o old.js
+          test $(wc -c < old.js) -gt 25000
+          curl --fail --show-error --silent --max-time 15 "$URL/review" -o preview.html
+          grep -q 'main-review-notice' preview.html
+          grep -q 'id="tasks-panel"' preview.html
+          grep -q 'id="assistant-panel"' preview.html
+          grep -q 'id="studio-panel"' preview.html
+          grep -q "fetch('/review/api/tasks'" preview.html
+          grep -q 'بازگشت به نسخه اصلی' preview.html
+          status=$(curl --show-error --silent --max-time 15 -o response.json -w '%{http_code}' -X POST "$URL/review/api/tasks" -H "Content-Type: application/json" --data '{"action":"list","initData":"invalid"}')
+          test "$status" = "401"
+          node -e 'if(require("./response.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          status=$(curl --show-error --silent --max-time 15 -o response.json -w '%{http_code}' -X POST "$URL/review/api/assistant" -H "Content-Type: application/json" --data '{"action":"status","initData":"invalid"}')
+          test "$status" = "401"
+          echo "PASS: actual Cloudflare canary serves legacy main app, review UI, original static assets and signed-user guard"
