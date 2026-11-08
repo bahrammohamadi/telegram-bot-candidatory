@@ -5,6 +5,8 @@ on:
       - feature/cloudflare-parity-audit-2026-10-29
     paths:
       - '.github/workflows/integration-http-auth-smoke.yml'
+      - 'cloudflare-live/phase15/**'
+      - 'cloudflare-live/phase14/integration-deployed-snapshot-2026-11-03.mjs'
   pull_request:
     paths:
       - '.github/workflows/integration-http-auth-smoke.yml'
@@ -142,8 +144,8 @@ jobs:
             echo "- D1-backed health HTTP: $health_status"
             echo "- Failed health samples: $availability_failures"
             echo "- Health contract failures: $health_payload_failures"
-            echo "- Unexpected auth responses: $auth_failures / 11"
-            echo "- Unverified auth probes: $auth_unverified / 11"
+            echo "- Unexpected auth responses: $auth_failures / 14"
+            echo "- Unverified auth probes: $auth_unverified / 14"
             echo "- Malformed initData failures: $malformed_failures / 3"
             echo '- Production deployment: not performed'
           } >> "$GITHUB_STEP_SUMMARY"
