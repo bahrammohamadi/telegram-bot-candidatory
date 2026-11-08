@@ -50,6 +50,7 @@ const {DatabaseSync}=require('node:sqlite');
    const note=await page.locator('.main-review-notice').innerText();
    if(!note.includes('دیتابیس آزمایشی'))throw Error('No isolated-data warning');
    await page.locator('#form').waitFor({state:'visible'});
+   await page.locator('#form [name="district"]').fill('حوزه آزمایشی بدون اطلاعات واقعی');
    await page.locator('#save').click();
    await page.locator('#review').waitFor({state:'visible'});
    await page.locator('#go-dashboard').click();
