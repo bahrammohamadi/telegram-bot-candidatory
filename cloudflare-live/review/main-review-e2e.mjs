@@ -7,6 +7,7 @@ import legacy from './dist/legacy.mjs';
 
 const sql=new DatabaseSync(':memory:');
 sql.exec(readFileSync(new URL('../integration-schema.sql',import.meta.url),'utf8'));
+sql.exec(readFileSync(new URL('../phase13/assistant-migration.sql',import.meta.url),'utf8'));
 sql.exec(readFileSync(new URL('../phase14/tasks-migration.sql',import.meta.url),'utf8'));
 const REVIEW_DB={
  prepare(query){const s=sql.prepare(query);return {
