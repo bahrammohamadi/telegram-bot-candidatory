@@ -9,9 +9,9 @@ import unittest
 
 # Exact query text embedded in the current phase15 build-progress-tasks.mjs.
 LIVE_QUERY = """SELECT COUNT(*) AS total,
-COALESCE(SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),0) AS completed,
+COALESCE(SUM(CASE WHEN status IN ('done','completed') THEN 1 ELSE 0 END),0) AS completed,
 COALESCE(SUM(CASE WHEN status='doing' THEN 1 ELSE 0 END),0) AS doing,
-COALESCE(SUM(CASE WHEN (status IS NULL OR status!='done') AND due_date IS NOT NULL AND date(due_date)<date('now','+210 minutes') THEN 1 ELSE 0 END),0) AS overdue
+COALESCE(SUM(CASE WHEN (status IS NULL OR status NOT IN ('done','completed')) AND due_date IS NOT NULL AND date(due_date)<date('now','+210 minutes') THEN 1 ELSE 0 END),0) AS overdue
 FROM candidate_tasks_v1 WHERE telegram_id=?"""
 
 class TaskCountEdgeCases(unittest.TestCase):
@@ -29,6 +29,12 @@ class TaskCountEdgeCases(unittest.TestCase):
         self.assertEqual(self.count(101),(3,1,1,1))
     def test_owner_202_isolation(self):
         self.assertEqual(self.count(202),(1,0,0,1))
+    def test_completed_alias_is_not_overdue(self):
+        self.db.execute("PRAGMA query_only=OFF")
+        self.db.execute("INSERT INTO candidate_tasks_v1 VALUES (101,'completed','2000-01-01')")
+        self.db.execute("PRAGMA query_only=ON")
+        self.assertEqual(self.count(101),(4,2,1,1))
+
     def test_unknown_owner(self):
         self.assertEqual(self.count(404),(0,0,0,0))
     def test_sql_injection_owner(self):
