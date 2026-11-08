@@ -11,7 +11,7 @@ import unittest
 LIVE_QUERY = """SELECT COUNT(*) AS total,
 COALESCE(SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),0) AS completed,
 COALESCE(SUM(CASE WHEN status='doing' THEN 1 ELSE 0 END),0) AS doing,
-COALESCE(SUM(CASE WHEN status!='done' AND due_date<date('now','+210 minutes') THEN 1 ELSE 0 END),0) AS overdue
+COALESCE(SUM(CASE WHEN (status IS NULL OR status!='done') AND due_date IS NOT NULL AND date(due_date)<date('now','+210 minutes') THEN 1 ELSE 0 END),0) AS overdue
 FROM candidate_tasks_v1 WHERE telegram_id=?"""
 
 class TaskCountEdgeCases(unittest.TestCase):
@@ -36,20 +36,18 @@ class TaskCountEdgeCases(unittest.TestCase):
     def test_missing_bound_owner_fails(self):
         with self.assertRaises(sqlite3.ProgrammingError):
             self.db.execute(LIVE_QUERY)
-    def test_null_status_discrepancy_documented(self):
-        # Current live query counts NULL status in total but NOT overdue.
-        # This is a known reporting inconsistency; do not silently claim it fixed.
+    def test_null_status_overdue_counted(self):
+        # A task with no status is open and can be overdue.
         self.db.execute("PRAGMA query_only=OFF")
         self.db.execute("INSERT INTO candidate_tasks_v1 VALUES (101,NULL,'2000-01-01')")
         self.db.execute("PRAGMA query_only=ON")
-        self.assertEqual(self.count(101),(4,1,1,1))
-    def test_timestamp_due_date_discrepancy_documented(self):
-        # Lexicographic timestamp vs date-only comparison can differ from
-        # normalized date(due_date); explicit regression captures current behavior.
+        self.assertEqual(self.count(101),(4,1,1,2))
+    def test_timestamp_due_date_normalized(self):
+        # Normalize timestamp due dates before comparison.
         self.db.execute("PRAGMA query_only=OFF")
         self.db.execute("INSERT INTO candidate_tasks_v1 VALUES (101,'todo','2000-01-01T12:00:00Z')")
         self.db.execute("PRAGMA query_only=ON")
-        self.assertEqual(self.count(101),(4,1,1,2))
+        self.assertEqual(self.count(101),(4,1,1,3))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
