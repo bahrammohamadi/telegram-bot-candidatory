@@ -21,3 +21,9 @@
 
 ## Release decision
 **Production NO-GO** until stable HTTP health, staging mobile checks, real-account isolation, accessibility, private receipts, permissions, backup, and explicit production approval.
+
+## 2026-11-08 — additional fail-closed health regression
+- Commit `0a2f36bd37f2b5de49ab9a27e3235642cf75a08d` adds two independent negative tests to `health-worker-e2e.mjs`: asynchronous D1 missing-table rejection and absent DB binding. Both must return HTTP 503 with exactly `{"error":"DB_UNAVAILABLE"}`, without SQL exception or signing-secret disclosure.
+- The latest integration HTTP smoke [42486941451](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42486941451) remains red; staging HTTP [42486941446](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42486941446) remains red. This is **not** a deployment fix.
+- Cloudflare deployment read-back still shows `f1eb351c-c3ee-4e46-bb58-b8cadb6e769b` with `DB` bound to the isolated D1; no script, schema, production, news Worker or channel changes.
+- Rollback: revert this regression-test commit (and this documentation commit if desired). No Cloudflare rollback is necessary because no deployment was performed. Keep production release blocked.
