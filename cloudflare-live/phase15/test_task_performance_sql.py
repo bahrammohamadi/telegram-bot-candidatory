@@ -44,6 +44,15 @@ class OwnerScopedPerformanceTests(unittest.TestCase):
         with self.assertRaises(sqlite3.ProgrammingError):
             self.db.execute(SQL)
 
+    def test_sql_injection_like_owner_cannot_escape_scope(self):
+        # Parameter binding must not interpret this as SQL or return other owners.
+        self.assertEqual(self.counts("101 OR 1=1"), (0, 0, 0, 0))
+        self.assertEqual(self.counts("101' UNION SELECT 1,1,1,1 --"), (0, 0, 0, 0))
+
+    def test_owner_is_required_even_with_null_parameter(self):
+        # A missing verified Telegram identity must never aggregate all tasks.
+        self.assertEqual(self.counts(None), (0, 0, 0, 0))
+
     def test_read_only(self):
         before = self.db.execute("SELECT COUNT(*) FROM candidate_tasks_v1").fetchone()
         self.counts(101)
