@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {check} from './release-evidence-gate.mjs';
+const sha='a'.repeat(40);
+const keys=['phase15_ci','integration_http','staging_http','mobile_qa','telegram_two_accounts','owner_isolation','admin_permissions','receipt_privacy','payment_sandbox','ai_consent_budget','accessibility','security_review','backup_restore','rollback_rehearsal','production_approval'];
+const evidence={target:'production',commit:sha,gates:Object.fromEntries(keys.map(k=>[k,{passed:true,evidence:'https://example.test/evidence/'+k}]))};
+evidence.gates.production_approval.approval_scope='deploy this exact commit';
+evidence.gates.production_approval.approved_commit=sha;
+assert.deepEqual(check(evidence),[]);
+assert.ok(check({}).length>0);
+for(const k of keys){const bad=structuredClone(evidence);delete bad.gates[k];assert.ok(check(bad).length>0,k);}
+for(const k of keys){const bad=structuredClone(evidence);bad.gates[k].passed=false;assert.ok(check(bad).length>0,k);}
+for(const k of keys){const bad=structuredClone(evidence);bad.gates[k].evidence='';assert.ok(check(bad).length>0,k);}
+for(const change of [e=>e.target='integration',e=>e.commit='latest',e=>e.gates.production_approval.approved_commit='b'.repeat(40),e=>e.gates.production_approval.approval_scope='general permission']){const bad=structuredClone(evidence);change(bad);assert.ok(check(bad).length>0);}
+console.log('PASS: fail-closed release evidence checks, 15 required gates and exact-commit approval');
