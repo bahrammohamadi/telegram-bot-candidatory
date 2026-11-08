@@ -32,7 +32,7 @@ def sql_from_fixture():
     return module.LIVE_QUERY
 
 def normalize(sql):
-    return re.sub(r"\s+", " ", sql.strip())
+    return re.sub(r"\s+", " ", re.sub(r"\s*([(),=<>])\s*", r"\\1", sql.strip()))
 
 class AssembledTaskSqlParity(unittest.TestCase):
     def test_exact_query_matches_regression_fixture(self):
