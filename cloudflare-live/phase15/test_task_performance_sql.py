@@ -5,9 +5,14 @@ import sqlite3
 import unittest
 
 SQL_PATH = Path(__file__).with_name("task-performance-owner-scoped.sql")
-SQL = SQL_PATH.read_text(encoding="utf-8")
-# Remove trailing SQL comments; retain the actual parameterized statement.
-SQL = SQL.split(";")[0] + ";"
+SQL_TEXT = SQL_PATH.read_text(encoding="utf-8")
+# SQL file starts with comments containing semicolons; splitting before locating
+# SELECT silently turned the test into a comment-only statement.
+import re
+match = re.search(r"(?im)^SELECT\\b", SQL_TEXT)
+if match is None:
+    raise RuntimeError("Task performance SQL SELECT statement missing")
+SQL = SQL_TEXT[match.start():].split(";", 1)[0].strip() + ";"
 
 class OwnerScopedPerformanceTests(unittest.TestCase):
     def setUp(self):
