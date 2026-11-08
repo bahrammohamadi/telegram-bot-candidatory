@@ -21,6 +21,9 @@ def sql_from_worker():
         r'db\.prepare\("(SELECT COUNT\(\*\) AS total,[^"\n]*?FROM candidate_tasks_v1 WHERE telegram_id=\?)"\)',
         source,
     )
+    # The legacy Worker also contains a task-count query for another route.
+    # Match only the phase15 progress query with its exact completed/overdue aliases.
+    matches = [q for q in matches if "AS completed" in q and "AS doing" in q and "AS overdue" in q]
     if len(matches) != 1:
         raise AssertionError(f"Expected exactly one owner-scoped task SQL, got {len(matches)}")
     return matches[0]
