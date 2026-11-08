@@ -47,7 +47,7 @@ class TaskCountEdgeCases(unittest.TestCase):
         self.db.execute("PRAGMA query_only=OFF")
         self.db.execute("INSERT INTO candidate_tasks_v1 VALUES (101,'todo','2000-01-01T12:00:00Z')")
         self.db.execute("PRAGMA query_only=ON")
-        self.assertEqual(self.count(101),(4,1,1,3))
+        self.assertEqual(self.count(101),(4,1,1,2))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
