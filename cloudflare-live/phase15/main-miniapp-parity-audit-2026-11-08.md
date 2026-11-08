@@ -14,3 +14,10 @@ Run `node cloudflare-live/phase15/main-miniapp-parity-audit.mjs` against the pin
 
 ## Rollback and authorization
 This commit adds only audit files, no migrations, secrets, bindings, or deployments. Roll back by reverting the audit commit. For integration Worker rollback use the pinned phase-14 snapshot and documented prior deployment; do not touch production or real D1. Production deployment requires separate explicit user approval for an exact tested commit.
+
+## CI enforcement (2026-11-08)
+The isolated task progress GitHub Actions workflow now runs `node cloudflare-live/phase15/main-miniapp-parity-audit.mjs` on every relevant push. Its PASS confirms **only** internal isolated task/progress page consistency; the printed `NO-GO` remains a production release block. Do not interpret a green workflow as evidence of parity with the live main Telegram Mini App.
+
+**Evidence before this change:** development HEAD `102ab17855474e43ae6f673d7e86f0c6c26c497e`; phase15 CI passed (`42512519153`), isolated HTTP auth failed (`42512523895`), staging HTTP smoke failed (`42512524026`), source parity passed (`42512523857`). Cloudflare read-only deployment list confirmed the latest isolated deployment `f1eb351c-c3ee-4e46-bb58-b8cadb6e769b` (2026-11-06T07:58:50Z). No Worker or D1 changes were made.
+
+**Rollback:** revert the workflow-only commit to remove the parity CI step, and revert this documentation commit if necessary. Neither revert changes the isolated Worker, D1, production bot, or Telegram channel. Do not deploy phase15 until HTTP health failures and live Mini App parity are independently resolved.
