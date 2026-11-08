@@ -24,3 +24,5 @@ jobs:
         run: node cloudflare-live/phase15/progress-tasks-e2e.mjs
       - name: Owner-scoped task performance SQL regression
         run: python3 cloudflare-live/phase15/test_task_performance_sql.py
+      - name: Live task count edge-case regression
+        run: python3 cloudflare-live/phase15/test_live_task_count_edge_cases.py
