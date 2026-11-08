@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Phase 15 read-only report SQL regression checks. No network or D1 writes."""
+from pathlib import Path
+import sqlite3
+import unittest
+
+SQL_PATH = Path(__file__).with_name("task-performance-owner-scoped.sql")
+SQL = SQL_PATH.read_text(encoding="utf-8")
+# Remove trailing SQL comments; retain the actual parameterized statement.
+SQL = SQL.split(";")[0] + ";"
+
+class OwnerScopedPerformanceTests(unittest.TestCase):
+    def setUp(self):
+        self.db = sqlite3.connect(":memory:")
+        self.db.execute("CREATE TABLE candidate_tasks_v1 (telegram_id INTEGER, status TEXT, due_date TEXT)")
+        self.db.executemany(
+            "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
+            [(101, "done", "2020-01-01"), (101, None, "2020-01-01T12:00:00Z"),
+             (101, "open", "2099-01-01"), (202, "done", "2020-01-01"),
+             (202, "open", "2020-01-01"), (303, None, None)]
+        )
+
+    def counts(self, owner):
+        return tuple(self.db.execute(SQL, (owner,)).fetchone())
+
+    def test_owner_101(self):
+        self.assertEqual(self.counts(101), (3, 1, 2, 1))
+
+    def test_owner_202_isolated(self):
+        self.assertEqual(self.counts(202), (2, 1, 1, 1))
+
+    def test_null_due_date_not_overdue(self):
+        self.assertEqual(self.counts(303), (1, 0, 1, 0))
+
+    def test_missing_owner_no_leak(self):
+        self.assertEqual(self.counts(404), (0, 0, 0, 0))
+
+    def test_owner_parameter_required(self):
+        with self.assertRaises(sqlite3.ProgrammingError):
+            self.db.execute(SQL)
+
+    def test_read_only(self):
+        before = self.db.execute("SELECT COUNT(*) FROM candidate_tasks_v1").fetchone()
+        self.counts(101)
+        after = self.db.execute("SELECT COUNT(*) FROM candidate_tasks_v1").fetchone()
+        self.assertEqual(before, after)
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
