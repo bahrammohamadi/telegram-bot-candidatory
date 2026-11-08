@@ -33,5 +33,7 @@ jobs:
       - name: Quota-light D1 health SQL regression
         run: python3 cloudflare-live/phase15/test_health_readiness_sql.py
 
+      - name: Main Mini App parity boundary (must remain NO-GO)
+        run: node cloudflare-live/phase15/main-miniapp-parity-audit.mjs
       - name: Fail-closed production release evidence gate regression
         run: node cloudflare-live/phase15/release-evidence-gate.test.mjs
