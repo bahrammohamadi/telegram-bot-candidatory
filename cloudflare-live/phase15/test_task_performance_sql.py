@@ -9,7 +9,7 @@ SQL_TEXT = SQL_PATH.read_text(encoding="utf-8")
 # SQL file starts with comments containing semicolons; splitting before locating
 # SELECT silently turned the test into a comment-only statement.
 import re
-match = re.search(r"(?im)^SELECT\\b", SQL_TEXT)
+match = re.search(r"(?im)^SELECT\b", SQL_TEXT)
 if match is None:
     raise RuntimeError("Task performance SQL SELECT statement missing")
 SQL = SQL_TEXT[match.start():].split(";", 1)[0].strip() + ";"
