@@ -53,11 +53,19 @@ class OwnerScopedPerformanceTests(unittest.TestCase):
         # A missing verified Telegram identity must never aggregate all tasks.
         self.assertEqual(self.counts(None), (0, 0, 0, 0))
 
-    def test_read_only(self):
-        before = self.db.execute("SELECT COUNT(*) FROM candidate_tasks_v1").fetchone()
-        self.counts(101)
-        after = self.db.execute("SELECT COUNT(*) FROM candidate_tasks_v1").fetchone()
-        self.assertEqual(before, after)
+    def test_read_only_with_sqlite_query_only(self):
+        # Row counts alone cannot detect UPDATE side effects.
+        self.db.execute("PRAGMA query_only = ON")
+        self.assertEqual(self.counts(101), (3, 1, 2, 1))
+        with self.assertRaises(sqlite3.OperationalError):
+            self.db.execute("UPDATE candidate_tasks_v1 SET status = 'done' WHERE telegram_id = 101")
+
+    def test_completed_timestamp_is_not_overdue(self):
+        self.db.execute(
+            "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
+            (101, "completed", "2000-01-01T00:00:00Z"),
+        )
+        self.assertEqual(self.counts(101), (4, 2, 2, 1))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
