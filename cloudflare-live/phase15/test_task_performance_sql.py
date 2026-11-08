@@ -60,6 +60,20 @@ class OwnerScopedPerformanceTests(unittest.TestCase):
         with self.assertRaises(sqlite3.OperationalError):
             self.db.execute("UPDATE candidate_tasks_v1 SET status = 'done' WHERE telegram_id = 101")
 
+    def test_future_due_date_is_not_overdue(self):
+        self.db.execute(
+            "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
+            (101, "in_progress", "2099-12-31T23:59:59Z"),
+        )
+        self.assertEqual(self.counts(101), (4, 1, 3, 1))
+
+    def test_invalid_due_date_does_not_count_as_overdue(self):
+        self.db.execute(
+            "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
+            (101, "open", "not-a-date"),
+        )
+        self.assertEqual(self.counts(101), (4, 1, 3, 1))
+
     def test_completed_timestamp_is_not_overdue(self):
         self.db.execute(
             "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
