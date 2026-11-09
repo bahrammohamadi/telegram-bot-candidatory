@@ -59,7 +59,7 @@ test('a signed signature field does not bypass hash verification', async () => {
 });
 
 test('signed initData requires an explicit canonical decimal auth_date', async () => {
-  for (const value of [null, '', ' ', '1e3', '+1794180000', '1794180000.0', '0x6af0c320', '1794180000abc']) {
+  for (const value of [null, '', ' ', '1e3', '+1794180000', '1794180000.0', '0x6af0c320', '1794180000abc', '01794180000', '0001794180000', '0000000000']) {
     const fields = [['user', user]];
     if (value !== null) fields.push(['auth_date', value]);
     assert.equal(await validateInitData(await signed(fields), token, now), null, String(value));
