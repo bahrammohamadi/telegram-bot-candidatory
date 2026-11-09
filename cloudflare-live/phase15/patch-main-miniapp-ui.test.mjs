@@ -18,5 +18,14 @@ try{
  assert.equal(spawnSync(process.execPath,[script,output,join(dir,'again.mjs')]).status,1,'No double injection');
  writeFileSync(input,'const TEST_PAGE="invalid";');
  assert.equal(spawnSync(process.execPath,[script,input,output]).status,1,'Unexpected HTML must fail closed');
+ const multipart=(names)=>{const boundary='--safe-test-boundary';return names.map(name=>boundary+'\r\nContent-Disposition: form-data; name="'+name+'"\r\n\r\n'+(name==='preview.mjs'?original:'export default {fetch(){return new Response("ok")}};')+'\r\n').join('')+boundary+'--\r\n'};
+ writeFileSync(input,multipart(['legacy.mjs','preview.mjs','entrypoint.mjs']));
+ const multi=spawnSync(process.execPath,[script,input,output],{encoding:'utf8'});
+ assert.equal(multi.status,0,multi.stderr);
+ const multiOut=readFileSync(output,'utf8');
+ assert.match(multiOut,/Candidatory mobile visual refresh/);
+ assert.equal(multiOut.split('Content-Disposition: form-data; name="legacy.mjs"')[1].split('Content-Disposition: form-data; name="preview.mjs"')[0],multipart(['legacy.mjs','preview.mjs','entrypoint.mjs']).split('Content-Disposition: form-data; name="legacy.mjs"')[1].split('Content-Disposition: form-data; name="preview.mjs"')[0]);
+ writeFileSync(input,multipart(['legacy.mjs','preview.mjs','unexpected.mjs']));
+ assert.equal(spawnSync(process.execPath,[script,input,output]).status,1,'Unknown module must fail closed');
  console.log('PASS: main miniapp CSS-only patch, no API changes, duplicate and malformed inputs rejected');
 }finally{rmSync(dir,{recursive:true,force:true})}
