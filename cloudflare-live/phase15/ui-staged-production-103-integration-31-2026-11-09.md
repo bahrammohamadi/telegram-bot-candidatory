@@ -3,7 +3,7 @@
 ## Status
 - **Main Worker `candidatory-miniapp-api`: candidate version 103 UPLOADED, NOT deployed.** Version ID: `14e9e89a-d81f-4cb3-9e02-bdf7f3d793d1`.
 - **Main live deployment unchanged**: `3d172eb9-eca1-45e5-9070-760970d1f8c1`, 100% on prior version `32d33109-8e48-4c9e-a38a-4dd91012967b` (#102). That prior version is the rollback target.
-- **Integration Worker `candidatory-miniapp-integration`: visual patch DEPLOYED to test only**. Deployment ID `578480c4-2c69-41bd-97ac-ab77a7aba185`; 100% on version `5e11406e-12a0-49d8-95cb-a7df9120fc51` (#31). Previous test deployment `f1eb351c-c3ee-4e46-bb58-b8cadb6e769b`.
+- **Integration Worker `candidatory-miniapp-integration`: visual patch DEPLOYED to test only**. Deployment ID `578480c4-2c69-41bd-97ac-ab77a7aba185`; 100% on version `5e11406e-12a0-49d8-95cb-a7df9120fc51` (#31). Previous test deployment `f1eb351c-c3ee-4e46-bb58-b8cadb6e769b` on version `fc7588b9-979c-4d51-a7a2-8e99effe0fd4`.
 - No D1 migrations, real customer data changes, Telegram bot API calls, bulk notifications, AI activity, or production deployment occurred.
 
 ## Verified change scope
@@ -20,6 +20,6 @@
 4. Deploy exactly main version `14e9e89a-d81f-4cb3-9e02-bdf7f3d793d1` after gates, and immediately verify version percentage, static HTML/CSS presence, signed-user APIs and cross-account isolation. No production D1 change.
 
 ## Rollback commands (Cloudflare deployments API)
-If test UI has a problem, POST `/accounts/{account_id}/workers/scripts/candidatory-miniapp-integration/deployments` with `{"strategy":"percentage","versions":[{"version_id":"<previous test version id resolved from GET previous deployment>","percentage":100}]}`. Do not guess a version ID.
+If test UI has a problem, POST `/accounts/{account_id}/workers/scripts/candidatory-miniapp-integration/deployments` with `{"strategy":"percentage","versions":[{"version_id":"fc7588b9-979c-4d51-a7a2-8e99effe0fd4","percentage":100}]}`. Do not guess a version ID.
 For any future main deployment, restore version `32d33109-8e48-4c9e-a38a-4dd91012967b` to 100% using the corresponding main Worker deployment endpoint. Confirm that deployed version and handlers/bindings match the previous snapshot.
 Do not change `candidatory-news-bot` or the channel.
