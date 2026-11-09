@@ -1,7 +1,9 @@
 const encoder=new TextEncoder();
 export async function validateInitData(initData,token,now=Math.floor(Date.now()/1000)){
  if(!initData||!token)return null;
- const p=new URLSearchParams(initData);const hash=p.get('hash'),auth=Number(p.get('auth_date'));
+ const p=new URLSearchParams(initData);const hash=p.get('hash'),rawAuth=p.get('auth_date');
+ if(!rawAuth||!/^\d{1,12}$/.test(rawAuth))return null;
+ const auth=Number(rawAuth);
  if(!hash||!Number.isSafeInteger(auth)||auth>now+60||auth<now-3600)return null;
  const seen=new Set();const entries=[];
  for(const [k,v] of p){if(seen.has(k))return null;seen.add(k);if(k!=='hash'&&k!=='signature')entries.push([k,v]);}
