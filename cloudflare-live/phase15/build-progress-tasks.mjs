@@ -23,6 +23,11 @@ let patched=source.replace(anchor,'const [profile,goals,calendar,practice,quizze
  .replace(responseAnchor,responseAnchor+',\n    tasks:{total:safeNumber(tasks?.total),completed:safeNumber(tasks?.completed),doing:safeNumber(tasks?.doing),overdue:safeNumber(tasks?.overdue)}');
 html=html.replace(reportAnchor,reportAnchor+"\n  progressCard('وظایف شخصی',progressFormat(data.tasks.completed)+' / '+progressFormat(data.tasks.total),progressFormat(data.tasks.doing)+' در حال انجام؛ '+progressFormat(data.tasks.overdue)+' عقب‌افتاده');")
  .replace(exportAnchor,exportAnchor+"\n    'وظایف: '+data.tasks.completed+' از '+data.tasks.total+' انجام‌شده؛ '+data.tasks.doing+' در حال انجام؛ '+data.tasks.overdue+' عقب‌افتاده',");
+// Visual-only refresh of the same embedded miniapp, preserving all existing routes and handlers.
+const visualCss=read('./mobile-ui-refresh.css');
+if(html.split('</style>').length!==2)throw Error('Expected one embedded style block');
+if(!visualCss.includes('.modules button')||!visualCss.includes('@media(max-width:420px)'))throw Error('Incomplete responsive theme');
+html=html.replace('</style>','\\n'+visualCss+'</style>');
 patched=patched.replace(healthQuery,healthQueryReplacement).replace(healthResult,healthResultReplacement);
 patched=patched.replace(originalHtml[0],'const TEST_PAGE='+JSON.stringify(html)+';\n');
 if(!patched.includes(healthQueryReplacement)||!patched.includes(healthResultReplacement))throw Error('Quota-light health patch failed');
