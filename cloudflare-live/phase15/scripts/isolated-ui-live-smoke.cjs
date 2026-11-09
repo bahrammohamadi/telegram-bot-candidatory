@@ -70,7 +70,7 @@ const url = 'https://candidatory-miniapp-integration.lasvaram-candidatory.worker
           }else if(name==='review'){
             document.getElementById('review').hidden=false;
             document.getElementById('steps').hidden=false;
-            document.getElementById('summary').textContent='نوع انتخابات: شوراهای اسلامی\\nمرحله: برنامه‌ریزی\\nحوزه: حوزه آزمایشی\\nمعرفی: متن ساختگی';
+            document.getElementById('summary').textContent='نوع انتخابات: شوراهای اسلامی\nمرحله: برنامه‌ریزی\nحوزه: حوزه آزمایشی\nمعرفی: متن ساختگی';
           }else{
             document.getElementById('dashboard').hidden=false;
           }
