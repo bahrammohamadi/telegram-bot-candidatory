@@ -15,7 +15,7 @@
 
 ## Remaining gates for main deployment
 1. Real Telegram WebView smoke test of the exact candidate with at least two authorized test accounts, including signed session isolation and mobile layout on iOS/Android.
-2. A successful HTTP response/screenshot from deployed test UI. The current tool environment rejects public `workers.dev` hosts with HTTP 403 at its outbound access policy; this was not an application-generated 403. Do not claim visual validation.
+2. **Completed for the deployed test Worker (anonymous mode)**: GitHub Actions [42593378806](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42593378806) loaded the actual isolated Worker with Chromium and passed HTTP 200, RTL, injected CSS marker, no horizontal overflow, and minimum touch target checks at 320px, 375px, and 430px. Anonymous screenshot artifact `isolated-miniapp-mobile-rtl` (artifact ID `13662597763`). This does not validate authenticated Telegram WebView behavior; direct requests from the assistant's connector remain restricted by outbound policy.
 3. Final review of release checklist and rollback. The explicit approval to change the *visual design* was provided, but security/testing prerequisites are not waived.
 4. Deploy exactly main version `14e9e89a-d81f-4cb3-9e02-bdf7f3d793d1` after gates, and immediately verify version percentage, static HTML/CSS presence, signed-user APIs and cross-account isolation. No production D1 change.
 
@@ -23,3 +23,7 @@
 If test UI has a problem, POST `/accounts/{account_id}/workers/scripts/candidatory-miniapp-integration/deployments` with `{"strategy":"percentage","versions":[{"version_id":"fc7588b9-979c-4d51-a7a2-8e99effe0fd4","percentage":100}]}`. Do not guess a version ID.
 For any future main deployment, restore version `32d33109-8e48-4c9e-a38a-4dd91012967b` to 100% using the corresponding main Worker deployment endpoint. Confirm that deployed version and handlers/bindings match the previous snapshot.
 Do not change `candidatory-news-bot` or the channel.
+
+## Latest source branch validation
+
+At branch SHA `47c7cb491f4dfed58ef5df8d1c845a7ffc990245`, [Mini App checks](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42593386908), [HTTP auth](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42593386959), [Cloudflare parity](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42593386813), and [Staging HTTP](https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/42593386816) all passed. Nevertheless, the full 15-item production release evidence gate remains NO-GO: private receipts, admin permission review, payment sandbox, AI consent, backup-restore exercise, and two real-account Telegram WebView evidence have not all been supplied. Do not mark them complete or deploy production.
