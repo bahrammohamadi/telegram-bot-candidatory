@@ -35,6 +35,8 @@ jobs:
 
       - name: Isolated mobile navigation and same-origin UX regression
         run: node cloudflare-live/phase15/miniapp-mobile-navigation-regression.mjs
+      - name: Offline parity probe target-safety regression
+        run: node cloudflare-live/phase15/scripts/miniapp-parity-probe.test.mjs
       - name: Main Mini App parity boundary (must remain NO-GO)
         run: node cloudflare-live/phase15/main-miniapp-parity-audit.mjs
       - name: Fail-closed production release evidence gate regression
