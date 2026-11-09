@@ -2,7 +2,7 @@ const encoder=new TextEncoder();
 export async function validateInitData(initData,token,now=Math.floor(Date.now()/1000)){
  if(!initData||!token)return null;
  const p=new URLSearchParams(initData);const hash=p.get('hash'),rawAuth=p.get('auth_date');
- if(!rawAuth||!/^\d{1,12}$/.test(rawAuth))return null;
+ if(!rawAuth||!/^[1-9][0-9]{0,11}$/.test(rawAuth))return null;
  const auth=Number(rawAuth);
  if(!hash||!Number.isSafeInteger(auth)||auth>now+60||auth<now-3600)return null;
  const seen=new Set();const entries=[];
