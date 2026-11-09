@@ -1,0 +1,35 @@
+name: Isolated deployed miniapp visual smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/phase15/mobile-ui-refresh.css'
+      - 'cloudflare-live/phase15/scripts/isolated-ui-live-smoke.cjs'
+      - '.github/workflows/candidatory-isolated-ui-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  mobile-visual:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test driver
+        run: npm install --no-save --prefix /tmp/candidatory-ui playwright@1.56.1
+      - name: Verify deployed test Worker CSS RTL touch and overflow
+        env:
+          NODE_PATH: /tmp/candidatory-ui/node_modules
+        run: node cloudflare-live/phase15/scripts/isolated-ui-live-smoke.cjs
+      - name: Preserve anonymous test screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-miniapp-mobile-rtl
+          path: integration-ui-screenshots/
+          if-no-files-found: ignore
