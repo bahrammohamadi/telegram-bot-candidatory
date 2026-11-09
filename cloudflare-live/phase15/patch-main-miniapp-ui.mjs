@@ -7,6 +7,22 @@ const [sourcePath,outputPath]=process.argv.slice(2);
 if(!sourcePath||!outputPath||resolve(sourcePath)===resolve(outputPath))throw Error('Usage: node patch-main-miniapp-ui.mjs <reviewed-source.mjs> <output.mjs>');
 const original=readFileSync(sourcePath,'utf8');
 const css=readFileSync(new URL('./mobile-ui-refresh.css',import.meta.url),'utf8');
+// Cloudflare returns a multipart bundle. Validate its exact three-module layout
+// before modifying the preview module; reject any unknown/changed bundle.
+if(original.startsWith('--')){
+ const lineEnd=original.indexOf('\r\n');
+ if(lineEnd<0)throw Error('Malformed multipart boundary');
+ const boundary=original.slice(0,lineEnd);
+ const parts=original.split(boundary).slice(1,-1);
+ const modules=parts.map(part=>{
+  const cut=part.indexOf('\r\n\r\n');
+  if(cut<0)throw Error('Malformed multipart module');
+  return {name:(part.slice(0,cut).match(/name="([^"]+)"/)||[])[1],body:part.slice(cut+4)};
+ });
+ if(modules.length!==3||modules.map(x=>x.name).sort().join(',')!=='entrypoint.mjs,legacy.mjs,preview.mjs')throw Error('Unexpected multipart modules');
+ if(!modules.find(x=>x.name==='preview.mjs').body.includes('const TEST_PAGE='))throw Error('Missing preview module HTML');
+ if(modules.some(x=>x.name!=='preview.mjs'&&x.body.includes('const TEST_PAGE=')))throw Error('Ambiguous HTML in non-preview module');
+}
 const pattern=/const TEST_PAGE=("(?:\\.|[^"\\])*");/g;
 const matches=[...original.matchAll(pattern)];
 if(matches.length!==1)throw Error('Fail closed: expected exactly one TEST_PAGE JSON string');
