@@ -1,0 +1,31 @@
+name: Phase 15 Telegram signed initData regression
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/tests/telegram-initdata-synthetic-security.test.mjs'
+      - '.github/workflows/phase15-initdata-regression.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/tests/telegram-initdata-synthetic-security.test.mjs'
+      - '.github/workflows/phase15-initdata-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-signature:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: node --check cloudflare-live/phase15/tests/telegram-initdata-synthetic-security.test.mjs
+      - name: Run synthetic signature regression
+        run: node --test cloudflare-live/phase15/tests/telegram-initdata-synthetic-security.test.mjs
+# Scope: offline synthetic verifier only. This does NOT verify production Worker auth,
+# real Telegram accounts, tenant isolation, or deployment readiness.
+# Rollback: revert the workflow commit; no Worker/D1 changes are made.
