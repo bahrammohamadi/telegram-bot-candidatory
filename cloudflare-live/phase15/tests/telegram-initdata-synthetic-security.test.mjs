@@ -31,7 +31,16 @@ const userA = JSON.stringify({ id: 101, first_name: 'Test A' });
 const userB = JSON.stringify({ id: 202, first_name: 'Test B' });
 const valid = sign({ auth_date: String(now), user: userA, query_id: 'synthetic' }, token);
 test('accepts synthetic valid Telegram WebApp HMAC', () => assert.equal(verify(valid, token, now), true));
-test('rejects tampered user identity', () => assert.equal(verify(valid.replace(encodeURIComponent(userA), encodeURIComponent(userB)), token, now), false));
+test('rejects tampered user identity', () => {
+  // URLSearchParams encodes spaces as '+', unlike encodeURIComponent (%20).
+  // Mutate the parsed signed field, preserving the original hash, so this
+  // regression actually tests an identity change rather than a no-op.
+  const forged = new URLSearchParams(valid);
+  assert.equal(forged.get('user'), userA);
+  forged.set('user', userB);
+  assert.notEqual(forged.toString(), valid);
+  assert.equal(verify(forged.toString(), token, now), false);
+});
 test('rejects incorrect token', () => assert.equal(verify(valid, token + '-wrong', now), false));
 test('rejects expired auth_date', () => assert.equal(verify(valid, token, now + 301), false));
 test('rejects future auth_date', () => assert.equal(verify(valid, token, now - 31), false));
