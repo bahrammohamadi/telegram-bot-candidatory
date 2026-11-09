@@ -8,15 +8,20 @@ import urllib.parse
 import urllib.request
 
 EXPECTED_HOST = "candidatory-miniapp-integration"
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
 def check(url, timeout=8):
     parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != "https" or EXPECTED_HOST not in (parsed.hostname or ""):
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not (hostname.startswith(EXPECTED_HOST + ".") and hostname.endswith(".workers.dev")):
         raise ValueError("Refusing non-integration host or non-HTTPS URL")
-    if parsed.path != "/api/health" or parsed.query or parsed.fragment or parsed.username:
+    if parsed.path != "/api/health" or parsed.query or parsed.fragment or parsed.username or parsed.password or parsed.port not in (None, 443):
         raise ValueError("Only the exact integration /api/health path is allowed")
     request = urllib.request.Request(url, headers={"Accept": "application/json", "Cache-Control": "no-store"}, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=timeout) as response:
             status = response.status
             body = response.read(2048).decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
