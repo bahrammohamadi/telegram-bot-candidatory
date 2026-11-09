@@ -18,6 +18,8 @@ jobs:
           node-version: '22'
       - name: Assemble isolated candidate
         run: node cloudflare-live/phase15/build-progress-tasks.mjs
+      - name: Main miniapp UI patch safety regression
+        run: node cloudflare-live/phase15/patch-main-miniapp-ui.test.mjs
       - name: Syntax check
         run: node --check cloudflare-live/phase15/dist/integration-progress-tasks-worker.mjs
       - name: Signed-user integration regression
