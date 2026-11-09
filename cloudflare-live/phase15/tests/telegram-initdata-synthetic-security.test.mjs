@@ -38,3 +38,23 @@ test('rejects future auth_date', () => assert.equal(verify(valid, token, now - 3
 test('rejects duplicate hash', () => assert.equal(verify(valid + '&hash=' + '0'.repeat(64), token, now), false));
 test('rejects duplicate user parameter', () => assert.equal(verify(valid + '&user=' + encodeURIComponent(userB), token, now), false));
 test('rejects malformed hash', () => assert.equal(verify(valid.replace(/hash=[^&]+/, 'hash=xyz'), token, now), false));
+
+test('accepts signed UTF-8 user fields without changing canonical bytes', () => {
+  const unicode = sign({ auth_date: String(now), user: JSON.stringify({ id: 303, first_name: 'آزمایش' }) }, token);
+  assert.equal(verify(unicode, token, now), true);
+});
+test('rejects signed user after adding an unsigned parameter', () => {
+  assert.equal(verify(valid + '&is_admin=true', token, now), false);
+});
+test('rejects tampered auth_date even inside freshness window', () => {
+  assert.equal(verify(valid.replace('auth_date=' + now, 'auth_date=' + (now - 1)), token, now), false);
+});
+test('rejects duplicate auth_date even when both timestamps match', () => {
+  assert.equal(verify(valid + '&auth_date=' + now, token, now), false);
+});
+test('rejects missing hash and empty hash', () => {
+  assert.equal(verify(valid.replace(/&hash=[^&]+/, ''), token, now), false);
+  assert.equal(verify(valid.replace(/hash=[^&]+/, 'hash='), token, now), false);
+});
+// These tests exercise a synthetic verifier, NOT the deployed Worker implementation.
+// Production release gate: separately test real Worker auth, user isolation and signed Telegram accounts.
