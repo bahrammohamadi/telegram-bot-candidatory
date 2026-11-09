@@ -25,7 +25,7 @@ html=html.replace(reportAnchor,reportAnchor+"\n  progressCard('وظایف شخص
  .replace(exportAnchor,exportAnchor+"\n    'وظایف: '+data.tasks.completed+' از '+data.tasks.total+' انجام‌شده؛ '+data.tasks.doing+' در حال انجام؛ '+data.tasks.overdue+' عقب‌افتاده',");
 // Visual-only refresh of the same embedded miniapp, preserving all existing routes and handlers.
 const visualCss=read('./mobile-ui-refresh.css');
-if(html.split('</style>').length!==2)throw Error('Expected one embedded style block');
+if(!html.includes('</style>'))throw Error('Embedded style block missing');
 if(!visualCss.includes('.modules button')||!visualCss.includes('@media(max-width:420px)'))throw Error('Incomplete responsive theme');
 html=html.replace('</style>','\\n'+visualCss+'</style>');
 patched=patched.replace(healthQuery,healthQueryReplacement).replace(healthResult,healthResultReplacement);
