@@ -56,6 +56,30 @@ const url = 'https://candidatory-miniapp-integration.lasvaram-candidatory.worker
       assert.ok(state.overflow<=2,'Horizontal overflow on '+width+'px: '+state.overflow);
       assert.ok(state.buttons.length>0&&state.buttons.every(h=>h>=44),'Touch targets too short');
       await page.screenshot({path:path.join(dir,`ui-${width}.png`),fullPage:true});
+      // Synthetic presentation-only snapshots. Do not bypass server auth or submit any form.
+      // These images reveal hidden markup in a sandboxed browser for visual QA only.
+      for (const screen of ['profile','review','dashboard']) {
+        await page.evaluate(name=>{
+          for (const id of ['form','review','dashboard','steps']) document.getElementById(id).hidden=true;
+          document.getElementById('msg').textContent='نمایش آزمایشی رابط کاربری — بدون اطلاعات واقعی';
+          if(name==='profile'){
+            document.getElementById('form').hidden=false;
+            document.getElementById('steps').hidden=false;
+            document.querySelector('[name="district"]').value='حوزه آزمایشی';
+            document.querySelector('[name="professional_summary"]').value='معرفی آزمایشی برای بررسی چیدمان متن فارسی';
+          }else if(name==='review'){
+            document.getElementById('review').hidden=false;
+            document.getElementById('steps').hidden=false;
+            document.getElementById('summary').textContent='نوع انتخابات: شوراهای اسلامی\\nمرحله: برنامه‌ریزی\\nحوزه: حوزه آزمایشی\\nمعرفی: متن ساختگی';
+          }else{
+            document.getElementById('dashboard').hidden=false;
+          }
+        },screen);
+        const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+        assert.ok(overflow<=2,'Synthetic '+screen+' horizontal overflow at '+width+'px: '+overflow);
+        if(width===375)await page.screenshot({path:path.join(dir,`synthetic-${screen}-375.png`),fullPage:true});
+      }
+      console.log('PASS synthetic display-only profile/review/dashboard layouts width='+width);
       console.log('PASS full-main-app isolated mobile smoke width='+width+' CSS/RTL/modules/onboarding/accessibility/routes');
       await context.close();
     }
