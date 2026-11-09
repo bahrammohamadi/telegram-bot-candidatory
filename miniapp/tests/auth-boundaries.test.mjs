@@ -4,7 +4,7 @@ import { webcrypto } from 'node:crypto';
 import { validateInitData } from '../src/auth.mjs';
 
 // Synthetic identities and token only. Never use real Telegram initData in CI.
-globalThis.crypto = webcrypto;
+
 const token = 'synthetic:ci-only';
 const now = 1794180000;
 const enc = new TextEncoder();
