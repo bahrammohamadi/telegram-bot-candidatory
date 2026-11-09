@@ -1,0 +1,32 @@
+name: Phase 15 isolated health probe offline safety
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/one_shot_integration_health.py'
+      - 'cloudflare-live/phase15/test_one_shot_health_safety.py'
+      - '.github/workflows/phase15-health-probe-safety.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/one_shot_integration_health.py'
+      - 'cloudflare-live/phase15/test_one_shot_health_safety.py'
+      - '.github/workflows/phase15-health-probe-safety.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-probe-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax check (no network)
+        run: python -m py_compile cloudflare-live/phase15/one_shot_integration_health.py cloudflare-live/phase15/test_one_shot_health_safety.py
+      - name: Regression tests (mocked; no D1/Worker requests)
+        run: python -m unittest discover -s cloudflare-live/phase15 -p 'test_one_shot_health_safety.py' -v
+# This CI does not assert integration availability or real Telegram identity.
+# Rollback: revert this workflow commit. No Cloudflare Worker or D1 changes.
