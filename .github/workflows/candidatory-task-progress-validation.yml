@@ -6,7 +6,15 @@ on:
       - 'cloudflare-live/phase15/**'
       - 'cloudflare-live/phase14/integration-deployed-snapshot-2026-11-03.mjs'
       - '.github/workflows/candidatory-task-progress-validation.yml'
+  pull_request:
+    branches: [feature/p0-hardening-2026-10-28]
+    paths:
+      - 'cloudflare-live/phase15/**'
+      - 'cloudflare-live/phase14/integration-deployed-snapshot-2026-11-03.mjs'
+      - '.github/workflows/candidatory-task-progress-validation.yml'
   workflow_dispatch:
+ # Rollback: revert this workflow-only commit; no Worker/D1 state is changed.
+ # All checks below run offline without Cloudflare/Telegram credentials.
 jobs:
   phase15:
     runs-on: ubuntu-latest
