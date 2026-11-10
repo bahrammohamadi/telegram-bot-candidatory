@@ -13,11 +13,16 @@ MAX_ROWS_READ = 100
 def check(payload):
     if not isinstance(payload, dict) or payload.get("success") is not True:
         return False
+    # A success flag must not override reported API/query errors.
+    if payload.get("errors") not in (None, []):
+        return False
     results = payload.get("result")
     if not isinstance(results, list) or len(results) != 1:
         return False
     item = results[0]
     if not isinstance(item, dict) or item.get("success") is not True:
+        return False
+    if item.get("errors") not in (None, []):
         return False
     meta = item.get("meta")
     if not isinstance(meta, dict):
