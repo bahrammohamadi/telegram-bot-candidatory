@@ -23,7 +23,7 @@ export function isReviewableEvidence(value){
  try{
   const url=new URL(value);
   const host=url.hostname.toLowerCase();
-  return url.protocol==='https:'&&!url.username&&!url.password&&!url.hash&&
+  return url.protocol==='https:'&&!url.username&&!url.password&&!url.hash&&!url.search&&
    !['localhost','127.0.0.1','::1'].includes(host)&&!isNonPublicIpHost(host)&&
    !host.endsWith('.localhost')&&!host.endsWith('.test')&&!host.endsWith('.invalid')&&!host.endsWith('.example')&&
    !['example.com','example.org','example.net'].includes(host)&&
