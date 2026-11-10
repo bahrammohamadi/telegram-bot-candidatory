@@ -54,5 +54,32 @@ const rejected=await worker.fetch(new Request('https://synthetic.invalid/api/pro
 }),env);
 assert.equal(rejected.status,401,'tampered signed owner must be rejected');
 assert.equal(reads.length,beforeRejected,'rejected owner must never query D1');
+// Mixed-load regression: invalid identities must never borrow a valid request's
+// authenticated owner while asynchronous D1 reads are in flight.
+const mixedOwners=[ids[0],ids[1],ids[0],ids[1]];
+const mixedPayloads=mixedOwners.map(sign);
+const forgedMixed=new URLSearchParams(sign(ids[0]));
+forgedMixed.set('user',JSON.stringify({id:ids[1],first_name:'Test'}));
+const badHashMixed=new URLSearchParams(sign(ids[1]));
+badHashMixed.set('hash','0'.repeat(64));
+const mixedInputs=[mixedPayloads[0],forgedMixed.toString(),mixedPayloads[1],badHashMixed.toString(),mixedPayloads[2],mixedPayloads[3]];
+const mixedBefore=reads.length;
+const mixedResponses=await Promise.all(mixedInputs.map(async initData=>{
+ const r=await worker.fetch(new Request('https://synthetic.invalid/api/progress',{
+  method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({initData,action:'overview'})
+ }),env);
+ return {status:r.status,body:await r.json()};
+}));
+assert.deepEqual(mixedResponses.map(r=>r.status),[200,401,200,401,200,200],
+ 'forged and invalid HMAC must fail even during valid concurrent requests');
+for(const [index,owner] of [[0,ids[0]],[2,ids[1]],[4,ids[0]],[5,ids[1]]]){
+ assert.deepEqual(mixedResponses[index].body.tasks,metrics.get(owner),
+  'mixed-load signed owner must not receive another user metrics');
+}
+assert.deepEqual([...reads.slice(mixedBefore)].sort(),[...mixedOwners].sort(),
+ 'invalid identities must never cause a D1 read under mixed concurrent load');
+console.log('PASS mixed valid/invalid concurrent requests: forged and bad HMAC denied without D1 reads');
+
 console.log('PASS delayed D1 concurrency: six interleaved signed requests isolated, owner-bound SQL and forged identity denied');
 // Rollback: delete this test and remove its CI step. No Worker or D1 changes.
