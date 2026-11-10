@@ -19,7 +19,10 @@ const env={TELEGRAM_BOT_TOKEN:token,DB:{prepare(sql){
  let args=[];
  return {bind(...a){args=a;return this},async first(){
   if(sql.includes('FROM candidate_tasks_v1')){
+   assert.match(sql,/WHERE\s+telegram_id\s*=\s*\?/i,'task SQL must scope the authenticated owner');
+   assert.equal(args.length,1,'task query must bind exactly one owner');
    const owner=args[0];
+   assert.ok(ids.includes(owner),'task query must bind a signed synthetic owner');
    reads.push(owner);
    await new Promise(resolve=>setTimeout(resolve,owner===ids[0]?25:1));
    return metrics.get(owner)??null;
@@ -40,5 +43,16 @@ results.forEach((r,i)=>{
  assert.deepEqual(r.body.tasks,metrics.get(owners[i]),'asynchronous D1 read crossed owner boundary');
 });
 assert.deepEqual([...reads].sort(),[...owners].sort(),'every owner must receive its own D1 query');
-console.log('PASS delayed D1 concurrency: six interleaved signed requests isolated');
+// Negative control: a tampered signed identity must fail before any D1 read,
+// including while other valid owners are being processed concurrently.
+const tampered=new URLSearchParams(sign(ids[0]));
+tampered.set('user',JSON.stringify({id:ids[1],first_name:'Test'}));
+const beforeRejected=reads.length;
+const rejected=await worker.fetch(new Request('https://synthetic.invalid/api/progress',{
+ method:'POST',headers:{'content-type':'application/json'},
+ body:JSON.stringify({initData:tampered.toString(),action:'overview'})
+}),env);
+assert.equal(rejected.status,401,'tampered signed owner must be rejected');
+assert.equal(reads.length,beforeRejected,'rejected owner must never query D1');
+console.log('PASS delayed D1 concurrency: six interleaved signed requests isolated, owner-bound SQL and forged identity denied');
 // Rollback: delete this test and remove its CI step. No Worker or D1 changes.
