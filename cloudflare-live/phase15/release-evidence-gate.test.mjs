@@ -6,6 +6,13 @@ const evidence={target:'production',commit:sha,gates:Object.fromEntries(keys.map
 evidence.gates.production_approval.approval_scope='deploy this exact commit';
 evidence.gates.production_approval.approved_commit=sha;
 assert.deepEqual(check(evidence),[]);
+// Independent gates must not reuse a single evidence artifact as proof of multiple controls.
+for(const k of keys.slice(1)){
+ const bad=structuredClone(evidence);
+ bad.gates[k].evidence=bad.gates[keys[0]].evidence;
+ assert.ok(check(bad).some(error=>error.startsWith('reused evidence URL:')), 'duplicate evidence must fail: '+k);
+}
+
 assert.ok(check({}).length>0);
 for(const k of keys){const bad=structuredClone(evidence);delete bad.gates[k];assert.ok(check(bad).length>0,k);}
 for(const k of keys){const bad=structuredClone(evidence);bad.gates[k].passed=false;assert.ok(check(bad).length>0,k);}
