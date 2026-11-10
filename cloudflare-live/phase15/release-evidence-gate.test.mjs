@@ -15,4 +15,8 @@ for(const invalid of ['https://example.test/evidence','http://github.com/evidenc
  const bad=structuredClone(evidence);bad.gates.phase15_ci.evidence=invalid;
  assert.ok(check(bad).length>0,'unsafe evidence URL: '+invalid);
 }
+for(const invalid of ['https://10.0.0.2/evidence','https://172.16.0.1/evidence','https://192.168.1.1/evidence','https://169.254.169.254/latest/meta-data','https://100.64.0.1/evidence','https://198.51.100.2/evidence','https://203.0.113.3/evidence','https://[::1]/evidence','https://[fd00::1]/evidence']){
+ const bad=structuredClone(evidence);bad.gates.phase15_ci.evidence=invalid;
+ assert.ok(check(bad).length>0,'nonpublic IP evidence URL: '+invalid);
+}
 console.log('PASS: fail-closed release evidence checks, 15 required gates and exact-commit approval');
