@@ -80,6 +80,39 @@ for(const [index,owner] of [[0,ids[0]],[2,ids[1]],[4,ids[0]],[5,ids[1]]]){
 assert.deepEqual([...reads.slice(mixedBefore)].sort(),[...mixedOwners].sort(),
  'invalid identities must never cause a D1 read under mixed concurrent load');
 console.log('PASS mixed valid/invalid concurrent requests: forged and bad HMAC denied without D1 reads');
+// Repeated high-concurrency regression: alternate owners and invalid hashes across
+// multiple bursts to detect accidental request-global identity caching.
+for(let round=0;round<3;round++){
+ const burstOwners=Array.from({length:12},(_,i)=>ids[(i+round)%2]);
+ const burstInputs=burstOwners.map((owner,i)=>{
+  if(i%4!==3)return sign(owner);
+  const invalid=new URLSearchParams(sign(owner));
+  invalid.set('hash','f'.repeat(64));
+  return invalid.toString();
+ });
+ const expectedOwners=burstOwners.filter((_,i)=>i%4!==3);
+ const before=reads.length;
+ const responses=await Promise.all(burstInputs.map(async initData=>{
+  const r=await worker.fetch(new Request('https://synthetic.invalid/api/progress',{
+   method:'POST',headers:{'content-type':'application/json'},
+   body:JSON.stringify({initData,action:'overview'})
+  }),env);
+  return {status:r.status,body:await r.json()};
+ }));
+ responses.forEach((r,i)=>{
+  if(i%4===3)assert.equal(r.status,401,'invalid hash in burst must fail closed');
+  else {
+   assert.equal(r.status,200,'valid signed request in burst must succeed');
+   assert.deepEqual(r.body.tasks,metrics.get(burstOwners[i]),
+    'burst request returned another owner metrics');
+  }
+ });
+ assert.deepEqual([...reads.slice(before)].sort(),[...expectedOwners].sort(),
+  'each burst must query D1 only for valid signed owners');
+}
+console.log('PASS 3x12 mixed burst: signed owners isolated, invalid HMAC never reads D1');
+// Rollback: revert this test-only commit; no Worker deployment or D1 migration.
+
 
 console.log('PASS delayed D1 concurrency: six interleaved signed requests isolated, owner-bound SQL and forged identity denied');
 // Rollback: delete this test and remove its CI step. No Worker or D1 changes.
