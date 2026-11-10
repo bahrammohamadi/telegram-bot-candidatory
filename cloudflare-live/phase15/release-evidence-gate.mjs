@@ -36,9 +36,12 @@ export function check(e){
  const errors=[];
  if(e.target!=='production')errors.push('target must be production');
  if(typeof e.commit!=='string'||!/^[a-f0-9]{40}$/.test(e.commit))errors.push('missing pinned 40-character commit');
+ const seenEvidence=new Set();
  for(const k of required){
   const v=e.gates?.[k];
   if(!v||v.passed!==true||!isReviewableEvidence(v.evidence))errors.push('missing verified gate: '+k);
+  else {const canonical=new URL(v.evidence).href; if(seenEvidence.has(canonical))errors.push('reused evidence URL: '+k); seenEvidence.add(canonical);}
+
  }
  if(e.gates?.production_approval?.approval_scope!=='deploy this exact commit')errors.push('specific production approval missing');
  if(e.gates?.production_approval?.approved_commit!==e.commit)errors.push('approval does not match pinned commit');
