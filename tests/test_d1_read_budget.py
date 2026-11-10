@@ -30,5 +30,21 @@ class D1ReadBudgetTests(unittest.TestCase):
         self.assertFalse(module.check({"success": False, "result": []}))
         self.assertFalse(module.check({"success": True, "result": []}))
 
+    def test_success_flags_cannot_hide_api_errors(self):
+        payload = self.payload()
+        payload["errors"] = [{"code": 7500, "message": "quota"}]
+        self.assertFalse(module.check(payload))
+        payload["errors"] = []
+        self.assertTrue(module.check(payload))
+        payload["result"][0]["errors"] = [{"code": 1}]
+        self.assertFalse(module.check(payload))
+
+    def test_multiple_results_and_invalid_write_metadata_fail(self):
+        payload = self.payload()
+        payload["result"].append(payload["result"][0].copy())
+        self.assertFalse(module.check(payload))
+        for value in (True, None, "0", -1):
+            self.assertFalse(module.check(self.payload(rows_written=value)))
+
 if __name__ == "__main__":
     unittest.main()
