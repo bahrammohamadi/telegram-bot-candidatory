@@ -6,7 +6,7 @@ const required=['phase15_ci','integration_http','staging_http','mobile_qa','tele
 function isNonPublicIpHost(host){
  const h=host.replace(/^\[|\]$/g,'');
  if(h.includes(':'))return true; // reject IPv6 literals, including loopback and private ranges
- if(!/^\d+\\.\d+\\.\d+\\.\d+$/.test(h))return false;
+ if(!/^\d+\.\d+\.\d+\.\d+$/.test(h))return false;
  const a=h.split('.').map(Number);
  return a[0]===0||a[0]===10||a[0]===127||a[0]>=224||
   (a[0]===100&&a[1]>=64&&a[1]<=127)||
