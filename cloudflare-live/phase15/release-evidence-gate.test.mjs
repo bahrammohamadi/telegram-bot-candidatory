@@ -31,4 +31,16 @@ assert.equal(isReviewableEvidence('https://8.8.8.8/evidence'),true,'public IPv4 
 for(const invalid of ['https://github.com/example-org/release-evidence/issues/1','https://github.com/placeholder/repo/issues/1','https://example.internal/evidence','https://release.local/evidence','https://intranet/evidence','https://github.com/fake/repo/issues/1']){
  assert.equal(isReviewableEvidence(invalid),false,'placeholder or internal evidence must be rejected: '+invalid);
 }
+
+// Distinct spellings of the same artifact must not satisfy independent gates.
+for(const alias of [
+ 'https://github.com/bahrammohamadi/telegram-bot-candidatory/issues/phase15_ci/',
+ 'https://github.com/bahrammohamadi/telegram-bot-candidatory/issues/phase15_c%69',
+ 'https://github.com:443/bahrammohamadi/telegram-bot-candidatory/issues/phase15_ci'
+]){
+ const bad=structuredClone(evidence);
+ bad.gates.integration_http.evidence=alias;
+ assert.ok(check(bad).some(error=>error.startsWith('reused evidence URL:')), 'URL alias must fail: '+alias);
+}
+
 console.log('PASS: fail-closed release evidence checks, 15 required gates and exact-commit approval');
