@@ -214,3 +214,23 @@ assert.equal(hostileTaskQueries.length,1,'one task metrics read expected');
 assert.equal(hostileTaskQueries[0].bound[0],uid2,'owner ID must remain parameter-bound');
 assert.ok(hostileTaskQueries[0].sql.includes('WHERE telegram_id=?'));
 console.log('PASS phase15 untrusted display name: SQL-like input cannot change task owner scope');
+
+
+// Concurrent signed-owner isolation regression (synthetic identities only).
+// Simultaneous requests must never share a mutable owner context across awaits.
+const concurrentOwners=[uid1,uid2,uid2,uid1,uid1,uid2];
+const concurrentStart=queries.length;
+const concurrentResults=await Promise.all(concurrentOwners.map(id=>progress(signed(id))));
+for(let i=0;i<concurrentOwners.length;i++){
+ assert.equal(concurrentResults[i].status,200,'concurrent signed request must succeed');
+ assert.deepEqual(concurrentResults[i].data.tasks,data.get(concurrentOwners[i]),
+  'concurrent response must contain only its authenticated owner metrics');
+}
+const concurrentTaskQueries=queries.slice(concurrentStart).filter(q=>q.sql.includes('FROM candidate_tasks_v1'));
+assert.equal(concurrentTaskQueries.length,concurrentOwners.length,
+ 'each concurrent request must perform a separate owner-scoped task query');
+assert.deepEqual(concurrentTaskQueries.map(q=>q.bound[0]).sort(),
+ [...concurrentOwners].sort(),'concurrent SQL owner bindings must match the signed requests');
+assert.ok(concurrentTaskQueries.every(q=>q.sql.includes('WHERE telegram_id=?')),
+ 'concurrent task SQL must remain parameterized and owner-scoped');
+console.log('PASS phase15 concurrent signed accounts: owner-bound task progress remains isolated');
