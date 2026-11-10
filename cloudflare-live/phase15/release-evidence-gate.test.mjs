@@ -11,7 +11,7 @@ for(const k of keys){const bad=structuredClone(evidence);delete bad.gates[k];ass
 for(const k of keys){const bad=structuredClone(evidence);bad.gates[k].passed=false;assert.ok(check(bad).length>0,k);}
 for(const k of keys){const bad=structuredClone(evidence);bad.gates[k].evidence='';assert.ok(check(bad).length>0,k);}
 for(const change of [e=>e.target='integration',e=>e.commit='latest',e=>e.gates.production_approval.approved_commit='b'.repeat(40),e=>e.gates.production_approval.approval_scope='general permission']){const bad=structuredClone(evidence);change(bad);assert.ok(check(bad).length>0);}
-for(const invalid of ['https://example.test/evidence','http://github.com/evidence','https://localhost/evidence','https://user:pass@github.com/evidence','https://github.com/evidence#fragment','not-a-url']){
+for(const invalid of ['https://example.test/evidence','http://github.com/evidence','https://localhost/evidence','https://user:pass@github.com/evidence','https://github.com/evidence#fragment','https://github.com/evidence?token=secret','https://github.com/evidence?version=latest','not-a-url']){
  const bad=structuredClone(evidence);bad.gates.phase15_ci.evidence=invalid;
  assert.ok(check(bad).length>0,'unsafe evidence URL: '+invalid);
 }
