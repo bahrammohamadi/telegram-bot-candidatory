@@ -26,7 +26,9 @@ export function isReviewableEvidence(value){
   return url.protocol==='https:'&&!url.username&&!url.password&&!url.hash&&
    !['localhost','127.0.0.1','::1'].includes(host)&&!isNonPublicIpHost(host)&&
    !host.endsWith('.localhost')&&!host.endsWith('.test')&&!host.endsWith('.invalid')&&!host.endsWith('.example')&&
-   !['example.com','example.org','example.net'].includes(host);
+   !['example.com','example.org','example.net'].includes(host)&&
+   host.includes('.')&&!host.endsWith('.internal')&&!host.endsWith('.local')&&
+   !url.pathname.split('/').some(segment=>/^(?:example(?:-org|-repo|-user)?|placeholder|todo|dummy|fake|sample)$/i.test(segment));
  }catch{return false;}
 }
 export function check(e){
