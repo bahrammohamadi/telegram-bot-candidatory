@@ -41,6 +41,24 @@ class TaskReportPlanTests(unittest.TestCase):
             self.assertEqual(total, done + opened)
             self.assertLessEqual(overdue, opened)
 
+    def test_status_variants_and_null_are_counted_consistently(self):
+        # The SQL treats NULL and unknown statuses as open, and both done/completed as closed.
+        self.db.executemany("INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)", [
+            (404, "completed", "2020-01-01"),
+            (404, None, "2020-01-01"),
+            (404, "blocked", "2099-01-01"),
+            (404, "done", None),
+        ])
+        self.assertEqual(self.db.execute(report_query(), (404,)).fetchone(), (4, 2, 2, 1))
+        self.assertEqual(self.db.execute(report_query(), (101,)).fetchone(), (2, 1, 1, 1))
+
+    def test_sql_rejects_extra_owner_predicate_or_unscoped_union(self):
+        sql = report_query()
+        # A second SELECT/UNION can leak rows despite the first owner predicate.
+        self.assertEqual(len(re.findall(r"(?i)\\bSELECT\\b", sql)), 1)
+        self.assertNotRegex(sql, r"(?i)\\bUNION\\b")
+        self.assertEqual(len(re.findall(r"(?i)\\btelegram_id\\s*=\\s*\\?1\\b", sql)), 1)
+
     def test_missing_owner_fails_closed(self):
         with self.assertRaises(sqlite3.ProgrammingError):
             self.db.execute(report_query()).fetchone()
