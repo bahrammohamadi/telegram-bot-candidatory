@@ -31,6 +31,12 @@ export function isReviewableEvidence(value){
    !url.pathname.split('/').some(segment=>/^(?:example(?:-org|-repo|-user)?|placeholder|todo|dummy|fake|sample)$/i.test(segment));
  }catch{return false;}
 }
+// Normalize harmless URL aliases before enforcing one independent artifact per gate.
+function evidenceIdentity(value){
+ const url=new URL(value);
+ url.pathname=url.pathname.replace(/%[0-9a-f]{2}/gi, m=>{const c=String.fromCharCode(parseInt(m.slice(1),16));return /[A-Za-z0-9._~-]/.test(c)?c:m.toUpperCase();}).replace(/\/+$/,'')||'/';
+ return url.href;
+}
 export function check(e){
  if(!e||typeof e!=='object'||Array.isArray(e))return ['invalid evidence'];
  const errors=[];
@@ -40,7 +46,7 @@ export function check(e){
  for(const k of required){
   const v=e.gates?.[k];
   if(!v||v.passed!==true||!isReviewableEvidence(v.evidence))errors.push('missing verified gate: '+k);
-  else {const canonical=new URL(v.evidence).href; if(seenEvidence.has(canonical))errors.push('reused evidence URL: '+k); seenEvidence.add(canonical);}
+  else {const canonical=evidenceIdentity(v.evidence); if(seenEvidence.has(canonical))errors.push('reused evidence URL: '+k); seenEvidence.add(canonical);}
 
  }
  if(e.gates?.production_approval?.approval_scope!=='deploy this exact commit')errors.push('specific production approval missing');
