@@ -110,6 +110,27 @@ for(let round=0;round<3;round++){
  assert.deepEqual([...reads.slice(before)].sort(),[...expectedOwners].sort(),
   'each burst must query D1 only for valid signed owners');
 }
+// Fail-closed regression for incomplete Telegram initData, not just a bad HMAC.
+// Neither case may touch D1, including while other signed requests are active.
+const missingHash=new URLSearchParams(sign(ids[0]));
+missingHash.delete('hash');
+const missingUser=new URLSearchParams(sign(ids[1]));
+missingUser.delete('user');
+const incompleteBefore=reads.length;
+const incompleteResults=await Promise.all([missingHash,missingUser].map(async p=>{
+ const r=await worker.fetch(new Request('https://synthetic.invalid/api/progress',{
+  method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({initData:p.toString(),action:'overview'})
+ }),env);
+ return r.status;
+}));
+assert.deepEqual(incompleteResults,[401,401],
+ 'missing Telegram hash or signed user must fail closed');
+assert.equal(reads.length,incompleteBefore,
+ 'incomplete Telegram initData must never access D1');
+console.log('PASS missing Telegram hash/user: both rejected before D1 access');
+// Rollback: revert this test-only commit. No Worker/D1 changes.
+
 console.log('PASS 3x12 mixed burst: signed owners isolated, invalid HMAC never reads D1');
 // Rollback: revert this test-only commit; no Worker deployment or D1 migration.
 
