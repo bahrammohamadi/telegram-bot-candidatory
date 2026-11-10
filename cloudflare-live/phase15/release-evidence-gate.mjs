@@ -4,9 +4,9 @@ import {readFileSync} from 'node:fs';
 const required=['phase15_ci','integration_http','staging_http','mobile_qa','telegram_two_accounts','owner_isolation','admin_permissions','receipt_privacy','payment_sandbox','ai_consent_budget','accessibility','security_review','backup_restore','rollback_rehearsal','production_approval'];
 // Reject placeholder, local, and credential-bearing evidence links.
 function isNonPublicIpHost(host){
- const h=host.replace(/^\\[|\\]$/g,'');
+ const h=host.replace(/^\[|\]$/g,'');
  if(h.includes(':'))return true; // reject IPv6 literals, including loopback and private ranges
- if(!/^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(h))return false;
+ if(!/^\d+\\.\d+\\.\d+\\.\d+$/.test(h))return false;
  const a=h.split('.').map(Number);
  return a[0]===0||a[0]===10||a[0]===127||a[0]>=224||
   (a[0]===100&&a[1]>=64&&a[1]<=127)||
