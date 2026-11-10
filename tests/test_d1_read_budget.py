@@ -46,5 +46,25 @@ class D1ReadBudgetTests(unittest.TestCase):
         for value in (True, None, "0", -1):
             self.assertFalse(module.check(self.payload(rows_written=value)))
 
+    def test_boundary_and_fail_closed_metadata(self):
+        self.assertTrue(module.check(self.payload(rows_read=100)))
+        self.assertFalse(module.check(self.payload(rows_read=101)))
+        for invalid in (True, None, "false", 0, 1):
+            self.assertFalse(module.check(self.payload(changed_db=invalid)))
+        for invalid in (1.0, 0.0, [], {}, "0", -1):
+            self.assertFalse(module.check(self.payload(rows_written=invalid)))
+        for invalid in (100.0, "100", [], {}):
+            self.assertFalse(module.check(self.payload(rows_read=invalid)))
+
+    def test_malformed_envelopes_fail_closed(self):
+        for invalid in (None, [], "ok", {"success": True, "result": {}}):
+            self.assertFalse(module.check(invalid))
+        payload = self.payload()
+        payload["result"][0]["meta"] = None
+        self.assertFalse(module.check(payload))
+        payload = self.payload()
+        payload["result"][0]["success"] = 1
+        self.assertFalse(module.check(payload))
+
 if __name__ == "__main__":
     unittest.main()
