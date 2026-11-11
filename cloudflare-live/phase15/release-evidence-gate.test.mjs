@@ -43,4 +43,13 @@ for(const alias of [
  assert.ok(check(bad).some(error=>error.startsWith('reused evidence URL:')), 'URL alias must fail: '+alias);
 }
 
+
+// Reject ambiguous proxy path representations, rather than treating them as distinct proof.
+for(const path of ['/issues%2Fphase15_ci','/issues%5Cphase15_ci','/issues%00phase15_ci','//issues/phase15_ci']){
+ const link='https://github.com/bahrammohamadi/telegram-bot-candidatory'+path;
+ assert.equal(isReviewableEvidence(link),false,'ambiguous evidence path must fail: '+path);
+ const bad=structuredClone(evidence);bad.gates.integration_http.evidence=link;
+ assert.ok(check(bad).length>0,'ambiguous evidence gate must fail: '+path);
+}
+
 console.log('PASS: fail-closed release evidence checks, 15 required gates and exact-commit approval');
