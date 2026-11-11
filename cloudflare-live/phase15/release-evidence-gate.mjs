@@ -22,6 +22,9 @@ export function isReviewableEvidence(value){
  if(typeof value!=='string'||value.length>2048)return false;
  try{
   const url=new URL(value);
+  // Ambiguous encoded separators can refer to the same resource through proxies.
+  // Fail closed rather than counting such URLs as independent release evidence.
+  if(/%(?:2f|5c|00)/i.test(url.pathname)||url.pathname.includes('\\')||url.pathname.includes('//'))return false;
   const host=url.hostname.toLowerCase();
   return url.protocol==='https:'&&!url.username&&!url.password&&!url.hash&&!url.search&&
    !['localhost','127.0.0.1','::1'].includes(host)&&!isNonPublicIpHost(host)&&
