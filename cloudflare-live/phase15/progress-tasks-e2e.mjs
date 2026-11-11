@@ -234,3 +234,22 @@ assert.deepEqual(concurrentTaskQueries.map(q=>q.bound[0]).sort(),
 assert.ok(concurrentTaskQueries.every(q=>q.sql.includes('WHERE telegram_id=?')),
  'concurrent task SQL must remain parameterized and owner-scoped');
 console.log('PASS phase15 concurrent signed accounts: owner-bound task progress remains isolated');
+
+
+// Zero-task owner regression (2026-11-11): the isolated D1 currently contains
+// no task rows. A newly signed user must receive explicit zero metrics rather
+// than a 500, undefined fields, or a previous owner's cached task totals.
+const emptyOwner=9106150099;
+const beforeEmptyOwner=queries.length;
+const emptyResult=await progress(signed(emptyOwner));
+assert.equal(emptyResult.status,200,'signed owner without tasks must get an overview');
+assert.deepEqual(emptyResult.data.tasks,{total:0,completed:0,doing:0,overdue:0},
+ 'empty owner must receive numeric zero task metrics, never another owner metrics');
+const emptyReads=queries.slice(beforeEmptyOwner).filter(q=>q.sql.includes('FROM candidate_tasks_v1'));
+assert.equal(emptyReads.length,1,'empty owner must trigger one owner-scoped task read');
+assert.equal(emptyReads[0].bound[0],emptyOwner,'empty task read must bind signed owner');
+const afterEmpty=await progress(signed(uid1));
+assert.deepEqual(afterEmpty.data.tasks,data.get(uid1),
+ 'empty-owner request must not overwrite next signed owner metrics');
+console.log('PASS phase15 zero-task owner: explicit zero metrics and no stale cross-user result');
+// Rollback: revert this test-only commit. No Worker/D1 changes.
