@@ -15,7 +15,14 @@ export function validateTarget(env) {
     assert.equal(env[key], value, 'Refusing non-integration target: ' + key);
   }
   assert.notEqual(env.TARGET_WORKER, 'candidatory-news-bot');
-  assert.notEqual(env.ALLOW_PRODUCTION, 'true', 'Production authorization cannot be supplied to this guard');
+  // Production opt-in aliases must never silently bypass the isolated-target guard.
+  const truthy = value => /^(?:1|true|yes|on)$/i.test(String(value ?? '').trim());
+  for (const key of ['ALLOW_PRODUCTION','PRODUCTION_DEPLOY','DEPLOY_PRODUCTION']) {
+    assert.equal(truthy(env[key]), false, 'Production authorization cannot be supplied: ' + key);
+  }
+  for (const key of ['TARGET_ENV','CLOUDFLARE_ENV','WRANGLER_ENV']) {
+    assert.notEqual(String(env[key] ?? '').trim().toLowerCase(), 'production', 'Production environment forbidden: ' + key);
+  }
   return true;
 }
 if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1]).href) {
