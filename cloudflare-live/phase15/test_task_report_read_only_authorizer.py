@@ -44,5 +44,35 @@ class ReadOnlyReportTests(unittest.TestCase):
             db.close()
 
 
+    def test_missing_owner_binding_fails_closed(self):
+        """The report must not run without the authenticated owner parameter."""
+        source = SQL.read_text(encoding="utf-8")
+        statement = "SELECT" + source.split("SELECT", 1)[1].split(";", 1)[0]
+        db = sqlite3.connect(":memory:")
+        try:
+            db.execute("CREATE TABLE candidate_tasks_v1 (telegram_id INTEGER, status TEXT, due_date TEXT)")
+            db.execute("INSERT INTO candidate_tasks_v1 VALUES (101, 'done', NULL)")
+            with self.assertRaises(sqlite3.ProgrammingError):
+                db.execute(statement).fetchone()
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM candidate_tasks_v1").fetchone(), (1,))
+        finally:
+            db.close()
+
+    def test_other_owner_is_excluded_from_report(self):
+        """Synthetic owner 202 must not influence owner 101 totals."""
+        source = SQL.read_text(encoding="utf-8")
+        statement = "SELECT" + source.split("SELECT", 1)[1].split(";", 1)[0]
+        db = sqlite3.connect(":memory:")
+        try:
+            db.execute("CREATE TABLE candidate_tasks_v1 (telegram_id INTEGER, status TEXT, due_date TEXT)")
+            db.executemany(
+                "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
+                [(101, "done", None), (202, "open", "2020-01-01"), (202, "done", None)],
+            )
+            self.assertEqual(db.execute(statement, (101,)).fetchone(), (1, 1, 0, 0))
+            self.assertEqual(db.execute(statement, (202,)).fetchone(), (2, 1, 1, 1))
+        finally:
+            db.close()
+
 if __name__ == "__main__":
     unittest.main()
