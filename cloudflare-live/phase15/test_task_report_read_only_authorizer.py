@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Phase 15: ensure the owner-scoped report SQL is read-only (synthetic SQLite)."""
+import sqlite3
+import unittest
+from pathlib import Path
+
+SQL = Path(__file__).with_name("task-performance-owner-scoped.sql")
+
+
+class ReadOnlyReportTests(unittest.TestCase):
+    def test_query_is_read_only_at_sqlite_authorizer_boundary(self):
+        source = SQL.read_text(encoding="utf-8")
+        statement = source.split("SELECT", 1)[1].split(";", 1)[0]
+        statement = "SELECT" + statement
+        db = sqlite3.connect(":memory:")
+        try:
+            db.execute("CREATE TABLE candidate_tasks_v1 (telegram_id INTEGER, status TEXT, due_date TEXT)")
+            db.execute("INSERT INTO candidate_tasks_v1 VALUES (101, 'open', '2020-01-01')")
+            allowed = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION}
+            seen = []
+            def authorize(action, arg1, arg2, database, trigger):
+                seen.append((action, arg1))
+                if action not in allowed:
+                    return sqlite3.SQLITE_DENY
+                if action == sqlite3.SQLITE_READ and arg1 != "candidate_tasks_v1":
+                    return sqlite3.SQLITE_DENY
+                return sqlite3.SQLITE_OK
+            db.set_authorizer(authorize)
+            row = db.execute(statement, (101,)).fetchone()
+            self.assertEqual(row, (1, 0, 1, 1))
+            self.assertTrue(any(a == sqlite3.SQLITE_READ for a, _ in seen))
+        finally:
+            db.close()
+
+    def test_authorizer_denies_mutating_sql(self):
+        db = sqlite3.connect(":memory:")
+        try:
+            db.execute("CREATE TABLE candidate_tasks_v1 (telegram_id INTEGER)")
+            allowed = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION}
+            db.set_authorizer(lambda action, *_: sqlite3.SQLITE_OK if action in allowed else sqlite3.SQLITE_DENY)
+            with self.assertRaises(sqlite3.DatabaseError):
+                db.execute("DELETE FROM candidate_tasks_v1")
+        finally:
+            db.close()
+
+
+if __name__ == "__main__":
+    unittest.main()
