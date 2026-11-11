@@ -1,0 +1,28 @@
+name: Phase 15 owner-scoped report SQLite safety
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/task-performance-owner-scoped.sql'
+      - 'cloudflare-live/phase15/test_task_report_read_only_authorizer.py'
+      - '.github/workflows/phase15-owner-report-sqlite-safety.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/task-performance-owner-scoped.sql'
+      - 'cloudflare-live/phase15/test_task_report_read_only_authorizer.py'
+      - '.github/workflows/phase15-owner-report-sqlite-safety.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  report-sqlite-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Owner binding, cross-user isolation and read-only SQL tests
+        run: python -m unittest discover -s cloudflare-live/phase15 -p 'test_task_report_read_only_authorizer.py' -v
