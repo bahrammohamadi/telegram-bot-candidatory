@@ -8,3 +8,12 @@ for(const [key,value] of [['TARGET_WORKER','candidatory-news-bot'],['TARGET_WORK
 }
 test('reject missing configuration',()=>assert.throws(()=>validateTarget({})));
 test('reject production override',()=>assert.throws(()=>validateTarget({...good,ALLOW_PRODUCTION:'true'})));
+
+for (const [key,value] of [
+ ['ALLOW_PRODUCTION','TRUE'],['ALLOW_PRODUCTION','1'],['ALLOW_PRODUCTION',' yes '],
+ ['PRODUCTION_DEPLOY','on'],['DEPLOY_PRODUCTION','true'],
+ ['TARGET_ENV','production'],['CLOUDFLARE_ENV','Production'],['WRANGLER_ENV',' production ']
+]) {
+ test('reject production alias '+key+'='+value,()=>assert.throws(()=>validateTarget({...good,[key]:value})));
+}
+test('accept explicit nonproduction environment',()=>assert.equal(validateTarget({...good,TARGET_ENV:'integration',ALLOW_PRODUCTION:'false'}),true));
