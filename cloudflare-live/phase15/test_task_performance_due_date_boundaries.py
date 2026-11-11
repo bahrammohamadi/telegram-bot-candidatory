@@ -9,9 +9,9 @@ import sqlite3
 import unittest
 
 SQL_PATH = Path(__file__).with_name("task-performance-owner-scoped.sql")
-QUERY = SQL_PATH.read_text(encoding="utf-8").split(";")[0]
-# Strip comments only; retain the exact production-candidate SELECT.
-QUERY = "\n".join(line for line in QUERY.splitlines() if not line.lstrip().startswith("--")).strip()
+# Strip SQL comments before splitting on the statement terminator: comments may contain semicolons.
+SQL_TEXT = "\n".join(line for line in SQL_PATH.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("--"))
+QUERY = SQL_TEXT.split(";")[0].strip()
 
 
 class TaskPerformanceDateBoundaries(unittest.TestCase):
