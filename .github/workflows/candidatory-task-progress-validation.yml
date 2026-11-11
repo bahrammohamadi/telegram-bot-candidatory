@@ -39,7 +39,9 @@ jobs:
         run: node cloudflare-live/phase15/health-worker-e2e.mjs
       - name: Owner-scoped task performance SQL regression
         run: python3 cloudflare-live/phase15/test_task_performance_sql.py
-      - name: Assembled task progress SQL semantic regression\n        run: python3 cloudflare-live/phase15/test_assembled_progress_sqlite.py\n      - name: Live task count edge-case regression
+      - name: Assembled task progress SQL semantic regression
+        run: python3 cloudflare-live/phase15/test_assembled_progress_sqlite.py
+      - name: Live task count edge-case regression
         run: python3 cloudflare-live/phase15/test_live_task_count_edge_cases.py
       - name: Assembled Worker task SQL parity and owner binding
         run: python3 cloudflare-live/phase15/test_assembled_task_sql_parity.py
