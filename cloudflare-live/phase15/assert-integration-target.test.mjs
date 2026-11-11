@@ -16,4 +16,14 @@ for (const [key,value] of [
 ]) {
  test('reject production alias '+key+'='+value,()=>assert.throws(()=>validateTarget({...good,[key]:value})));
 }
+for (const [key,value] of [
+ ['ALLOW_PRODUCTION','enabled'],['ALLOW_PRODUCTION','deploy'],
+ ['PRODUCTION_DEPLOY','approved'],['DEPLOY_PRODUCTION','unexpected'],
+ ['ALLOW_PRODUCTION','false,true'],['ALLOW_PRODUCTION','null']
+]) {
+ test('fail closed on unknown production flag '+key+'='+value,()=>assert.throws(()=>validateTarget({...good,[key]:value})));
+}
+for (const value of ['false','FALSE','0','off','no','  ']) {
+ test('allow explicit disabled production flag '+JSON.stringify(value),()=>assert.equal(validateTarget({...good,ALLOW_PRODUCTION:value}),true));
+}
 test('accept explicit nonproduction environment',()=>assert.equal(validateTarget({...good,TARGET_ENV:'integration',ALLOW_PRODUCTION:'false'}),true));
