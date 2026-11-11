@@ -42,3 +42,11 @@ button:disabled,[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
 @media(max-width:320px){body{padding-inline:6px}main{padding-inline:10px}.modules{grid-template-columns:minmax(0,1fr)}.steps{flex-wrap:wrap}.steps span{flex-basis:45%}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 @media(forced-colors:active){button,.modules button,.secondary{border:1px solid ButtonText}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid Highlight!important}#msg,.progress-card,.quiz-card{border:1px solid CanvasText}}
+
+/* 200% text zoom and mobile keyboard: keep form controls and status readable. */
+:where(.modules,.progress-cards,.steps){max-width:100%;min-width:0}
+:where(.modules button,.steps span,.progress-card,.quiz-card){overflow-wrap:anywhere;word-break:normal}
+:where(button,input,select,textarea){font-size:max(1rem,16px)}
+:where(button,a,input,select,textarea){touch-action:manipulation}
+@media(max-width:400px){.progress-cards{grid-template-columns:minmax(0,1fr)}.steps span{min-width:0}}
+@media(prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}
