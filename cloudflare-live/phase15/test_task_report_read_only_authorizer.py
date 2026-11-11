@@ -74,5 +74,22 @@ class ReadOnlyReportTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_empty_owner_and_null_status_are_scoped(self):
+        """Empty owners stay zero; NULL status counts open only for its owner."""
+        source = SQL.read_text(encoding="utf-8")
+        statement = "SELECT" + source.split("SELECT", 1)[1].split(";", 1)[0]
+        db = sqlite3.connect(":memory:")
+        try:
+            db.execute("CREATE TABLE candidate_tasks_v1 (telegram_id INTEGER, status TEXT, due_date TEXT)")
+            db.executemany(
+                "INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)",
+                [(101, None, "2020-01-01"), (202, "completed", None)],
+            )
+            self.assertEqual(db.execute(statement, (303,)).fetchone(), (0, 0, 0, 0))
+            self.assertEqual(db.execute(statement, (101,)).fetchone(), (1, 0, 1, 1))
+            self.assertEqual(db.execute(statement, (202,)).fetchone(), (1, 1, 0, 0))
+        finally:
+            db.close()
+
 if __name__ == "__main__":
     unittest.main()
