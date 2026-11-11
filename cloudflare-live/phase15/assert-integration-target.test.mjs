@@ -27,3 +27,12 @@ for (const value of ['false','FALSE','0','off','no','  ']) {
  test('allow explicit disabled production flag '+JSON.stringify(value),()=>assert.equal(validateTarget({...good,ALLOW_PRODUCTION:value}),true));
 }
 test('accept explicit nonproduction environment',()=>assert.equal(validateTarget({...good,TARGET_ENV:'integration',ALLOW_PRODUCTION:'false'}),true));
+
+for (const key of ['TARGET_ENV','CLOUDFLARE_ENV','WRANGLER_ENV']) {
+ for (const value of ['prod','live','main','release','production-preview','unexpected']) {
+  test('reject unknown environment '+key+'='+value,()=>assert.throws(()=>validateTarget({...good,[key]:value})));
+ }
+ for (const value of ['integration','staging','test','development']) {
+  test('allow safe environment '+key+'='+value,()=>assert.equal(validateTarget({...good,[key]:value}),true));
+ }
+}
