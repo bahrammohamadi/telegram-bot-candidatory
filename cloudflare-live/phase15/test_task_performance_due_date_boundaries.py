@@ -41,6 +41,17 @@ class TaskPerformanceDateBoundaries(unittest.TestCase):
     def test_other_owner_isolated(self):
         self.assertEqual(tuple(self.db.execute(QUERY, (202,)).fetchone()), (1, 0, 1, 1))
 
+    def test_tehran_calendar_day_cutoff_matches_progress_api(self):
+        # Freeze SQLite's now() via a deterministic SQL substitution to check
+        # the UTC 20:30 -> Tehran 00:00 boundary without relying on wall time.
+        self.assertIn("date('now','+210 minutes')", QUERY)
+        utc_day = "2026-11-11"
+        before_midnight = QUERY.replace("date('now','+210 minutes')", "date('2026-11-11 20:29:59','+210 minutes')")
+        at_midnight = QUERY.replace("date('now','+210 minutes')", "date('2026-11-11 20:30:00','+210 minutes')")
+        self.db.execute("INSERT INTO candidate_tasks_v1 VALUES (?, ?, ?)", (101, "open", utc_day))
+        self.assertEqual(self.db.execute(before_midnight, (101,)).fetchone()[3], 2)
+        self.assertEqual(self.db.execute(at_midnight, (101,)).fetchone()[3], 3)
+
     def test_missing_owner_fails_closed(self):
         with self.assertRaises(sqlite3.ProgrammingError):
             self.db.execute(QUERY).fetchone()
