@@ -23,7 +23,8 @@ export function validateTarget(env) {
     assert.equal(disabled(env[key]), true, 'Production authorization cannot be supplied: ' + key);
   }
   for (const key of ['TARGET_ENV','CLOUDFLARE_ENV','WRANGLER_ENV']) {
-    assert.notEqual(String(env[key] ?? '').trim().toLowerCase(), 'production', 'Production environment forbidden: ' + key);
+    const selected = String(env[key] ?? '').trim().toLowerCase();
+    assert.ok(['', 'integration', 'staging', 'test', 'testing', 'development', 'dev'].includes(selected), 'Unknown or production environment forbidden: ' + key);
   }
   return true;
 }
