@@ -16,9 +16,11 @@ export function validateTarget(env) {
   }
   assert.notEqual(env.TARGET_WORKER, 'candidatory-news-bot');
   // Production opt-in aliases must never silently bypass the isolated-target guard.
-  const truthy = value => /^(?:1|true|yes|on)$/i.test(String(value ?? '').trim());
+  // Fail closed: unknown non-empty opt-in values must not silently pass.
+  // Only explicit false/off/0/no (or an unset variable) are safe.
+  const disabled = value => value == null || /^(?:|0|false|no|off)$/i.test(String(value).trim());
   for (const key of ['ALLOW_PRODUCTION','PRODUCTION_DEPLOY','DEPLOY_PRODUCTION']) {
-    assert.equal(truthy(env[key]), false, 'Production authorization cannot be supplied: ' + key);
+    assert.equal(disabled(env[key]), true, 'Production authorization cannot be supplied: ' + key);
   }
   for (const key of ['TARGET_ENV','CLOUDFLARE_ENV','WRANGLER_ENV']) {
     assert.notEqual(String(env[key] ?? '').trim().toLowerCase(), 'production', 'Production environment forbidden: ' + key);
