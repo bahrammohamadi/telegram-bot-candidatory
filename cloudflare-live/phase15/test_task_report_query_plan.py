@@ -55,9 +55,9 @@ class TaskReportPlanTests(unittest.TestCase):
     def test_sql_rejects_extra_owner_predicate_or_unscoped_union(self):
         sql = report_query()
         # A second SELECT/UNION can leak rows despite the first owner predicate.
-        self.assertEqual(len(re.findall(r"(?i)\\bSELECT\\b", sql)), 1)
-        self.assertNotRegex(sql, r"(?i)\\bUNION\\b")
-        self.assertEqual(len(re.findall(r"(?i)\\btelegram_id\\s*=\\s*\\?1\\b", sql)), 1)
+        self.assertEqual(len(re.findall(r"(?i)\bSELECT\b", sql)), 1)
+        self.assertNotRegex(sql, r"(?i)\bUNION\b")
+        self.assertEqual(len(re.findall(r"(?i)\btelegram_id\s*=\s*\?1\b", sql)), 1)
 
     def test_missing_owner_fails_closed(self):
         with self.assertRaises(sqlite3.ProgrammingError):
