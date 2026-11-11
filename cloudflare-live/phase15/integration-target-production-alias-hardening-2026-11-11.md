@@ -16,3 +16,13 @@ Before deployment: revert the two code/test commits and this documentation commi
 
 ## Remaining gates
 Signed Telegram initData on two real accounts, cross-owner isolation, actual mobile accessibility, receipts/private storage, sandbox payments, opt-in AI budgets, backup restore, and explicit per-action production approval remain pending. This change does not authorize production.
+
+## Follow-up: fail-closed unknown opt-in values (2026-11-11)
+
+Observed remaining bypass of the alias check: non-empty values such as `enabled`, `approved`, `deploy` and `false,true` were not recognized by the previous truthy allowlist and therefore passed. The guard now accepts only unset, empty, `false`, `0`, `off` or `no` (case/whitespace-insensitive) for each production opt-in variable; any other value is rejected. The exact integration Worker/D1 allowlist remains unchanged. No credentials are logged.
+
+**Verification:** `node --test cloudflare-live/phase15/assert-integration-target.test.mjs`. Check the GitHub Actions integration target guard for commit `77ea582cafe21663294cbc7f658fb1dc288540ab` or newer; this is a static safety check, not live signed-account or mobile acceptance.
+
+**Deployment:** no Worker or D1 deployment required: this guard runs in development/CI. Production deployment is still forbidden without separate explicit approval.
+
+**Rollback:** revert this documentation commit, then test commit `77ea582cafe21663294cbc7f658fb1dc288540ab`, then code commit `3d61ed81cc2804aa388254856e8421c16afdcabd` (in that order), but only after security review; doing so reopens the unknown-value bypass. No Cloudflare rollback is required.
