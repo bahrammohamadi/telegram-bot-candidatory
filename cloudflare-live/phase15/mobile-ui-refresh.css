@@ -33,3 +33,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 @media(max-width:420px){main{padding:17px 13px;border-radius:20px}.modules{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.modules button{min-height:78px;font-size:12px}.steps span{font-size:11px}.progress-cards{gap:8px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}button{transition:none}}
 @media print{main{box-shadow:none;border:0;padding:0}body{background:#fff!important}}
+
+/* Phase 15 accessibility: keyboard, text zoom, narrow screens and motion preferences. */
+:where(button,input,select,textarea,a,[tabindex]):focus-visible{outline:3px solid #8b5e00!important;outline-offset:3px}
+button:disabled,[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
+:where(main,.panel,.progress-card,.quiz-card){min-width:0;overflow-wrap:anywhere}
+:where(input,select,textarea){max-width:100%;box-sizing:border-box}
+@media(max-width:320px){body{padding-inline:6px}main{padding-inline:10px}.modules{grid-template-columns:minmax(0,1fr)}.steps{flex-wrap:wrap}.steps span{flex-basis:45%}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(forced-colors:active){button,.modules button,.secondary{border:1px solid ButtonText}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid Highlight!important}#msg,.progress-card,.quiz-card{border:1px solid CanvasText}}
