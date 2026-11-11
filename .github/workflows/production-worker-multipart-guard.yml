@@ -1,0 +1,21 @@
+name: Production Worker multipart completeness guard
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - scripts/verify-worker-multipart.mjs
+      - .github/workflows/production-worker-multipart-guard.yml
+  workflow_dispatch:
+jobs:
+  verify-multipart:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify complete multipart export parser
+        run: node scripts/verify-worker-multipart.mjs --self-test
