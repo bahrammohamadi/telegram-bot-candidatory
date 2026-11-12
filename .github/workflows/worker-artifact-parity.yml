@@ -1,0 +1,23 @@
+name: Worker multipart artifact parity
+on:
+  push:
+    paths:
+      - 'scripts/verify-worker-artifact.mjs'
+      - '.github/workflows/worker-artifact-parity.yml'
+  pull_request:
+    paths:
+      - 'scripts/verify-worker-artifact.mjs'
+      - '.github/workflows/worker-artifact-parity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  artifact-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate artifact manifest guard
+        run: node scripts/verify-worker-artifact.mjs --self-test
