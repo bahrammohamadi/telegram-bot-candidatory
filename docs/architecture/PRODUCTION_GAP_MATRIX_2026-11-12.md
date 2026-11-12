@@ -30,3 +30,13 @@ No production deployment until current SHA CI, module/binding parity, RBAC/secur
 - Repository branch: `feature/cloudflare-parity-audit-2026-10-29`
 - GitHub workflow runs for commit `620c3682caddc60fbb24e107caef4752bc759b5c`: artifact parity run 43253044620 and binding guard run 43253044657, both success; these are not a substitute for current-head CI.
 - Cloudflare deployments API, read-only check 2026-11-12.
+
+## Read-only verification — 2026-11-12, automation follow-up
+
+Cloudflare deployments API was queried again for the **existing** production script `candidatory-miniapp-api`: current deployment `860f813c-baf4-4cff-bfc7-bb4120b910ed`, version `3c35231f-36f0-4bad-b786-9a4309d8e868`, 100% traffic; deployment creation `2026-11-11T20:05:53.015284Z`. This is metadata evidence, **not** proof of HTTP health or module parity.
+
+Cloudflare script settings read-only response: compatibility date `2026-10-27`, compatibility flags empty; bindings `ADMIN_TELEGRAM_IDS` (secret_text), `ADMIN_TELEGRAM_IDS_MAHDI` (secret_text), `AI` (ai), `AVALAI_API_KEY` (secret_text), `DB` (d1; `48b3c86b-45ea-492b-96e1-334dfafa2097`), `REVIEW_DB` (d1; `2b5f5ef4-d2fa-4234-a62c-e568cb45e4b0`), `TELEGRAM_BOT_TOKEN` (secret_text). No secret values accessed. Script-settings endpoint did not supply module inventory; its empty binding array is **not** evidence that script bindings are absent.
+
+GitHub branch `feature/cloudflare-parity-audit-2026-10-29` was found and the architecture and gap documents were read. Combined commit status endpoint for `30c57bd86b69c4519f65f2f2000591e726dcc33b` returned an empty status array: **not evidence of passing or failing GitHub Actions checks**. Exact current branch HEAD and its Actions checks require separate verification. Public repository commit search returned older commits and must not be used as a branch HEAD assertion.
+
+**Classification changes:** binding-name inventory = سالم (metadata only); production module parity = ناقص; exact-head CI = ناقص; HTTP smoke test = ناقص; rollback execution = ناقص. Release remains blocked. No deployment, D1 mutation, secret change, news Worker action, or second runtime was performed during this verification.
