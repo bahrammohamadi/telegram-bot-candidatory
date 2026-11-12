@@ -35,7 +35,7 @@ if (process.argv[2] === '--self-test') {
   assert.throws(() => inspectMultipart(make([...REQUIRED, REQUIRED[0]])), /Duplicate module/);
   assert.throws(() => inspectMultipart('--boundary\r\n'), /closing boundary/);
   assert.throws(() => inspectMultipart(make(REQUIRED).replace('export default {};', '')), /Empty module body/);
-  console.log('PASS multipart source completeness guard (4 cases)');
+  console.log('PASS multipart source completeness guard (5 cases)');
 } else if (process.argv[2]) {
   console.log(JSON.stringify(inspectMultipart(readFileSync(process.argv[2])), null, 2));
 } else {
