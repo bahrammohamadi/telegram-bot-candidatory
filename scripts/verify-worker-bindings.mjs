@@ -40,7 +40,7 @@ if (process.argv[2] === '--self-test') {
   assert.throws(()=>compareBindings(base,[{name:'DB',type:'d1',database_id:'review-456'},base[1]]),/Binding drift/);
   assert.throws(()=>compareBindings(base,[base[0]]),/Binding drift/);
   assert.throws(()=>compareBindings(base,[...base,base[0]]),/Duplicate binding/);
-  assert.throws(()=>compareBindings(base,[{name:'DB',type:'kv_namespace',database_id:'prod-123'},base[1]]),/Binding drift/);
+  assert.throws(()=>compareBindings(base,[{name:'DB',type:'kv_namespace',namespace_id:'kv-123'},base[1]]),/Binding drift/);
   assert.throws(()=>compareBindings([{name:'DB',type:'d1'}],[{name:'DB',type:'d1'}]),/Missing database_id/);
   assert.throws(()=>compareBindings([{name:'CACHE',type:'kv_namespace'}],[{name:'CACHE',type:'kv_namespace'}]),/Missing namespace_id/);
   assert.throws(()=>compareBindings([{name:'FILES',type:'r2_bucket'}],[{name:'FILES',type:'r2_bucket'}]),/Missing bucket_name/);
