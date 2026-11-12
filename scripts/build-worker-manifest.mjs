@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { strict as assert } from 'node:assert';
 
 const safeName = name => typeof name === 'string' && name.length > 0 &&
-  name === name.trim() && !name.includes('\\') && !name.includes('\\0') &&
+  name === name.trim() && !name.includes('\\') && !/[\x00-\x1f\x7f]/.test(name) &&
   !isAbsolute(name) && !name.split('/').some(part => !part || part === '.' || part === '..') &&
   !name.includes(':') && !name.includes('%');
 
@@ -44,9 +44,11 @@ if (process.argv[2] === '--self-test') {
     assert.throws(() => buildManifest(root, 'entrypoint.mjs', Array.of('..' + '/entrypoint.mjs')), /Invalid module inventory/);
     assert.throws(()=>buildManifest(root,'entrypoint.mjs',['entrypoint.mjs','%2e%2e/x']),/Invalid module inventory/);
     assert.throws(()=>buildManifest(root,'missing.mjs',['entrypoint.mjs']),/Invalid module inventory/);
+    assert.throws(()=>buildManifest(root,'entrypoint.mjs',['entrypoint.mjs','bad\u0000name.mjs']),/Invalid module inventory/);
+    assert.throws(()=>buildManifest(root,'entrypoint.mjs',['entrypoint.mjs','bad\nname.mjs']),/Invalid module inventory/);
     symlinkSync(join(root,'legacy.mjs'),join(root,'linked.mjs'));
     assert.throws(()=>buildManifest(root,'entrypoint.mjs',['entrypoint.mjs','linked.mjs']),/Unsafe module path/);
-    console.log('PASS offline artifact manifest builder (6 cases)');
+    console.log('PASS offline artifact manifest builder (8 cases)');
   } finally { rmSync(root,{recursive:true,force:true}); }
 } else if (process.argv.length>=5) {
   console.log(JSON.stringify(buildManifest(process.argv[2],process.argv[3],process.argv.slice(4)),null,2));
