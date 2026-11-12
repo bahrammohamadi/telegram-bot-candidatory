@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { strict as assert } from 'node:assert';
 
 const safeName = name => typeof name === 'string' && name.length > 0 &&
-  name === name.trim() && !name.includes('\\') && !/[\\x00-\\x1f\\x7f]/.test(name) &&
+  name === name.trim() && !name.includes('\\') && !/[\x00-\x1f\x7f]/.test(name) &&
   !isAbsolute(name) && !name.split('/').some(part => !part || part === '.' || part === '..') &&
   !name.includes(':') && !name.includes('%');
 
