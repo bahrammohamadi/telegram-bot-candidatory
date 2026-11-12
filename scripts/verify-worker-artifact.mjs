@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 const hash = '^[a-f0-9]{64}$';
 const safeModuleName = name => typeof name === 'string' && name.length > 0 && name === name.trim() &&
-  !name.startsWith('/') && !name.includes('\\\\') && !name.split('/').some(part => part === '' || part === '.' || part === '..');
+  !name.startsWith('/') && !name.includes(String.fromCharCode(92)) && !name.split('/').some(part => part === '' || part === '.' || part === '..');
 export function normalize(manifest) {
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.modules) ||
       !safeModuleName(manifest.main_module)) throw Error('Invalid artifact manifest');
