@@ -15,14 +15,22 @@ export function inspectMultipart(bytes) {
   const parts = segments.slice(1, -1);
   const names = parts.map(part => {
     const m = part.match(/Content-Disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]+)")?/i);
-    if (!m || !m[2]) throw new Error('Part without a filename');
+    if (!m) throw new Error('Missing part disposition');
+    if (m[1] === 'metadata' && !m[2]) {
+      const separator = part.includes('\\r\\n\\r\\n') ? '\\r\\n\\r\\n' : '\\n\\n';
+      if (!part.includes(separator)) throw new Error('Missing metadata body');
+      try { JSON.parse(part.slice(part.indexOf(separator) + separator.length).trim()); }
+      catch { throw new Error('Invalid metadata JSON'); }
+      return null;
+    }
+    if (!m[2]) throw new Error('Part without a filename');
     if (!/Content-Type:\s*application\/javascript\+module/i.test(part)) throw new Error('Non-module part: ' + m[1]);
     const separator = part.includes('\r\n\r\n') ? '\r\n\r\n' : '\n\n';
     if (!part.includes(separator)) throw new Error('Missing part body');
     const body = part.slice(part.indexOf(separator) + separator.length).replace(/\r?\n--$/, '').trim();
     if (!body) throw new Error('Empty module body: ' + m[2]);
     return m[2];
-  });
+  }).filter(Boolean);
   if (new Set(names).size !== names.length) throw new Error('Duplicate module filename');
   for (const name of REQUIRED) if (!names.includes(name)) throw new Error('Missing required module: ' + name);
   // Any extra modules are allowed but MUST be included in the inventory.
