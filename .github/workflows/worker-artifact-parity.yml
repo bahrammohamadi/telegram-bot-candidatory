@@ -1,15 +1,9 @@
 name: Worker multipart artifact parity
+# Always validate artifact safety on each change to the candidate branch,
+# not only when the manifest scripts themselves change. No deployment.
 on:
   push:
-    paths:
-      - 'scripts/verify-worker-artifact.mjs'
-      - 'scripts/build-worker-manifest.mjs'
-      - '.github/workflows/worker-artifact-parity.yml'
   pull_request:
-    paths:
-      - 'scripts/verify-worker-artifact.mjs'
-      - 'scripts/build-worker-manifest.mjs'
-      - '.github/workflows/worker-artifact-parity.yml'
   workflow_dispatch:
 permissions:
   contents: read
