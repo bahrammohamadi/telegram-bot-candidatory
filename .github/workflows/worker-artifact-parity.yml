@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - 'scripts/verify-worker-artifact.mjs'
+      - 'scripts/build-worker-manifest.mjs'
       - '.github/workflows/worker-artifact-parity.yml'
   workflow_dispatch:
 permissions:
