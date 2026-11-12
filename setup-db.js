@@ -34,20 +34,25 @@ const CONFIG = {
   endpoint:  process.env.APPWRITE_ENDPOINT  || "https://fra.cloud.appwrite.io/v1",
   projectId: process.env.APPWRITE_PROJECT_ID,
   apiKey:    process.env.APPWRITE_API_KEY,
-  databaseId:      process.env.DATABASE_ID         || "kandidatory_db",
+  databaseId:      process.env.DATABASE_ID || process.env.APPWRITE_DB_ID,
   databaseName:    "Kandidatory Database",
   collections: {
     users:   process.env.COLLECTION_USERS   || "users",
     consult: process.env.COLLECTION_CONSULT || "consultations",
-    leads:   process.env.COLLECTION_LEADS   || "leads",
+    leads:   process.env.COLLECTION_LEADS || process.env.APPWRITE_LEADS_COLLECTION || "leads_status",
+    // فاز ۱ (سند معماری §۸) — افزایشی؛ کالکشن‌های قبلی دست نمی‌خورند
+    tasks:    process.env.COLLECTION_TASKS    || "tasks",
+    meetings: process.env.COLLECTION_MEETINGS || "meetings",
+    aiJobs:   process.env.COLLECTION_AI_JOBS   || "ai_jobs",
+    audit:    process.env.COLLECTION_AUDIT    || "audit_logs",
   },
 };
 
 // ───────────────────────────────────────────────────────────────
 // اعتبارسنجی env
 // ───────────────────────────────────────────────────────────────
-if (!CONFIG.projectId || !CONFIG.apiKey) {
-  console.error("❌ خطا: APPWRITE_PROJECT_ID و APPWRITE_API_KEY الزامی هستند.");
+if (!CONFIG.projectId || !CONFIG.apiKey || !CONFIG.databaseId) {
+  console.error("❌ خطا: APPWRITE_PROJECT_ID، APPWRITE_API_KEY و DATABASE_ID الزامی هستند.");
   console.error("   لطفاً فایل .env را ایجاد کنید یا متغیرها را تنظیم کنید.");
   process.exit(1);
 }
@@ -88,13 +93,24 @@ const USERS_SCHEMA = {
     // آیا کاربر راهنمای ورود اول را دیده؟
     { key: "onboardingSeen",     type: "boolean",  required: false, default: false },
 
+    // وضعیت عملیات فاز ۱ (JSON): پیشرفت الزامات، پیش‌نویس جلسه/وظیفه
+    // افزایشی و سازگار — فلوهای قدیمی به این فیلد دست نمی‌زنند.
+    { key: "opsState",           type: "string",   size: 16384, required: false, default: "{}" },
+
     // اطلاعات هویتی
     { key: "nationalId",         type: "string",   size: 10,   required: false, default: null },
     { key: "phone",              type: "string",   size: 15,   required: false, default: null },
     { key: "fullName",           type: "string",   size: 128,  required: false, default: null },
 
     // پروفایل کاندیدا (JSON) — برای ذخیره پروفایل ۱۵+ فیلدی onboarding
-    { key: "profile",            type: "string",   size: 16384, required: false, default: "{}" },
+    // ⚠️ مهم: کد در src/flows/onboarding.js و src/utils/db.js از کلید
+    //         «candidateProfile» استفاده می‌کند. تا قبل از این patch، این
+    //         فیلد در دیتابیس وجود نداشت و هر تلاش برای ذخیره‌ی پروفایل
+    //         با خطای «Attribute candidateProfile not found» شکست می‌خورد.
+    //         فیلد قدیمی «profile» را نیز برای سازگاری با schemaهای قبلی
+    //         نگه می‌داریم (در آینده می‌توان حذف کرد پس از migration).
+    { key: "candidateProfile",   type: "string",   size: 16384, required: false, default: "{}" },
+    { key: "profile",            type: "string",   size: 16384, required: false, default: "{}" }, // legacy — استفاده نمی‌شود
 
     // داده‌های مدیریت کمپین (JSON)
     { key: "rivals",             type: "string",   size: 32768, required: false, default: "[]" },
@@ -191,6 +207,87 @@ const LEADS_SCHEMA = {
   ],
 };
 
+// ✅ TASKS (فاز ۱ — سند §۸: Tasks, Assignments, TaskEvents)
+// هر وظیفه: مالک (userId)، وضعیت، اولویت، منبع، مهلت، نسخه‌ی هم‌زمانی،
+// کلید idempotency برای جلوگیری از ثبت تکراری.
+const TASKS_SCHEMA = {
+  attributes: [
+    { key: "userId",         type: "string",   size: 32,    required: true,  default: null },
+    { key: "title",          type: "string",   size: 256,   required: true,  default: null },
+    { key: "status",         type: "string",   size: 16,    required: false, default: "open" },
+    { key: "priority",       type: "string",   size: 16,    required: false, default: "normal" },
+    { key: "source",         type: "string",   size: 16,    required: false, default: "manual" },
+    { key: "dueAt",          type: "datetime", required: false, default: null },
+    { key: "meetingId",      type: "string",   size: 64,    required: false, default: null },
+    { key: "requirementId",  type: "string",   size: 64,    required: false, default: null },
+    { key: "idempotencyKey", type: "string",   size: 128,   required: false, default: null },
+    { key: "version",        type: "integer",  required: false, default: 1 },
+    { key: "createdAt",      type: "datetime", required: false, default: null },
+    { key: "updatedAt",      type: "datetime", required: false, default: null },
+    { key: "completedAt",    type: "datetime", required: false, default: null },
+  ],
+  indexes: [
+    { key: "idx_userId",          type: "key",    attributes: ["userId"] },
+    { key: "idx_user_status",     type: "key",    attributes: ["userId", "status"] },
+    { key: "idx_user_due",        type: "key",    attributes: ["userId", "dueAt"] },
+    { key: "idx_idempotency",     type: "key",    attributes: ["userId", "idempotencyKey"] },
+  ],
+};
+
+// ✅ MEETINGS (فاز ۱ — سند §۸: Meetings, Decisions, ActionItems)
+// تصمیم‌ها در decisions و اقدام‌ها به‌صورت وظیفه‌ی جدا (source=meeting) ذخیره می‌شوند.
+const MEETINGS_SCHEMA = {
+  attributes: [
+    { key: "userId",    type: "string",   size: 32,    required: true,  default: null },
+    { key: "title",     type: "string",   size: 256,   required: true,  default: null },
+    { key: "notes",     type: "string",   size: 8192,  required: false, default: null },
+    { key: "decisions", type: "string",   size: 8192,  required: false, default: null },
+    { key: "heldAt",    type: "datetime", required: false, default: null },
+    { key: "createdAt", type: "datetime", required: false, default: null },
+    { key: "updatedAt", type: "datetime", required: false, default: null },
+  ],
+  indexes: [
+    { key: "idx_userId",    type: "key", attributes: ["userId"] },
+    { key: "idx_createdAt", type: "key", attributes: ["createdAt"], orders: ["DESC"] },
+  ],
+};
+
+// ✅ AI JOBS (فاز ۱ — سند §۸/§۱۰: AIJobs, AIUsage, AIApprovals)
+const AI_JOBS_SCHEMA = {
+  attributes: [
+    { key: "userId",       type: "string",   size: 32,    required: true,  default: null },
+    { key: "kind",         type: "string",   size: 32,    required: false, default: "knowledge_answer" },
+    { key: "operation",    type: "string",   size: 64,    required: false, default: "read_only" },
+    { key: "status",       type: "string",   size: 24,    required: false, default: "pending_approval" },
+    { key: "inputSummary", type: "string",   size: 2048,  required: false, default: null },
+    { key: "draftPayload", type: "string",   size: 16384, required: false, default: "{}" },
+    { key: "requestedBy",  type: "string",   size: 32,    required: false, default: null },
+    { key: "approvedBy",   type: "string",   size: 32,    required: false, default: null },
+    { key: "createdAt",    type: "datetime", required: false, default: null },
+    { key: "updatedAt",    type: "datetime", required: false, default: null },
+  ],
+  indexes: [
+    { key: "idx_userId",     type: "key", attributes: ["userId"] },
+    { key: "idx_user_status", type: "key", attributes: ["userId", "status"] },
+  ],
+};
+
+// ✅ AUDIT LOGS (فاز ۱ — سند §۸: AuditLogs) — بدون توکن/رمز (sanitize در دامنه)
+const AUDIT_SCHEMA = {
+  attributes: [
+    { key: "userId",     type: "string",   size: 32,    required: true,  default: null },
+    { key: "action",     type: "string",   size: 64,    required: false, default: null },
+    { key: "entityType", type: "string",   size: 64,    required: false, default: null },
+    { key: "entityId",   type: "string",   size: 128,   required: false, default: null },
+    { key: "meta",       type: "string",   size: 4096,  required: false, default: "{}" },
+    { key: "createdAt",  type: "datetime", required: false, default: null },
+  ],
+  indexes: [
+    { key: "idx_userId",    type: "key", attributes: ["userId"] },
+    { key: "idx_createdAt", type: "key", attributes: ["createdAt"], orders: ["DESC"] },
+  ],
+};
+
 // ───────────────────────────────────────────────────────────────
 // کمکی: انتظار با مدت مشخص
 // ───────────────────────────────────────────────────────────────
@@ -249,12 +346,8 @@ async function ensureCollection(collectionId, name) {
           CONFIG.databaseId,
           collectionId,
           name,
-          [
-            Permission.read(Role.any()),
-            Permission.create(Role.any()),
-            Permission.update(Role.any()),
-            Permission.delete(Role.any()),
-          ],
+          [], // Server API key only; never expose personal data publicly.
+
           false, // documentSecurity
           true,  // enabled
         );
@@ -344,7 +437,7 @@ async function createAttribute(collectionId, attr) {
       return false;
     }
     LOG.step(`❌ خطا در ${key}: ${e.message}`);
-    return false;
+    throw e;
   }
 }
 
@@ -369,7 +462,7 @@ async function createIndex(collectionId, idx) {
       return false;
     }
     LOG.step(`❌ خطا در ایندکس ${idx.key}: ${e.message}`);
-    return false;
+    throw e;
   }
 }
 
@@ -464,6 +557,11 @@ async function main() {
     await setupCollection(CONFIG.collections.users,   "Users",         USERS_SCHEMA);
     await setupCollection(CONFIG.collections.consult, "Consultations", CONSULT_SCHEMA);
     await setupCollection(CONFIG.collections.leads,   "Leads",         LEADS_SCHEMA);
+    // فاز ۱ — افزایشی و idempotent؛ داده‌های موجود دست نمی‌خورند
+    await setupCollection(CONFIG.collections.tasks,    "Tasks",    TASKS_SCHEMA);
+    await setupCollection(CONFIG.collections.meetings, "Meetings", MEETINGS_SCHEMA);
+    await setupCollection(CONFIG.collections.aiJobs,   "AI Jobs",  AI_JOBS_SCHEMA);
+    await setupCollection(CONFIG.collections.audit,    "Audit Logs", AUDIT_SCHEMA);
 
     // ۳) خلاصه
     await printSummary();

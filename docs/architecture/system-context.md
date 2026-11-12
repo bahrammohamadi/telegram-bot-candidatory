@@ -1,0 +1,2 @@
+# زمینه سامانه
+در این مخزن: ربات Node.js/grammY، Appwrite Functions و Appwrite Database، با adapter تولید متن Gemini/OpenAI. مسیرهای عملیاتی جدید پشت `ENABLE_EXPERIMENTAL_OPERATIONS=true` و فقط برای محیط آزمایشی هستند. Worker اصلی، مینی‌اپ و دیتابیس زنده بررسی نشده‌اند؛ نبود آن‌ها در مخزن به معنای نبود در محصول نیست. معماری Cloudflare و API هدف پیشنهادی است، نه استقرار اثبات‌شده. رجوع به `gap-analysis.md`.

@@ -17,10 +17,24 @@
 //       در دیتابیس ذخیره می‌کنیم تا جلسه بین فراخوانی‌ها حفظ شود.
 // ═══════════════════════════════════════════════════════════════
 
+const crypto = require("crypto");
 const { getOrCreateUser, updateUser } = require("./db.js");
 
 // مدت اعتبار جلسه‌ی ادمین پس از زدن رمز (به دقیقه)
 const SESSION_MINUTES = parseInt(process.env.ADMIN_SESSION_MINUTES || "30", 10);
+
+// ───────────────────────────────────────────────────────────────
+// Brute-force protection
+// ───────────────────────────────────────────────────────────────
+// تعداد تلاش‌های مجاز قبل از قفل شدن موقت (پیش‌فرض ۵)
+const MAX_PIN_ATTEMPTS = parseInt(process.env.ADMIN_MAX_ATTEMPTS || "5", 10);
+// مدت قفل پس از رسیدن به سقف (پیش‌فرض ۱۵ دقیقه)
+const LOCKOUT_MINUTES = parseInt(process.env.ADMIN_LOCKOUT_MINUTES || "15", 10);
+
+// شمارنده‌ی in-memory برای تلاش‌های ناموفق per-user.
+// (در serverless ایده‌آل نیست، اما warm instance ها مزاحم می‌شوند.
+// در turn بعدی می‌توان به Appwrite منتقل کرد.)
+const _failedAttempts = new Map(); // userId → { count, lockedUntil }
 
 // State موقت برای فلوی «در انتظار دریافت رمز»
 // از همان بازه‌ی state ادمین استفاده می‌کنیم تا با بقیه تداخل نکند.
@@ -85,9 +99,74 @@ function isPasswordEnabled() {
   return !!(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length > 0);
 }
 
+// مقایسه‌ی امن در برابر timing attack
+// قبلاً از === استفاده می‌شد که بر اساس اولین کاراکتر متفاوت زمان متفاوتی می‌گیرد
+// و در تئوری امکان حدس کاراکتر-به-کاراکتر را می‌دهد. crypto.timingSafeEqual
+// همیشه زمان ثابت برای buffers هم‌سایز برمی‌گرداند.
+function _safeEqual(a, b) {
+  const ba = Buffer.from(String(a || ""), "utf8");
+  const bb = Buffer.from(String(b || ""), "utf8");
+  if (ba.length !== bb.length) {
+    // برای جلوگیری از leak طول، یک مقایسه‌ی dummy انجام بده
+    crypto.timingSafeEqual(ba, ba);
+    return false;
+  }
+  return crypto.timingSafeEqual(ba, bb);
+}
+
 function checkPassword(input) {
   if (!isPasswordEnabled()) return true;
-  return String(input || "").trim() === String(process.env.ADMIN_PASSWORD);
+  return _safeEqual(String(input || "").trim(), String(process.env.ADMIN_PASSWORD));
+}
+
+// ───────────────────────────────────────────────────────────────
+// Brute-force protection helpers
+// خروجی attemptLogin:
+//   { ok: true } — اجازه عبور
+//   { ok: false, reason: "locked", remainingMinutes } — قفل
+//   { ok: false, reason: "bad", attemptsLeft } — رمز اشتباه
+// ───────────────────────────────────────────────────────────────
+function attemptLogin(userId, input) {
+  const key = String(userId);
+  const now = Date.now();
+  const state = _failedAttempts.get(key) || { count: 0, lockedUntil: 0 };
+
+  // اگر هنوز در قفل است
+  if (state.lockedUntil > now) {
+    return {
+      ok: false,
+      reason: "locked",
+      remainingMinutes: Math.ceil((state.lockedUntil - now) / 60_000),
+    };
+  }
+
+  if (checkPassword(input)) {
+    _failedAttempts.delete(key); // reset
+    return { ok: true };
+  }
+
+  state.count += 1;
+  if (state.count >= MAX_PIN_ATTEMPTS) {
+    state.lockedUntil = now + LOCKOUT_MINUTES * 60_000;
+    state.count = 0;
+    _failedAttempts.set(key, state);
+    return { ok: false, reason: "locked", remainingMinutes: LOCKOUT_MINUTES };
+  }
+
+  _failedAttempts.set(key, state);
+  return { ok: false, reason: "bad", attemptsLeft: MAX_PIN_ATTEMPTS - state.count };
+}
+
+// پاکسازی periodic از حافظه (برای محیط‌های long-running)
+function _cleanupAttempts() {
+  const now = Date.now();
+  for (const [k, v] of _failedAttempts) {
+    if (v.lockedUntil < now && v.count === 0) _failedAttempts.delete(k);
+  }
+}
+if (typeof setInterval === "function") {
+  const t = setInterval(_cleanupAttempts, 5 * 60_000);
+  if (t.unref) t.unref();
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -129,11 +208,14 @@ async function lockSession(userId) {
 module.exports = {
   ADMIN_AWAITING_PASSWORD,
   SESSION_MINUTES,
+  MAX_PIN_ATTEMPTS,
+  LOCKOUT_MINUTES,
   getAdminIdsFromEnv,
   isAdminUser,
   isAdminUserSync,
   isPasswordEnabled,
   checkPassword,
+  attemptLogin,
   isSessionUnlocked,
   unlockSession,
   lockSession,

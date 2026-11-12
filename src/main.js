@@ -13,13 +13,14 @@
 const { Bot, InlineKeyboard, webhookCallback } = require("grammy");
 
 // ───────────────────────────────────────────────────────────────
-// ماژول‌ها (ترتیب: utils → flows)
+// ماژول‌ها (ترتیب: utils → middleware → flows)
 // ───────────────────────────────────────────────────────────────
 const { getOrCreateUser, updateUser, initDB } = require("./utils/db.js");
 const { requireAccess } = require("./utils/access.js");
 const { mainMenuKB, analysisMenuKB } = require("./utils/keyboard.js");
 const { isAdminUserSync } = require("./utils/admin-auth.js");
 const { registerCompatRoutes } = require("./flows/router-compat.js");
+const { rateLimitMiddleware, startCleanup } = require("./middleware/rate-limit.js");
 
 // ─── بارگذاری امن فلوها ─────────────────────────────────────────
 // اگر فایلی هنوز در پروژه نباشد، crash نمی‌کنیم؛ یک stub قرار می‌دهیم
@@ -47,6 +48,8 @@ const plans       = safeRequire("./flows/plans.js",                "plans")     
 const history     = safeRequire("./flows/history.js",              "history")     || {};
 const contact     = safeRequire("./flows/contact.js",              "contact")     || {};
 const admin       = safeRequire("./flows/admin.js",                "admin")       || {};
+const operationsEnabled = process.env.ENABLE_EXPERIMENTAL_OPERATIONS === "true";
+const operations  = safeRequire("./flows/operations.js",           "operations")  || {};
 
 // کمکی: ارسال پیام «در حال توسعه» برای فلوهایی که هنوز کد ندارند
 async function notReady(ctx, featureName) {
@@ -114,8 +117,12 @@ bot.api.config.use(async (prev, method, payload, signal) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// ۲) Middleware جهانی: خطایابی و log
+// ۲) Middleware جهانی: rate-limit → خطایابی → log
 // ═══════════════════════════════════════════════════════════════
+// Rate-limit در ابتدای زنجیره تا قبل از هر کار دیگر اعمال شود
+// (قبلاً ساخته شده بود ولی نصب نشده بود → عملاً غیرفعال — رفع باگ C4)
+bot.use(rateLimitMiddleware());
+
 bot.use(async (ctx, next) => {
   const t0 = Date.now();
   try {
@@ -256,6 +263,68 @@ bot.command("dashboard", async (ctx) => {
 // /admin — پنل ادمین (با کنترل دسترسی داخلی)
 bot.command("admin", async (ctx) => {
   return admin.handleAdminPanel(ctx);
+});
+
+// ─── فاز ۱: دستورات عملیات (امروز / مسیر / کارها / حساب) ───
+// این دستورات روی همان ربات موجود سوار می‌شوند (سند §۱۸: یک محصول اصلی).
+bot.command("today", async (ctx) => {
+  if (!operationsEnabled) return ctx.reply("⚠️ این بخش هنوز فعال نشده است.");
+  if (typeof operations.showToday === "function") return operations.showToday(ctx);
+  await ctx.reply("⚠️ این بخش در دسترس نیست.");
+});
+bot.command("journey", async (ctx) => {
+  if (!operationsEnabled) return ctx.reply("⚠️ این بخش هنوز فعال نشده است.");
+  if (typeof operations.showJourney === "function") return operations.showJourney(ctx);
+  await ctx.reply("⚠️ این بخش در دسترس نیست.");
+});
+bot.command("tasks", async (ctx) => {
+  if (!operationsEnabled) return ctx.reply("⚠️ این بخش هنوز فعال نشده است.");
+  if (typeof operations.showTasks === "function") return operations.showTasks(ctx);
+  await ctx.reply("⚠️ این بخش در دسترس نیست.");
+});
+bot.command("account", async (ctx) => {
+  if (!operationsEnabled) return ctx.reply("⚠️ این بخش هنوز فعال نشده است.");
+  if (typeof operations.showAccount === "function") return operations.showAccount(ctx);
+  await ctx.reply("⚠️ این بخش در دسترس نیست.");
+});
+// ثبت سریع با دستور: /task عنوان وظیفه
+bot.command("task", async (ctx) => {
+  if (!operationsEnabled) return ctx.reply("⚠️ این بخش هنوز فعال نشده است.");
+  const arg = String(ctx.message?.text || "").replace(/^\/task\s*/i, "").trim();
+  if (!arg) {
+    if (typeof operations.showTasks === "function") return operations.showTasks(ctx);
+    return;
+  }
+  // مسیر سریع: ساخت مستقیم بدون state (مهلت/اولویت پیش‌فرض)
+  try {
+    const { createTask, logAudit } = require("./utils/db.js");
+    const { task } = await createTask(String(ctx.from.id), {
+      title: arg.slice(0, 200),
+      source: "manual",
+      priority: "normal",
+      idempotencyKey: `telegram-update:${ctx.update.update_id}`,
+    });
+    await logAudit(String(ctx.from.id), {
+      action: "task.create",
+      entityType: "task",
+      entityId: String(task.$id || task.id || ""),
+      meta: { source: "manual", via: "/task" },
+    });
+    await ctx.reply(`✅ وظیفه ثبت شد:\n\n📌 ${arg.slice(0, 120)}`, {
+      reply_markup: new InlineKeyboard().text("📋 کارها", "ops:tasks"),
+    });
+  } catch (e) {
+    const { isCollectionMissing } = require("./utils/db.js");
+    if (isCollectionMissing(e)) {
+      await ctx.reply(
+        "⚠️ بخش «کارها» هنوز فعال نشده است. ادمین باید `node setup-db.js` را اجرا کند.",
+        { parse_mode: "Markdown" }
+      );
+    } else {
+      console.error("[command:task]", e?.message || e);
+      await ctx.reply("⚠️ ثبت وظیفه ناموفق بود.");
+    }
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -624,6 +693,13 @@ bot.callbackQuery(/^plans:/,   plans.handlePlansCallback);
 bot.callbackQuery(/^history:/, history.handleHistoryCallback);
 bot.callbackQuery(/^contact:/, contact.handleContactCallback);
 bot.callbackQuery(/^admin:/,   admin.handleAdminCallback);
+// فاز ۱: عملیات (امروز/مسیر/کارها/جلسات/الزامات/حساب/تأیید AI)
+bot.callbackQuery(/^ops:/, async (ctx) => {
+  if (!operationsEnabled) return ctx.answerCallbackQuery({ text: "این بخش هنوز فعال نشده است.", show_alert: true });
+  if (typeof operations.handleOperationsCallback === "function") {
+    return operations.handleOperationsCallback(ctx);
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // ۶‑الف) روتر سازگاری: وصل کردن callbackهای legacy فلوها
@@ -656,6 +732,7 @@ bot.on("message:text", async (ctx) => {
   try {
     const textHandlers = [
       [admin,       ["handleTextInput"]],
+      [operationsEnabled ? operations : null, ["handleTextInput"]],
       [content,     ["handleTextInput"]],
       [onboarding,  ["handleTextInput", "handleProfileTextInput"]],
       [readiness,   ["handleTextInput"]],
@@ -767,16 +844,30 @@ bot.catch((err) => {
 // ═══════════════════════════════════════════════════════════════
 // Appwrite این تابع را با ({req, res, log, error}) صدا می‌زند.
 // تلگرام POSTهای webhook را به این endpoint ارسال می‌کند.
+//
+// ─── تغییرات Patch 1 (Turn 2) ─────────────────────────────────
+//   C2: کد مرده‌ی fakeRequest/fakeResponse/webhookCallback حذف شد
+//       — به‌جایش مستقیم bot.handleUpdate صدا زده می‌شود (روش رسمی).
+//   C3: bot.init() ⇐ اگر BOT_INFO استاتیک نداشته باشیم، در اولین
+//       فراخوانی یک‌بار با تلگرام sync می‌کنیم و در همان فرایند cache
+//       می‌گذاریم تا call های بعدی (warm) سریع باشند.
+//   M2: webhook با X-Telegram-Bot-Api-Secret-Token header محافظت
+//       می‌شود (در صورت تنظیم BOT_WEBHOOK_SECRET).
 // ═══════════════════════════════════════════════════════════════
 
-let webhookHandler = null;
-
-function getWebhookHandler() {
-  if (!webhookHandler) {
-    // grammy یک adapter سفارشی برای Appwrite ندارد، پس از adapter استاندارد استفاده می‌کنیم
-    webhookHandler = webhookCallback(bot, "http");
+// (C3) سیگنال یک‌بار-init برای bot در سرورhای serverless که bot.botInfo
+// ندارند. در warm instance ها این متغیر باقی می‌ماند و دوباره init نمی‌کنیم.
+let _botInitPromise = null;
+async function ensureBotInitialized() {
+  if (bot.botInfo) return;
+  if (!_botInitPromise) {
+    _botInitPromise = bot.init().catch((e) => {
+      // در صورت شکست، promise را پاک کن تا تلاش بعدی دوباره امتحان کند
+      _botInitPromise = null;
+      throw e;
+    });
   }
-  return webhookHandler;
+  await _botInitPromise;
 }
 
 /**
@@ -785,7 +876,7 @@ function getWebhookHandler() {
  */
 module.exports = async function ({ req, res, log, error }) {
   try {
-    // health check
+    // ─── (1) Health check ───────────────────────────────────────
     if (req.method === "GET") {
       log && log("[health] GET request");
       return res.json({
@@ -793,6 +884,7 @@ module.exports = async function ({ req, res, log, error }) {
         bot: "candidatory-bot",
         version: "2.0.0",
         runtime: "appwrite-function",
+        botInitialized: !!bot.botInfo,
         timestamp: new Date().toISOString(),
       });
     }
@@ -801,16 +893,43 @@ module.exports = async function ({ req, res, log, error }) {
       return res.json({ error: "Method not allowed" }, 405);
     }
 
-    // اطمینان از init دیتابیس (idempotent)
-    try {
-      if (typeof initDB === "function") {
-        await initDB();
+    // ─── (2) Webhook secret verification (M2) ──────────────────
+    // اگر BOT_WEBHOOK_SECRET تنظیم شده باشد، فقط درخواست‌هایی که
+    // header مشابه را دارند پذیرفته می‌شوند. این جلوی update جعلی
+    // از کسانی که URL endpoint را می‌دانند را می‌گیرد.
+    const expectedSecret = process.env.BOT_WEBHOOK_SECRET || "";
+    if (expectedSecret) {
+      const headerSecret =
+        (req.headers && (req.headers["x-telegram-bot-api-secret-token"] ||
+                         req.headers["X-Telegram-Bot-Api-Secret-Token"])) || "";
+      if (headerSecret !== expectedSecret) {
+        error && error("[webhook] secret token mismatch — rejected");
+        // 401 ولی همچنان 200 برمی‌گردانیم تا تلگرام retry نکند
+        // (اگر این یک حمله بود، ربات خودش تشخیص داده و log کرده)
+        return res.json({ ok: false, error: "unauthorized" });
       }
-    } catch (e) {
-      error && error("[initDB] " + (e?.message || e));
     }
 
-    // بدنه‌ی request (Appwrite ممکن است body را به صورت آبجکت یا string بدهد)
+    // ─── (3) Init DB (idempotent) ──────────────────────────────
+    try {
+      if (typeof initDB === "function") initDB();
+    } catch (e) {
+      error && error("[initDB] " + (e?.message || e));
+      // اگر DB init شکست بخورد، فلوها به‌هرحال شکست می‌خورند ولی
+      // ما به update پاسخ می‌دهیم تا تلگرام retry storm نکند
+    }
+
+    // ─── (4) Ensure bot is initialized (C3) ────────────────────
+    // اگر BOT_INFO استاتیک تنظیم شده، bot از همان ابتدا botInfo دارد.
+    // در غیر این صورت، اولین فراخوانی یک getMe می‌زند و cache می‌کند.
+    try {
+      await ensureBotInitialized();
+    } catch (e) {
+      error && error("[bot.init] " + (e?.message || e));
+      return res.json({ ok: false, error: "bot_init_failed" });
+    }
+
+    // ─── (5) Parse body ────────────────────────────────────────
     let body = req.body;
     if (typeof body === "string") {
       try { body = JSON.parse(body); } catch {}
@@ -820,25 +939,11 @@ module.exports = async function ({ req, res, log, error }) {
       return res.json({ ok: true });
     }
 
-    // ساخت یک Request شبیه‌سازی‌شده برای grammy webhookCallback
-    const fakeRequest = {
-      method: "POST",
-      headers: req.headers || {},
-      body: () => Promise.resolve(body),
-      json: () => Promise.resolve(body),
-    };
-
-    let responseBody = null;
-    let responseStatus = 200;
-    const fakeResponse = {
-      end: (data) => { responseBody = data; },
-      status: (s) => { responseStatus = s; return fakeResponse; },
-      send: (data) => { responseBody = data; },
-      json: (data) => { responseBody = JSON.stringify(data); },
-      setHeader: () => {},
-    };
-
-    // پردازش مستقیم با bot.handleUpdate (روش ساده‌تر و قابل اعتماد در serverless)
+    // ─── (6) Handle update ─────────────────────────────────────
+    // مستقیماً bot.handleUpdate استفاده می‌کنیم — این روش رسمی grammY
+    // برای محیط‌هایی است که web framework خودشان را دارند.
+    // (قبلاً اینجا fakeRequest/fakeResponse ساخته می‌شد اما هرگز استفاده
+    // نمی‌شد — کد مرده. حذف شد.)
     await bot.handleUpdate(body);
 
     return res.json({ ok: true });
@@ -861,7 +966,7 @@ if (require.main === module) {
 
     try {
       if (typeof initDB === "function") {
-        await initDB();
+        initDB();
         console.log("✅ دیتابیس راه‌اندازی شد");
       }
     } catch (e) {
@@ -875,6 +980,9 @@ if (require.main === module) {
       console.error("❌ اتصال به تلگرام ناموفق:", e.message);
       process.exit(1);
     }
+
+    // فعال‌سازی cleanup حافظه‌ی rate-limit (فقط برای polling/long-running)
+    startCleanup();
 
     bot.start({
       onStart: (info) => {
