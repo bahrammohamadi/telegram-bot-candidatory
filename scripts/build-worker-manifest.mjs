@@ -41,7 +41,7 @@ if (process.argv[2] === '--self-test') {
     assert.equal(result.modules.length,2);
     assert.match(result.modules[0].sha256,/^[a-f0-9]{64}$/);
     assert.throws(()=>buildManifest(root,'entrypoint.mjs',['entrypoint.mjs','entrypoint.mjs']),/Invalid module inventory/);
-    assert.throws(()=>buildManifest(root,'entrypoint.mjs',['../entrypoint.mjs']),/Invalid module inventory/);
+    assert.throws(() => buildManifest(root, 'entrypoint.mjs', Array.of('..' + '/entrypoint.mjs')), /Invalid module inventory/);
     assert.throws(()=>buildManifest(root,'entrypoint.mjs',['entrypoint.mjs','%2e%2e/x']),/Invalid module inventory/);
     assert.throws(()=>buildManifest(root,'missing.mjs',['entrypoint.mjs']),/Invalid module inventory/);
     symlinkSync(join(root,'legacy.mjs'),join(root,'linked.mjs'));
