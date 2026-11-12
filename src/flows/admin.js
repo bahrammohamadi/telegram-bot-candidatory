@@ -21,12 +21,14 @@ const {
   updateUser,
   getStats,
   listLeads,
+  getLeadById,         // ← اضافه: جایگزین گردش روی کل لیست
   updateLead,
   findByNationalId,
   findByPhone,
   getUserById,
   listAllUsers,
   listRecentUsers,
+  iterateAllUsers,     // ← اضافه: pagination واقعی برای broadcast
 } = require("../utils/db.js");
 const { setUserPlan, PLAN_LEVELS } = require("../utils/access.js");
 const {
@@ -35,10 +37,12 @@ const {
   isAdminUser,
   isPasswordEnabled,
   checkPassword,
+  attemptLogin,
   isSessionUnlocked,
   unlockSession,
   lockSession,
 } = require("../utils/admin-auth.js");
+const { escapeMd, plain, truncate } = require("../utils/safe-text.js");
 
 // ───────────────────────────────────────────────────────────────
 // State برای ورودی متنی ادمین (جستجو، broadcast)
@@ -302,8 +306,10 @@ async function handleLeadsList(ctx, page = 0, status = "pending") {
 
   slice.forEach((lead, i) => {
     const num = start + i + 1;
-    const name = lead.firstName || lead.username || "بی‌نام";
-    const planName = lead.planName || lead.planId || "—";
+    // داده‌ی کاربر را escape می‌کنیم تا کاراکترهای markdown او parse را نشکنند
+    // یا لینک جعلی تزریق نکنند
+    const name = escapeMd(lead.firstName || lead.username || "بی‌نام");
+    const planName = escapeMd(lead.planName || lead.planId || "—");
     const date = fmtDate(lead.createdAt);
     text +=
       `*${num}.* ${name}\n` +
@@ -363,13 +369,14 @@ function leadsFilterKB(page, status, totalPages) {
 async function handleLeadView(ctx, leadId) {
   if (!(await ensureAdminUnlocked(ctx))) return;
 
-  let leads = [];
+  // قبلاً ۵۰۰ سند را می‌خواند و local search می‌کرد (هزینه‌بر و کند).
+  // حالا یک getDocument مستقیم — O(1) به جای O(n).
+  let lead = null;
   try {
-    leads = (await listLeads({ status: "all", limit: 500 })) || [];
+    lead = await getLeadById(leadId);
   } catch (e) {
-    console.error("[admin] leadView error:", e);
+    console.error("[admin] getLeadById error:", e);
   }
-  const lead = leads.find((l) => (l.id || l.$id) === leadId);
 
   if (!lead) {
     await ctx.answerCallbackQuery({ text: "لید یافت نشد", show_alert: true });
@@ -382,17 +389,17 @@ async function handleLeadView(ctx, leadId) {
     `🔖 *کد:* \`${(lead.id || lead.$id || "").toString().slice(-12)}\`\n` +
     `📊 *وضعیت:* ${statusLabel(lead.status)}\n\n` +
     `👤 *کاربر*\n` +
-    `   • نام: ${lead.firstName || "—"} ${lead.lastName || ""}\n` +
-    `   • یوزرنیم: ${lead.username ? "@" + lead.username : "—"}\n` +
+    `   • نام: ${escapeMd(lead.firstName || "—")} ${escapeMd(lead.lastName || "")}\n` +
+    `   • یوزرنیم: ${lead.username ? "@" + escapeMd(lead.username) : "—"}\n` +
     `   • تلگرام ID: \`${lead.userId || "—"}\`\n` +
-    `   • شماره: ${lead.phone || "—"}\n` +
-    `   • کد ملی: ${lead.nationalId || "—"}\n\n` +
+    `   • شماره: ${escapeMd(lead.phone || "—")}\n` +
+    `   • کد ملی: ${escapeMd(lead.nationalId || "—")}\n\n` +
     `📦 *خرید*\n` +
-    `   • بسته: ${lead.planName || lead.planId || "—"}\n` +
+    `   • بسته: ${escapeMd(lead.planName || lead.planId || "—")}\n` +
     `   • مبلغ: ${(lead.priceNumeric ?? 0).toLocaleString("fa-IR")} تومان\n` +
     `   • تاریخ ثبت: ${fmtDate(lead.createdAt)}\n` +
     (lead.confirmedAt ? `   • تاریخ تأیید: ${fmtDate(lead.confirmedAt)}\n` : "") +
-    (lead.note ? `\n📝 *یادداشت:* ${lead.note}` : "");
+    (lead.note ? `\n📝 *یادداشت:* ${escapeMd(truncate(lead.note, 500))}` : "");
 
   const kb = new InlineKeyboard();
 
@@ -420,13 +427,12 @@ async function handleLeadView(ctx, leadId) {
 async function handleLeadAction(ctx, action, leadId) {
   if (!(await ensureAdminUnlocked(ctx))) return;
 
-  let leads = [];
+  let lead = null;
   try {
-    leads = (await listLeads({ status: "all", limit: 500 })) || [];
+    lead = await getLeadById(leadId);
   } catch (e) {
-    console.error("[admin] leadAction error:", e);
+    console.error("[admin] getLeadById error:", e);
   }
-  const lead = leads.find((l) => (l.id || l.$id) === leadId);
 
   if (!lead) {
     await ctx.answerCallbackQuery({ text: "لید یافت نشد", show_alert: true });
@@ -501,14 +507,16 @@ async function handleUsersList(ctx, page = 0) {
   const kb = new InlineKeyboard();
   slice.forEach((u, i) => {
     const num = start + i + 1;
-    const name = u.firstName || u.username || `User-${(u.userId || "").slice(-6)}`;
+    const rawName = u.firstName || u.username || `User-${(u.userId || "").slice(-6)}`;
+    const safeName = escapeMd(rawName);             // برای متن Markdown
+    const buttonName = plain(rawName, 30);          // برای دکمه (بدون markdown)
     const plan = planLabel(u.purchasedPlan || u.role);
     const lastSeen = fmtDate(u.lastInteractionNew || u.lastInteraction);
     text +=
-      `*${num}.* ${name}\n` +
+      `*${num}.* ${safeName}\n` +
       `   ${plan}\n` +
       `   🕒 ${lastSeen}\n\n`;
-    kb.text(`👁 ${name}`, `admin:user:${u.userId}`).row();
+    kb.text(`👁 ${buttonName}`, `admin:user:${u.userId}`).row();
   });
 
   if (totalPages > 1) {
@@ -581,10 +589,10 @@ async function handleUserView(ctx, targetUserId) {
     `👤 *جزئیات کاربر*\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
     `🆔 *تلگرام ID:* \`${user.userId || targetUserId}\`\n` +
-    `📛 *نام:* ${user.firstName || "—"} ${user.lastName || ""}\n` +
-    `🔖 *یوزرنیم:* ${user.username ? "@" + user.username : "—"}\n` +
-    `📞 *شماره:* ${user.phone || "—"}\n` +
-    `🆔 *کد ملی:* ${user.nationalId || "—"}\n\n` +
+    `📛 *نام:* ${escapeMd(user.firstName || "—")} ${escapeMd(user.lastName || "")}\n` +
+    `🔖 *یوزرنیم:* ${user.username ? "@" + escapeMd(user.username) : "—"}\n` +
+    `📞 *شماره:* ${escapeMd(user.phone || "—")}\n` +
+    `🆔 *کد ملی:* ${escapeMd(user.nationalId || "—")}\n\n` +
     `💎 *پلن:* ${planLabel(user.purchasedPlan)}\n` +
     `🎭 *نقش:* ${user.role === "admin" ? "🛠 ادمین" : "👤 کاربر عادی"}\n\n` +
     `📅 *ثبت‌نام:* ${fmtDate(user.createdAt)}\n` +
@@ -747,31 +755,54 @@ async function handleBroadcastExecute(ctx) {
     return;
   }
 
-  let users = [];
+  // ────────────────────────────────────────────────────────────────
+  // قبلاً listAllUsers({ limit: 10000 }) → در Appwrite Cloud به‌خاطر
+  // سقف 100 در request واقعاً فقط ۱۰۰ تای اول broadcast می‌گرفتند.
+  // الان از iterateAllUsers (cursor pagination) استفاده می‌کنیم تا
+  // واقعاً همه‌ی کاربران را بپیماید. همچنین قبل از ارسال انبوه،
+  // پیام را با خود ادمین test می‌کنیم تا اشتباه markdown زود کشف شود.
+  // ────────────────────────────────────────────────────────────────
+
+  // (1) Test send به ادمین — اگر parse fail شود، broadcast کنسل می‌شود
   try {
-    users = (await listAllUsers({ limit: 10000 })) || [];
+    await ctx.api.sendMessage(adminId, message, { parse_mode: "Markdown" });
   } catch (e) {
-    console.error("[admin] broadcast listAllUsers error:", e);
+    await ctx.reply(
+      `⚠️ پیام شما به دلیل خطای قالب‌بندی قابل ارسال نیست:\n\n\`${(e?.description || e?.message || "خطای نامشخص").slice(0, 200)}\`\n\n` +
+      `لطفاً متن را اصلاح کنید (احتمالاً یک \\_ یا \\* بدون جفت دارید).`,
+      { parse_mode: "Markdown" }
+    );
+    await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
+    return;
   }
 
-  let success = 0;
-  let failed = 0;
-
-  // پاسخ اولیه به کاربر
+  // (2) پاسخ اولیه — هنوز total را نمی‌دانیم چون pagination است
   await sendOrEdit(
     ctx,
-    `📤 *ارسال آغاز شد...*\n\n_در حال ارسال به ${users.length} کاربر..._`,
+    `📤 *ارسال آغاز شد...*\n\n_در حال پردازش..._`,
     new InlineKeyboard().text("⏳ صبر کنید", "admin:noop")
   );
 
-  for (const u of users) {
+  let success = 0;
+  let failed = 0;
+  let total = 0;
+
+  for await (const u of iterateAllUsers(100)) {
+    total++;
+    // به خود ادمین دوباره نفرست (قبلاً test سند شد)
+    if (String(u.userId) === String(adminId)) {
+      success++;
+      continue;
+    }
     try {
       await ctx.api.sendMessage(u.userId, message, { parse_mode: "Markdown" });
       success++;
     } catch (e) {
       failed++;
+      // فقط چند خطای اول را لاگ کن تا CloudWatch/Appwrite log منفجر نشه
+      if (failed <= 3) console.warn("[broadcast] failed:", u.userId, e?.description || e?.message);
     }
-    // وقفه‌ی کوتاه برای جلوگیری از rate limit تلگرام
+    // وقفه‌ی کوتاه برای جلوگیری از rate limit تلگرام (سقف ~30/sec)
     await new Promise((r) => setTimeout(r, 50));
   }
 
@@ -781,7 +812,7 @@ async function handleBroadcastExecute(ctx) {
   const result =
     "✅ *ارسال پیام انبوه پایان یافت*\n" +
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
-    `📊 مجموع کاربران: ${users.length}\n` +
+    `📊 مجموع کاربران: ${total}\n` +
     `✅ ارسال موفق: ${success}\n` +
     `❌ ارسال ناموفق: ${failed}`;
 
@@ -810,20 +841,37 @@ async function handleTextInput(ctx) {
     // تلاش برای حذف پیام رمز کاربر (برای امنیت)
     try { await ctx.deleteMessage(); } catch {}
 
-    if (!checkPassword(text)) {
+    // attemptLogin شامل: timing-safe compare + brute-force lockout
+    const result = attemptLogin(adminId, text);
+
+    if (result.ok) {
+      // رمز درست → باز کردن جلسه و ورود به پنل
+      await unlockSession(adminId);
+      await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
+      await ctx.reply(`✅ رمز تأیید شد. خوش آمدید! (اعتبار جلسه: ${SESSION_MINUTES} دقیقه)`);
+      return handleAdminPanel(ctx);
+    }
+
+    // قفل → خروج کامل از فاز رمز و اعلام به کاربر
+    if (result.reason === "locked") {
       await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
       await ctx.reply(
-        "❌ رمز اشتباه است. ورود به پنل مدیریت لغو شد. جهت تلاش مجدد /admin را بزنید.",
-        { reply_markup: new InlineKeyboard().text("🏠 منوی اصلی", "menu") }
+        `⛔ به دلیل تلاش‌های ناموفق، ورود به پنل مدیریت تا *${result.remainingMinutes} دقیقه* قفل شد.`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: new InlineKeyboard().text("🏠 منوی اصلی", "menu"),
+        }
       );
       return true;
     }
 
-    // رمز درست → باز کردن جلسه و ورود به پنل
-    await unlockSession(adminId);
-    await updateUser(adminId, { currentStep: null, tempAnswers: "{}" });
-    await ctx.reply(`✅ رمز تأیید شد. خوش آمدید! (اعتبار جلسه: ${SESSION_MINUTES} دقیقه)`);
-    return handleAdminPanel(ctx);
+    // رمز اشتباه ولی هنوز قفل نشده → اجازه‌ی تلاش مجدد
+    await ctx.reply(
+      `❌ رمز اشتباه است. *${result.attemptsLeft} تلاش* باقی مانده.\n\n` +
+      `_رمز را دوباره ارسال کنید یا /cancel بزنید._`,
+      { parse_mode: "Markdown" }
+    );
+    return true;
   }
 
   if (!text) {

@@ -15,8 +15,16 @@ function mainMenuKB(user) {
   // ادمین = role === "admin" در دیتابیس یا حضور در ADMIN_IDS (env)
   const isAdmin = typeof user === 'object' && isAdminUserSync(user);
 
-  const kb = new InlineKeyboard()
-    .text("🚀 ارزیابی آمادگی", "start_consultation").row()
+  // فاز ۱ (سند §۵): «امروز» در بالای منو تا ارزش از اولین ورود برسد.
+  // دکمه‌های قدیمی حفظ شده‌اند — هیچ قابلیت موجودی حذف نشده است.
+  const kb = new InlineKeyboard();
+  if (process.env.ENABLE_EXPERIMENTAL_OPERATIONS === "true") {
+    kb.text("✅ امروز", "ops:today").row()
+      .text("🗺 مسیر من", "ops:journey").row()
+      .text("📋 کارها", "ops:tasks").row()
+      .text("👤 حساب من", "ops:account").row();
+  }
+  kb.text("🚀 ارزیابی آمادگی", "start_consultation").row()
     .text("📊 داشبورد کمپین", "dashboard").row()
     .text("🗂️ مدیریت کمپین", "campaign_menu").row()
     .text("📚 آموزش‌های تخصصی", "edu_list").row()

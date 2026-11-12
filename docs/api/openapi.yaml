@@ -1,0 +1,117 @@
+# docs/api/openapi.yaml — قرارداد هدف REST API (سند §۹)
+# ⚠️ این فایل «قرارداد هدف» است، نه پیاده‌سازی فعلی.
+# این مخزن عمدتاً ربات تلگرام است؛ وضعیت API و مینی‌اپ زنده بررسی نشده است.
+# این قرارداد برای مینی‌اپ آینده است و نباید بدون بررسی با مسیرهای موجود جایگزین شود.
+openapi: 3.0.3
+info:
+  title: Candidatory API (هدف)
+  version: 1.0.0-draft
+  description: |
+    قرارداد هدف برای مینی‌اپ آینده. احراز هویت با Telegram initData (اعتبارسنجی سمت سرور).
+    همه‌ی پاسخ‌ها: { data, meta: { requestId, version } } و خطا: { error: { code, message, requestId } }.
+paths:
+  /api/v1/auth/telegram:
+    post:
+      summary: ورود با initData تلگرام
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [initData], properties: { initData: { type: string } } }
+      responses:
+        '200': { description: نشست کوتاه‌عمر }
+  /api/v1/me:
+    get:
+      summary: اطلاعات کاربر جاری
+      responses:
+        '200': { description: OK }
+  /api/v1/workspaces:
+    post:
+      summary: ساخت فضای کاری
+      responses:
+        '201': { description: ساخته شد }
+  /api/v1/journey:
+    get:
+      summary: مسیر کاندیدا (۱۱ مرحله)
+      responses:
+        '200': { description: OK }
+  /api/v1/tasks:
+    get:
+      summary: فهرست وظایف کاربر جاری (فقط داده‌ی خود کاربر)
+      responses:
+        '200': { description: OK }
+    post:
+      summary: ساخت وظیفه (با Idempotency-Key)
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: ساخته شد }
+        '200': { description: تکراری — همان رکورد برگردانده شد }
+  /api/v1/tasks/{id}/complete:
+    post:
+      summary: تکمیل وظیفه
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '403': { description: PERMISSION_DENIED }
+  /api/v1/meetings:
+    post:
+      summary: ثبت جلسه
+      responses:
+        '201': { description: ساخته شد }
+  /api/v1/requirements:
+    get:
+      summary: الزامات با منبع/نسخه/وضعیت اعتبار
+      responses:
+        '200': { description: OK }
+  /api/v1/ai/jobs:
+    post:
+      summary: ساخت AI Job (عملیات نوشتنی → pending_approval)
+      responses:
+        '201': { description: ساخته شد }
+  /api/v1/ai/jobs/{id}/approve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      summary: تأیید انسانی AI Job
+      responses:
+        '200': { description: OK }
+  /api/v1/subscription:
+    get:
+      summary: اشتراک و سهمیه‌ها
+      responses:
+        '200': { description: OK }
+  /api/v1/billing/checkout:
+    post:
+      summary: شروع پرداخت (درگاه — هنوز وجود ندارد)
+      responses:
+        '501': { description: هنوز پیاده نشده }
+  /api/v1/reports/weekly:
+    get:
+      summary: گزارش هفتگی
+      responses:
+        '200': { description: OK }
+  /api/v1/account/export:
+    post:
+      summary: خروجی اطلاعات کاربر
+      responses:
+        '200': { description: OK }
+
+# callbackهای آزمایشی ops:* به‌طور پیش‌فرض غیرفعال‌اند؛ export/delete و اجرای AI فعال نیستند.
+# ops:today | ops:journey | ops:tasks | ops:task_new | ops:task_view:<id>
+# ops:task_done:<id> | ops:task_start:<id> | ops:task_postpone:<id> | ops:task_cancel:<id>
+# ops:meetings | ops:meeting_new | ops:meeting_view:<id> | ops:meeting_confirm:<id>
+# ops:requirements | ops:req_view:<id> | ops:req_done:<id> | ops:req_review:<id>
+# ops:account | ops:export | ops:delete_confirm | ops:delete_yes
+# ops:ai_inbox | ops:ai_approve:<id> | ops:ai_reject:<id> | ops:task_priority:<level>
+# دستورات: /today /journey /tasks /account /task <عنوان>

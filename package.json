@@ -4,7 +4,9 @@
   "description": "ربات تلگرامی کاندیداتوری هوشمند",
   "main": "src/main.js",
   "scripts": {
-    "start": "node src/main.js"
+    "start": "node src/main.js",
+    "test": "node --test tests/unit/*.test.js",
+    "check": "node --check src/main.js && node --check src/utils/db.js && node --check src/flows/operations.js && node --check setup-db.js"
   },
   "keywords": ["telegram", "bot", "grammy", "appwrite"],
   "author": "Candidatory Team",
