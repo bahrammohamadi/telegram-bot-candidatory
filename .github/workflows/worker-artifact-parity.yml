@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'scripts/verify-worker-artifact.mjs'
+      - 'scripts/build-worker-manifest.mjs'
       - '.github/workflows/worker-artifact-parity.yml'
   pull_request:
     paths:
@@ -21,3 +22,5 @@ jobs:
           node-version: '22'
       - name: Validate artifact manifest guard
         run: node scripts/verify-worker-artifact.mjs --self-test
+      - name: Validate offline artifact manifest builder
+        run: node scripts/build-worker-manifest.mjs --self-test
