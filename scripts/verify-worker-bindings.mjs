@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 
 export function bindingIdentity(binding) {
-  if (!binding || typeof binding.name !== 'string' || !binding.name.trim() || typeof binding.type !== 'string' || !binding.type.trim()) throw new Error('Invalid binding name/type');
+  if (!binding || typeof binding.name !== 'string' || (!binding.name.trim() || binding.name !== binding.name.trim()) || typeof binding.type !== 'string' || (!binding.type.trim() || binding.type !== binding.type.trim())) throw new Error('Invalid binding name/type');
   // Fail closed on missing resource identifiers: two malformed D1/KV/R2 bindings
   // must not compare equal and accidentally pass the production release gate.
   const resourceFields = {
@@ -15,7 +15,7 @@ export function bindingIdentity(binding) {
     service: 'service',
   };
   const field = resourceFields[binding.type];
-  if (field && (typeof binding[field] !== 'string' || !binding[field].trim())) {
+  if (field && (typeof binding[field] !== 'string' || (!binding[field].trim() || binding[field] !== binding[field].trim()))) {
     throw new Error('Missing ' + field + ' for binding ' + binding.name);
   }
   // Never compare or print secret values; Cloudflare returns secret names/types.
@@ -51,7 +51,10 @@ if (process.argv[2] === '--self-test') {
   assert.throws(()=>compareBindings([{name:'  ',type:'secret_text'}],[{name:'  ',type:'secret_text'}]),/Invalid binding name\/type/);
   assert.throws(()=>compareBindings([{name:'DB',type:'  '}],[{name:'DB',type:'  '}]),/Invalid binding name\/type/);
   assert.throws(()=>compareBindings([{name:'DB',type:'d1',database_id:'prod-123'}, {name:'DB',type:'secret_text'}],[{name:'DB',type:'d1',database_id:'prod-123'}]),/Duplicate binding/);
-  console.log('PASS binding parity guard (15 cases)');
+  assert.throws(()=>compareBindings([{name:' DB',type:'d1',database_id:'prod-123'}],[{name:' DB',type:'d1',database_id:'prod-123'}]),/Invalid binding name\/type/);
+  assert.throws(()=>compareBindings([{name:'DB',type:'d1 ',database_id:'prod-123'}],[{name:'DB',type:'d1 ',database_id:'prod-123'}]),/Invalid binding name\/type/);
+  assert.throws(()=>compareBindings([{name:'DB',type:'d1',database_id:'prod-123 '}],[{name:'DB',type:'d1',database_id:'prod-123 '}]),/Missing database_id/);
+  console.log('PASS binding parity guard (18 cases)');
 } else if (process.argv.length===4) {
   const read = file => { const obj=JSON.parse(readFileSync(file,'utf8')); return Array.isArray(obj)?obj:obj.bindings; };
   console.log(JSON.stringify(compareBindings(read(process.argv[2]),read(process.argv[3]))));
