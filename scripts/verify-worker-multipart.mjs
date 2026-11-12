@@ -10,12 +10,17 @@ export function inspectMultipart(bytes) {
   if (!first) throw new Error('Missing multipart boundary');
   const boundary = first[1];
   if (!input.includes(boundary + '--')) throw new Error('Missing closing boundary');
-  const parts = input.split(boundary).slice(1, -1);
+  const segments = input.split(boundary);
+  if (segments.length < 3 || !segments.at(-1)?.startsWith('--')) throw new Error('Malformed multipart closing boundary');
+  const parts = segments.slice(1, -1);
   const names = parts.map(part => {
     const m = part.match(/Content-Disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]+)")?/i);
     if (!m || !m[2]) throw new Error('Part without a filename');
     if (!/Content-Type:\s*application\/javascript\+module/i.test(part)) throw new Error('Non-module part: ' + m[1]);
-    if (!part.includes('\r\n\r\n') && !part.includes('\n\n')) throw new Error('Missing part body');
+    const separator = part.includes('\r\n\r\n') ? '\r\n\r\n' : '\n\n';
+    if (!part.includes(separator)) throw new Error('Missing part body');
+    const body = part.slice(part.indexOf(separator) + separator.length).replace(/\r?\n--$/, '').trim();
+    if (!body) throw new Error('Empty module body: ' + m[2]);
     return m[2];
   });
   if (new Set(names).size !== names.length) throw new Error('Duplicate module filename');
@@ -29,6 +34,7 @@ if (process.argv[2] === '--self-test') {
   assert.throws(() => inspectMultipart(make(REQUIRED.slice(0,2))), /Missing required module/);
   assert.throws(() => inspectMultipart(make([...REQUIRED, REQUIRED[0]])), /Duplicate module/);
   assert.throws(() => inspectMultipart('--boundary\r\n'), /closing boundary/);
+  assert.throws(() => inspectMultipart(make(REQUIRED).replace('export default {};', '')), /Empty module body/);
   console.log('PASS multipart source completeness guard (4 cases)');
 } else if (process.argv[2]) {
   console.log(JSON.stringify(inspectMultipart(readFileSync(process.argv[2])), null, 2));
