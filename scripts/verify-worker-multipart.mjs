@@ -39,11 +39,15 @@ export function inspectMultipart(bytes) {
 if (process.argv[2] === '--self-test') {
   const make = names => '--boundary\r\n' + names.map(n => 'Content-Disposition: form-data; name="' + n + '"; filename="' + n + '"\r\nContent-Type: application/javascript+module\r\n\r\nexport default {};\r\n--boundary\r\n').join('').replace(/--boundary\r\n$/, '--boundary--\r\n');
   assert.deepEqual(inspectMultipart(make(REQUIRED)).modules, [...REQUIRED].sort());
+  const withMetadata = make(REQUIRED).replace('Content-Disposition: form-data; name="entrypoint.mjs"', 'Content-Disposition: form-data; name="entrypoint.mjs"');
+  const metadataPart = '--boundary\\r\\nContent-Disposition: form-data; name="metadata"\\r\\nContent-Type: application/json\\r\\n\\r\\n{"main_module":"entrypoint.mjs"}\\r\\n';
+  assert.deepEqual(inspectMultipart(withMetadata.replace('--boundary\\r\\n', metadataPart + '--boundary\\r\\n')).modules, [...REQUIRED].sort());
+  assert.throws(() => inspectMultipart(withMetadata.replace('--boundary\\r\\n', metadataPart.replace('{"main_module":"entrypoint.mjs"}', '{invalid}') + '--boundary\\r\\n')), /Invalid metadata JSON/);
   assert.throws(() => inspectMultipart(make(REQUIRED.slice(0,2))), /Missing required module/);
   assert.throws(() => inspectMultipart(make([...REQUIRED, REQUIRED[0]])), /Duplicate module/);
   assert.throws(() => inspectMultipart('--boundary\r\n'), /closing boundary/);
   assert.throws(() => inspectMultipart(make(REQUIRED).replace('export default {};', '')), /Empty module body/);
-  console.log('PASS multipart source completeness guard (5 cases)');
+  console.log('PASS multipart source completeness guard (7 cases)');
 } else if (process.argv[2]) {
   console.log(JSON.stringify(inspectMultipart(readFileSync(process.argv[2])), null, 2));
 } else {
