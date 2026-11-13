@@ -72,3 +72,27 @@ jobs:
           assert.doesNotMatch(normalized,/\b(drop table|drop index|alter table|delete from|truncate)\b/);
           console.log('PASS task D1 schema contract (source-only; no D1 calls)');
           JS
+
+      - name: Execute synthetic SQLite schema checks (no external services)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --disable-warning=ExperimentalWarning --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import {DatabaseSync} from 'node:sqlite';
+          const db=new DatabaseSync(':memory:');
+          try {
+            db.exec(readFileSync('cloudflare-live/integration-schema.sql','utf8'));
+            db.exec(readFileSync('cloudflare-live/phase14/tasks-migration.sql','utf8'));
+            const cols=db.prepare("PRAGMA table_info('candidate_tasks_v1')").all().map(x=>x.name);
+            for(const c of ['id','telegram_id','title','status','due_date']) assert.ok(cols.includes(c),'Missing column '+c);
+            const idx=db.prepare("PRAGMA index_info('idx_candidate_tasks_owner_due')").all().map(x=>x.name);
+            assert.deepEqual(idx,['telegram_id','status','due_date']);
+            const fk=db.prepare("PRAGMA foreign_key_list('candidate_tasks_v1')").all();
+            assert.ok(fk.some(x=>x.table==='candidate_users'&&x.from==='telegram_id'&&x.to==='telegram_id'));
+            const triggers=db.prepare("SELECT name FROM sqlite_master WHERE type='trigger'").all().map(x=>x.name);
+            assert.ok(triggers.includes('trg_candidate_tasks_quota_v1'));
+            console.log('PASS SQLite schema, index, foreign key and quota trigger on synthetic in-memory database');
+          } finally {db.close();}
+          JS
