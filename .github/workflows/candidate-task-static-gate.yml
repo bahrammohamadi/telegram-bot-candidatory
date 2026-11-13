@@ -105,7 +105,8 @@ jobs:
           import assert from 'node:assert/strict';
           import {readFileSync} from 'node:fs';
           const migration=readFileSync('cloudflare-live/phase14/tasks-migration.sql','utf8');
-          assert.match(migration.split('\\n').slice(0,5).join('\\n'),/Apply ONLY to isolated D1/,'Migration provenance changed; production D1 application requires separate authorization');
-          assert.doesNotMatch(migration,/\\b(?:DROP\\s+TABLE|DELETE\\s+FROM|ALTER\\s+TABLE|TRUNCATE)\\b/i);
+          const header=migration.split(/\r?\n/).slice(0,5).join('\n');
+          assert.match(header,/Apply ONLY to isolated D1/,'Migration provenance changed; production D1 application requires separate authorization');
+          assert.doesNotMatch(migration,/\b(?:DROP\s+TABLE|DELETE\s+FROM|ALTER\s+TABLE|TRUNCATE)\b/i);
           console.log('PASS: migration remains isolated-only; no production D1 migration authorized');
           JS
