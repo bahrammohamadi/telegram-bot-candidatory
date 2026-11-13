@@ -1,0 +1,47 @@
+name: Candidate task contract static gate
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/phase14/**'
+      - '.github/workflows/candidate-task-static-gate.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase14/**'
+      - '.github/workflows/candidate-task-static-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and synthetic ownership regression coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare-live/phase14/tasks-e2e.mjs
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const src=readFileSync('cloudflare-live/phase14/tasks-e2e.mjs','utf8');
+          for (const marker of [
+            "call('invalid','list')",
+            "call(other,'list')",
+            "call(other,'update'",
+            "call(other,'status'",
+            "call(other,'delete'",
+            "call(user,'status',{id:isolatedTask.data.id",
+            "call(user,'delete',{id:isolatedTask.data.id",
+            "call(other,'unknown-action'",
+            "candidate_tasks_v1"
+          ]) assert.ok(src.includes(marker), 'Missing offline regression: '+marker);
+          assert.ok(src.includes("new DatabaseSync(':memory:')"),'Tests must use synthetic in-memory SQLite');
+          assert.ok(!/https?:\/\/(?!tasks\.synthetic)/.test(src),'Unexpected external URL in synthetic test');
+          console.log('PASS static task contract markers (not a runtime E2E pass)');
+          JS
