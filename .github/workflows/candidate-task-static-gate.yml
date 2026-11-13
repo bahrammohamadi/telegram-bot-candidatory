@@ -39,9 +39,17 @@ jobs:
             "call(user,'status',{id:isolatedTask.data.id",
             "call(user,'delete',{id:isolatedTask.data.id",
             "call(other,'unknown-action'",
-            "candidate_tasks_v1"
+            "candidate_tasks_v1",
+            "assert.equal(r.status,401,'forged Telegram identity rejected')",
+            "assert.equal(denied.status,429)",
+            "assert.equal((await call(other,'summary')).data.summary.total,0",
+            "assert.equal((await call(user,'update',{...sample,id:taskId,title:'Unauthorized edit'})).status,404)",
+            "assert.equal((await call(user,'list')).data.tasks[0].done_at,null)"
           ]) assert.ok(src.includes(marker), 'Missing offline regression: '+marker);
           assert.ok(src.includes("new DatabaseSync(':memory:')"),'Tests must use synthetic in-memory SQLite');
           assert.ok(!/https?:\/\/(?!tasks\.synthetic)/.test(src),'Unexpected external URL in synthetic test');
-          console.log('PASS static task contract markers (not a runtime E2E pass)');
+          assert.ok(src.includes("readFileSync(new URL('./tasks-migration.sql'"),'Synthetic tests must load task schema');
+          assert.ok(src.includes("readFileSync(new URL('../integration-schema.sql'"),'Synthetic tests must load integration schema');
+          assert.ok(!/cloudflare\.com|workers\.dev|api\.telegram\.org/.test(src),'Synthetic test must not target live services');
+          console.log('PASS static task security/ownership/expiry contract markers (not a runtime E2E pass)');
           JS
