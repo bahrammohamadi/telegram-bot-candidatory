@@ -43,7 +43,7 @@ jobs:
             "assert.equal(r.status,401,'forged Telegram identity rejected')",
             "assert.equal(denied.status,429)",
             "assert.equal((await call(other,'summary')).data.summary.total,0",
-            "assert.equal((await call(user,'update',{...sample,id:taskId,title:'Unauthorized edit'})).status,404)",
+            "assert.equal((await call(other,'update',{...sample,id:taskId,title:'Unauthorized edit'})).status,404)",
             "assert.equal((await call(user,'list')).data.tasks[0].done_at,null)"
           ]) assert.ok(src.includes(marker), 'Missing offline regression: '+marker);
           assert.ok(src.includes("new DatabaseSync(':memory:')"),'Tests must use synthetic in-memory SQLite');
