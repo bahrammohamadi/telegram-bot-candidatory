@@ -99,5 +99,15 @@ assert.equal((await call(pro,'list')).data.tasks.length,11,'existing tasks remai
 const forged=new URLSearchParams(signed(pro));forged.set('signature','forged');
 const r=await worker.fetch(new Request('https://tasks.synthetic/api/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData:forged.toString(),action:'summary'})}),env);
 assert.equal(r.status,401,'forged Telegram identity rejected');
+// Offline contract regression: repeated completion must remain owner-scoped and idempotent.
+const isolatedTask=await call(other,'create',{...sample,title:'Other owner synthetic task'});
+assert.equal(isolatedTask.status,201);
+assert.equal((await call(user,'status',{id:isolatedTask.data.id,status:'done'})).status,404,'owner A cannot complete owner B task');
+assert.equal((await call(other,'status',{id:isolatedTask.data.id,status:'done'})).status,200);
+assert.equal((await call(other,'status',{id:isolatedTask.data.id,status:'done'})).status,200,'repeat completion is idempotent');
+assert.equal((await call(other,'list')).data.tasks.find(t=>t.id===isolatedTask.data.id).status,'done');
+assert.equal((await call(user,'delete',{id:isolatedTask.data.id})).status,404,'cross-owner delete denied');
+assert.equal((await call(other,'list')).data.tasks.length,1,'cross-owner mutation preserves data');
+assert.equal((await call(other,'unknown-action',{id:isolatedTask.data.id})).status,400,'unknown action rejected');
 sqlite.close();
 console.log('PASS tasks: signed identity, full CRUD, overdue Tehran date, strict date checks, owner isolation, DB quota, expiry, read access after downgrade');
