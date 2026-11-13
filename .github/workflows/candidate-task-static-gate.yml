@@ -53,3 +53,22 @@ jobs:
           assert.ok(!/cloudflare\.com|workers\.dev|api\.telegram\.org/.test(src),'Synthetic test must not target live services');
           console.log('PASS static task security/ownership/expiry contract markers (not a runtime E2E pass)');
           JS
+
+      - name: Validate task D1 schema contract without database access
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const sql=readFileSync('cloudflare-live/phase14/tasks-migration.sql','utf8');
+          const normalized=sql.replace(/--[^\n]*/g,' ').replace(/\s+/g,' ').toLowerCase();
+          assert.match(normalized,/create table if not exists candidate_tasks_v1\s*\(/);
+          assert.match(normalized,/telegram_id integer not null references candidate_users\(telegram_id\) on delete cascade/);
+          assert.match(normalized,/create index if not exists idx_candidate_tasks_owner_due on candidate_tasks_v1\(telegram_id,status,due_date\)/);
+          assert.match(normalized,/create trigger if not exists trg_candidate_tasks_quota_v1 before insert/);
+          assert.match(normalized,/where telegram_id=new\.telegram_id/);
+          assert.match(normalized,/raise\(abort,'task_quota_limit'\)/);
+          assert.doesNotMatch(normalized,/\b(drop table|drop index|alter table|delete from|truncate)\b/);
+          console.log('PASS task D1 schema contract (source-only; no D1 calls)');
+          JS
