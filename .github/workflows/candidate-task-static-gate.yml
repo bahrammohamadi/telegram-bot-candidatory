@@ -120,4 +120,4 @@ jobs:
             echo "::error file=cloudflare-live/phase14/tasks-e2e.mjs::Runtime E2E is NOT executed: missing $artifact. Build and verify the exact multi-module artifact before release."
             exit 1
           fi
-          node --disable-warning=ExperimentalWarning cloudflare-live/phase14/tasks-e2e.mjs
+          node --disable-warning=ExperimentalWarning --import ./cloudflare-live/phase14/offline-network-guard.mjs cloudflare-live/phase14/tasks-e2e.mjs
