@@ -1,4 +1,5 @@
-name: Production main Worker read-only release gate
+name: Production main Worker read-only homepage gate
+# Non-mutating GET only. No authentication probes or writes to live Production.
 on:
   push:
     branches: [feature/cloudflare-parity-audit-2026-10-29]
@@ -12,23 +13,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     steps:
-      - name: Main URL, RTL and anonymous-auth negative checks (no user writes)
+      - name: Check existing Production homepage using anonymous GET only
         env:
           BASE_URL: https://candidatory-miniapp-api.lasvaram-candidatory.workers.dev
         shell: bash
         run: |
           set -euo pipefail
-          code=$(curl --silent --show-error --max-time 20 -o home.html -w '%{http_code}' "$BASE_URL/")
+          # No POST, auth, Telegram initData, cookies, user-scoped API, or D1 access.
+          code=$(curl --silent --show-error --location --max-redirs 0 --max-time 20 \
+            -H 'Accept: text/html' -o home.html -w '%{http_code}' "$BASE_URL/")
           test "$code" = 200
           grep -Eiq '<html|<!doctype html' home.html
           grep -Eiq 'lang=["\x27]fa|dir=["\x27]rtl' home.html
-          # Never send signed credentials, secrets, or real user data.
-          # Invalid initData must fail before any user-scoped task operation.
-          for endpoint in /api/tasks /review/api/tasks; do
-            code=$(curl --silent --show-error --max-time 20 -o response.json -w '%{http_code}' \
-              -X POST "$BASE_URL$endpoint" -H 'Content-Type: application/json' \
-              --data '{"action":"list","initData":"invalid"}')
-            test "$code" = 401
-            node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("response.json","utf8"));if(j.error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
-          done
-          echo "PASS: production root and invalid Telegram auth fail-closed; no user data read or changed"
+          echo "PASS: existing Production homepage returned HTML with Persian/RTL marker via anonymous GET"
+          echo "::warning::This is a read-only homepage smoke check, not proof of auth, D1, multipart parity or rollback."
