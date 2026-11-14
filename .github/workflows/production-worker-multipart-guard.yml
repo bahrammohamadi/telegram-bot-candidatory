@@ -51,7 +51,17 @@ jobs:
           console.log('PASS recorded Production baseline manifest shape and three module hashes');
           console.log('::warning::Recorded baseline was not freshly downloaded by CI; this does not establish live source parity.');
           JS
-          node scripts/verify-worker-artifact.mjs docs/architecture/production-worker-module-manifest-2026-11-14.json docs/architecture/production-worker-module-manifest-2026-11-14.json
+          # A baseline compared to itself always passes and cannot prove parity.
+          # Require a separately produced candidate manifest for any release decision.
+          # This workflow only validates the recorded baseline and NEVER grants deployment.
+          echo "::warning::Candidate multipart manifest is absent; production source parity remains UNVERIFIED."
+          if [[ -f docs/architecture/production-worker-candidate-manifest.json ]]; then
+            node scripts/verify-worker-artifact.mjs \
+              docs/architecture/production-worker-module-manifest-2026-11-14.json \
+              docs/architecture/production-worker-candidate-manifest.json
+          else
+            echo "No independent candidate manifest. Release remains blocked."
+          fi
       - name: Declare production parity is not established
         run: |
           echo "::warning::Synthetic multipart and manifest tests do not prove parity with active candidatory-miniapp-api. No Production upload is authorized by this workflow."
