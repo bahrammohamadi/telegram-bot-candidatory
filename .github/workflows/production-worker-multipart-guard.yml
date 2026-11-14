@@ -32,6 +32,27 @@ jobs:
           node scripts/verify-worker-artifact.mjs --self-test
           node --check scripts/build-worker-manifest.mjs
           node scripts/build-worker-manifest.mjs --self-test
+      - name: Validate recorded Production module baseline (offline, no network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {strict as assert} from 'node:assert';
+          import {normalize, verifyArtifact} from './scripts/verify-worker-artifact.mjs';
+          const file='docs/architecture/production-worker-module-manifest-2026-11-14.json';
+          const baseline=JSON.parse(readFileSync(file,'utf8'));
+          assert.equal(baseline.worker,'candidatory-miniapp-api');
+          assert.equal(baseline.main_module,'entrypoint.mjs');
+          const manifest=normalize(baseline);
+          assert.deepEqual(manifest.modules.map(x=>x.name),['entrypoint.mjs','legacy.mjs','preview.mjs']);
+          for (const module of baseline.modules) {
+            assert.ok(Number.isSafeInteger(module.bytes) && module.bytes > 0, 'Invalid recorded module size');
+          }
+          assert.equal(verifyArtifact(baseline,baseline).moduleCount,3);
+          console.log('PASS recorded Production baseline manifest shape and three module hashes');
+          console.log('::warning::Recorded baseline was not freshly downloaded by CI; this does not establish live source parity.');
+          JS
       - name: Declare production parity is not established
         run: |
           echo "::warning::Synthetic multipart and manifest tests do not prove parity with active candidatory-miniapp-api. No Production upload is authorized by this workflow."
