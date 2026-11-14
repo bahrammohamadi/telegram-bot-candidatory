@@ -1,5 +1,9 @@
 name: Offline historical source regression (NOT live parity)
+# Run source regressions for every commit to the authorized branch, not only PRs.
+# This is offline CI; it does not deploy any Worker or create a runtime environment.
 on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
   pull_request:
     paths:
       - 'cloudflare-live/**'
