@@ -1,0 +1,58 @@
+name: Isolated task progress integration
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/phase15/**'
+      - 'cloudflare-live/phase14/integration-deployed-snapshot-2026-11-03.mjs'
+      - '.github/workflows/candidatory-task-progress-validation.yml'
+  pull_request:
+    branches: [feature/p0-hardening-2026-10-28, feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/phase15/**'
+      - 'cloudflare-live/phase14/integration-deployed-snapshot-2026-11-03.mjs'
+      - '.github/workflows/candidatory-task-progress-validation.yml'
+  workflow_dispatch:
+ # PR validation covers both the hardening base and the active isolated integration branch.
+ # Rollback: revert this workflow-only commit; no Worker/D1 state is changed.
+ # All checks below run offline without Cloudflare/Telegram credentials.
+jobs:
+  phase15:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assemble isolated candidate
+        run: node cloudflare-live/phase15/build-progress-tasks.mjs
+      - name: Main miniapp UI patch safety regression
+        run: node cloudflare-live/phase15/patch-main-miniapp-ui.test.mjs
+      - name: Syntax check
+        run: node --check cloudflare-live/phase15/dist/integration-progress-tasks-worker.mjs
+      - name: Signed-user integration regression
+        run: node cloudflare-live/phase15/progress-tasks-e2e.mjs
+      - name: Delayed concurrent D1 owner isolation regression
+        run: node cloudflare-live/phase15/progress-tasks-delayed-isolation.test.mjs
+      - name: Health readiness Worker E2E
+        run: node cloudflare-live/phase15/health-worker-e2e.mjs
+      - name: Owner-scoped task performance SQL regression
+        run: python3 cloudflare-live/phase15/test_task_performance_sql.py
+      - name: Assembled task progress SQL semantic regression
+        run: python3 cloudflare-live/phase15/test_assembled_progress_sqlite.py
+      - name: Live task count edge-case regression
+        run: python3 cloudflare-live/phase15/test_live_task_count_edge_cases.py
+      - name: Assembled Worker task SQL parity and owner binding
+        run: python3 cloudflare-live/phase15/test_assembled_task_sql_parity.py
+      - name: Quota-light D1 health SQL regression
+        run: python3 cloudflare-live/phase15/test_health_readiness_sql.py
+
+      - name: Isolated mobile navigation and same-origin UX regression
+        run: node cloudflare-live/phase15/miniapp-mobile-navigation-regression.mjs
+      - name: Offline parity probe target-safety regression
+        run: node cloudflare-live/phase15/scripts/miniapp-parity-probe.test.mjs
+      - name: Main Mini App parity boundary (must remain NO-GO)
+        run: node cloudflare-live/phase15/main-miniapp-parity-audit.mjs
+      - name: Fail-closed production release evidence gate regression
+        run: node cloudflare-live/phase15/release-evidence-gate.test.mjs

@@ -1,0 +1,23 @@
+{
+  "verifiedOn": "2026-10-31",
+  "developmentBranch": "feature/cloudflare-parity-audit-2026-10-29",
+  "production": {
+    "worker": "candidatory-miniapp-api",
+    "versionId": "117dbec8-e994-491b-9020-1d3c8ee862d3",
+    "deploymentId": "173dfdec-d73f-44d5-af2a-e6bde5be3ed9",
+    "source": "worker.js",
+    "sha256": "79d3c4780bb58637b7c9a9202ca19da1ff50e12608c486378cf187ebe3acd543",
+    "databaseId": "48b3c86b-45ea-492b-96e1-334dfafa2097"
+  },
+  "staging": {
+    "worker": "candidatory-miniapp-staging",
+    "versionId": "26ae4e9b-495b-4446-8cb4-aff2e719fce5",
+    "deploymentId": "5516e392-1ee8-45f6-9e62-514f454378f6",
+    "source": "staging-worker.js",
+    "sha256": "f5b9222602517484a4ad40639317f4a9cdcc566c93cd5f8877b68fb829932a21",
+    "databaseId": "d698f87c-fd9a-439a-86c9-de78330c6ebf",
+    "mode": "synthetic-preview",
+    "telegramAuthentication": false,
+    "productionSchema": false
+  }
+}

@@ -1,0 +1,24 @@
+name: New-main router isolated regression
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/review/new-main-entrypoint.mjs'
+      - 'cloudflare-live/review/new-main-router.test.mjs'
+      - '.github/workflows/candidatory-new-main-router.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  new-main:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and isolated routing tests
+        run: |
+          node --check cloudflare-live/review/new-main-entrypoint.mjs
+          node --test cloudflare-live/review/new-main-router.test.mjs

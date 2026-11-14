@@ -1,0 +1,27 @@
+{
+  "source": "Cloudflare GET /accounts/{account_id}/workers/scripts/candidatory-miniapp-api/content/v2",
+  "retrieved_date": "2026-11-14",
+  "worker": "candidatory-miniapp-api",
+  "deployment_id": "860f813c-baf4-4cff-bfc7-bb4120b910ed",
+  "version_id": "3c35231f-36f0-4bad-b786-9a4309d8e868",
+  "main_module": "entrypoint.mjs",
+  "modules": [
+    {
+      "name": "entrypoint.mjs",
+      "bytes": 1224,
+      "sha256": "42d70d5d27ca8941bd387fe69728ea9cb981277565319dba5456707397f66048"
+    },
+    {
+      "name": "legacy.mjs",
+      "bytes": 300672,
+      "sha256": "79d3c4780bb58637b7c9a9202ca19da1ff50e12608c486378cf187ebe3acd543"
+    },
+    {
+      "name": "preview.mjs",
+      "bytes": 153168,
+      "sha256": "3b253b0d98755595d164efcf0d4ca14ee253ee8064d9f381f68cf911cb16e8ce"
+    }
+  ],
+  "release_gate": "Evidence only. Do not deploy without complete metadata/bindings/CI/D1/RBAC/smoke/rollback parity.",
+  "note": "Hashes computed from module bodies in Cloudflare multipart response. Secret values not read. Hashes do not establish source parity with GitHub."
+}

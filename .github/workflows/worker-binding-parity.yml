@@ -1,0 +1,29 @@
+name: Worker binding parity guard
+
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'scripts/verify-worker-bindings.mjs'
+      - '.github/workflows/worker-binding-parity.yml'
+  pull_request:
+    paths:
+      - 'scripts/verify-worker-bindings.mjs'
+      - '.github/workflows/worker-binding-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  binding-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Worker binding guard
+        run: node scripts/verify-worker-bindings.mjs --self-test

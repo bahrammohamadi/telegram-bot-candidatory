@@ -1,0 +1,29 @@
+name: Phase 15 isolated D1 budget regression
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/check_d1_read_budget.py'
+      - 'tests/test_d1_read_budget.py'
+      - '.github/workflows/phase15-d1-budget-regression.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/check_d1_read_budget.py'
+      - 'tests/test_d1_read_budget.py'
+      - '.github/workflows/phase15-d1-budget-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-d1-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate syntax without D1 access
+        run: python3 -m py_compile cloudflare-live/phase15/check_d1_read_budget.py tests/test_d1_read_budget.py
+      - name: Run fail-closed D1 metadata regression
+        run: python3 -m unittest discover -s tests -p 'test_d1_read_budget.py' -v
+# This workflow is offline: it must never receive Cloudflare credentials or query D1.
+# Rollback: revert the commit that introduced this workflow; no Worker deployment involved.

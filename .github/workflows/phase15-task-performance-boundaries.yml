@@ -1,0 +1,32 @@
+name: Phase 15 task performance date-boundary regression
+
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/task-performance-owner-scoped.sql'
+      - 'cloudflare-live/phase15/test_task_performance_due_date_boundaries.py'
+      - '.github/workflows/phase15-task-performance-boundaries.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/task-performance-owner-scoped.sql'
+      - 'cloudflare-live/phase15/test_task_performance_due_date_boundaries.py'
+      - '.github/workflows/phase15-task-performance-boundaries.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  owner-scoped-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify owner-scoped due-date boundaries (offline SQLite)
+        run: python3 cloudflare-live/phase15/test_task_performance_due_date_boundaries.py
+
+# Isolated offline CI only: no Cloudflare secrets, deployment, D1 mutation, or Telegram calls.
+# Rollback: revert the commit introducing this workflow. No Worker/D1 rollback is needed.
+# This does not validate signed Telegram initData, API wiring, mobile UX, or two real accounts.

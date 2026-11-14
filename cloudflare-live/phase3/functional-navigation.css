@@ -1,0 +1,7 @@
+.functional-home{padding:16px;background:var(--canvas);color:var(--ink)}
+.functional-home h2{font-size:20px;line-height:1.7}.functional-home p{font-size:13px}
+.functional-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}
+.functional-grid button{min-height:88px;font-size:15px;white-space:normal}
+#functional-section{padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--canvas)}
+#functional-section[hidden]{display:none}#functional-section>div{display:grid;gap:10px;margin-bottom:18px}
+.functional-legacy{margin:20px 0}.functional-legacy>summary{padding:16px;cursor:pointer}

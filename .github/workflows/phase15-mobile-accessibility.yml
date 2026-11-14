@@ -1,0 +1,25 @@
+name: Phase 15 mobile accessibility CSS regression
+on:
+  push:
+    paths:
+      - 'cloudflare-live/phase15/mobile-ui-refresh.css'
+      - 'cloudflare-live/phase15/mobile-accessibility-css.test.mjs'
+      - '.github/workflows/phase15-mobile-accessibility.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/mobile-ui-refresh.css'
+      - 'cloudflare-live/phase15/mobile-accessibility-css.test.mjs'
+      - '.github/workflows/phase15-mobile-accessibility.yml'
+  workflow_dispatch:
+jobs:
+  css-accessibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify accessibility regression
+        run: node --test cloudflare-live/phase15/mobile-accessibility-css.test.mjs
+      - name: Verify UI patch is safe
+        run: node cloudflare-live/phase15/patch-main-miniapp-ui.test.mjs

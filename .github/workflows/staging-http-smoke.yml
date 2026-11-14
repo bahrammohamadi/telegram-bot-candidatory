@@ -1,0 +1,16 @@
+# Retained as a tombstone to prevent accidental resurrection of the former staging smoke workflow.
+# Owner decision (2026-11-12): ONLY existing production Worker candidatory-miniapp-api.
+# No staging/preview/test Worker or HTTP probes of a secondary environment are authorized.
+# This workflow is intentionally manual-only and contains no deploy, network probe, or secret access.
+name: Deprecated staging smoke (disabled)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deprecation-notice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm no staging action is executed
+        run: |
+          echo "Staging smoke is retired. Use offline unit/static/contract checks with synthetic fixtures."

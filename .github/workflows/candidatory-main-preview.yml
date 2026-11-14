@@ -1,0 +1,40 @@
+name: Main-bot opt-in preview safety checks
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - 'cloudflare-live/review/**'
+      - '.github/workflows/candidatory-main-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prod-parity-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile original prod and isolated review modules
+        run: |
+          node cloudflare-live/review/build-review.mjs
+          node --check cloudflare-live/review/dist/entrypoint.mjs
+          node --check cloudflare-live/review/dist/legacy.mjs
+          node --check cloudflare-live/review/dist/preview.mjs
+      - name: Test main-bot review routing, data isolation and unauthorized requests
+        run: node --experimental-sqlite cloudflare-live/review/main-review-e2e.mjs
+  review-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/review/build-review.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Test main bot navigation and signed review CRUD on 3 phone widths
+        run: node --experimental-sqlite cloudflare-live/review/main-review-browser.cjs
