@@ -81,6 +81,35 @@ jobs:
               exit 1
             fi
           done
-          echo 'Synthetic schema boundary tests passed; this does not verify real production evidence.'
+          # Each mutation must fail closed. No real Worker, token, or database is accessed.
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const base = process.env.RUNNER_TEMP;
+          const original = JSON.parse(fs.readFileSync(path.join(base,'fresh-evidence.json'),'utf8'));
+          const cases = {
+            'wrong-commit': e => { e.ci.commitSha = 'b'.repeat(64); },
+            'module-mismatch': e => { e.modules[0].candidateSha256 = 'b'.repeat(64); },
+            'duplicate-module': e => { e.modules[1].name = e.modules[0].name; },
+            'unsafe-secondary': e => { e.secondaryEnvironmentCreated = true; },
+            'd1-migration': e => { e.d1.migrationPerformed = true; },
+            'rbac-not-tested': e => { e.security.rbacNegativeTestsPassed = false; },
+            'secret-values-read': e => { e.bindings.secretsValuesRead = true; },
+            'rollback-unverified': e => { e.rollback.verified = false; },
+            'unauthorized': e => { e.approval.authorized = false; }
+          };
+          for (const [name,mutate] of Object.entries(cases)) {
+            const e = structuredClone(original);
+            mutate(e);
+            fs.writeFileSync(path.join(base,name+'-evidence.json'),JSON.stringify(e));
+          }
+          NODE
+          for scenario in wrong-commit module-mismatch duplicate-module unsafe-secondary d1-migration rbac-not-tested secret-values-read rollback-unverified unauthorized; do
+            if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/${scenario}-evidence.json"; then
+              echo "ERROR: ${scenario} unsafe evidence accepted"
+              exit 1
+            fi
+          done
+          echo 'Synthetic schema and security negative tests passed; real production evidence remains unverified.'
       - name: Confirm no deployment occurred
         run: echo 'Offline contract checks only. No Worker upload, preview, staging, D1 write, or deployment.'
