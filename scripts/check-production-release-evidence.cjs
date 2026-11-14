@@ -18,7 +18,8 @@ check(e.secondaryEnvironmentCreated===false,'no secondary environment may be cre
 check(hex64(e.commitSha),'exact candidate commit SHA required');
 check(e.ci?.commitSha===e.commitSha && e.ci?.conclusion==='success' && typeof e.ci?.url==='string' && e.ci.url.startsWith('https://github.com/'),'successful CI for exact candidate commit required');
 check(uuid(e.active?.versionId)&&uuid(e.active?.deploymentId),'fresh active version and deployment required');
-check(typeof e.active?.observedAt==='string' && !Number.isNaN(Date.parse(e.active.observedAt)),'timestamped live deployment observation required');
+const observedMs = typeof e.active?.observedAt === 'string' ? Date.parse(e.active.observedAt) : NaN;
+check(Number.isFinite(observedMs) && observedMs <= Date.now() + 60000 && Date.now() - observedMs <= 30 * 60 * 1000,'live deployment observation must be within 30 minutes and not in the future');
 const parts=e.modules;
 check(Array.isArray(parts)&&parts.length>=2,'multi-module artifact must list all parts');
 if(Array.isArray(parts)){
