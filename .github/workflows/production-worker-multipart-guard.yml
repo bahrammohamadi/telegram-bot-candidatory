@@ -39,20 +39,19 @@ jobs:
           node --input-type=module <<'JS'
           import {readFileSync} from 'node:fs';
           import {strict as assert} from 'node:assert';
-          import {normalize, verifyArtifact} from './scripts/verify-worker-artifact.mjs';
           const file='docs/architecture/production-worker-module-manifest-2026-11-14.json';
           const baseline=JSON.parse(readFileSync(file,'utf8'));
           assert.equal(baseline.worker,'candidatory-miniapp-api');
           assert.equal(baseline.main_module,'entrypoint.mjs');
-          const manifest=normalize(baseline);
-          assert.deepEqual(manifest.modules.map(x=>x.name),['entrypoint.mjs','legacy.mjs','preview.mjs']);
+          assert.deepEqual(baseline.modules.map(x=>x.name).sort(),['entrypoint.mjs','legacy.mjs','preview.mjs']);
+          for (const module of baseline.modules) assert.match(module.sha256,/^[0-9a-f]{64}$/);
           for (const module of baseline.modules) {
             assert.ok(Number.isSafeInteger(module.bytes) && module.bytes > 0, 'Invalid recorded module size');
           }
-          assert.equal(verifyArtifact(baseline,baseline).moduleCount,3);
           console.log('PASS recorded Production baseline manifest shape and three module hashes');
           console.log('::warning::Recorded baseline was not freshly downloaded by CI; this does not establish live source parity.');
           JS
+          node scripts/verify-worker-artifact.mjs docs/architecture/production-worker-module-manifest-2026-11-14.json docs/architecture/production-worker-module-manifest-2026-11-14.json
       - name: Declare production parity is not established
         run: |
           echo "::warning::Synthetic multipart and manifest tests do not prove parity with active candidatory-miniapp-api. No Production upload is authorized by this workflow."
