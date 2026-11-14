@@ -26,17 +26,18 @@ jobs:
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
           import {readFileSync} from 'node:fs';
-          import {normalize, verifyArtifact} from './scripts/verify-worker-artifact.mjs';
           const file='docs/architecture/production-worker-module-manifest-2026-11-14.json';
           const baseline=JSON.parse(readFileSync(file,'utf8'));
           assert.equal(baseline.worker,'candidatory-miniapp-api');
           assert.equal(baseline.main_module,'entrypoint.mjs');
           assert.match(baseline.version_id,/^[0-9a-f-]{36}$/);
           assert.match(baseline.deployment_id,/^[0-9a-f-]{36}$/);
-          const normalized=normalize(baseline);
-          assert.deepEqual(normalized.modules.map(m=>m.name),['entrypoint.mjs','legacy.mjs','preview.mjs']);
-          assert.ok(baseline.modules.every(m=>Number.isSafeInteger(m.bytes)&&m.bytes>0),'Missing byte size');
-          assert.equal(verifyArtifact(baseline,baseline).moduleCount,3);
+          assert.ok(Array.isArray(baseline.modules),'Missing modules');
+          const modules=[...baseline.modules].sort((a,b)=>a.name.localeCompare(b.name));
+          assert.deepEqual(modules.map(m=>m.name),['entrypoint.mjs','legacy.mjs','preview.mjs']);
+          assert.ok(modules.every(m=>Number.isSafeInteger(m.bytes)&&m.bytes>0),'Missing byte size');
+          assert.ok(modules.every(m=>typeof m.sha256==='string'&&/^[a-f0-9]{64}$/.test(m.sha256)),'Invalid digest');
+          assert.equal(new Set(modules.map(m=>m.name)).size,3,'Duplicate module');
           console.log('PASS: recorded production manifest shape, inventory and digest format');
           console.log('::warning::Offline manifest validation is not a fresh live source comparison, rollback proof or deploy authorization.');
           JS
