@@ -1,4 +1,4 @@
-name: Cloudflare live source parity
+name: Offline historical source regression (NOT live parity)
 on:
   pull_request:
     paths:
@@ -16,19 +16,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Reconstruct exact source from verified chunks
+      - name: Declare historical snapshot scope and enforce offline manifest parser regression
+        run: |
+          echo '::warning::This workflow validates repository snapshots only; it does NOT compare against active Cloudflare Production modules and cannot authorize deployment.'
+          node scripts/verify-worker-artifact.mjs --self-test
+      - name: Reconstruct repository snapshot from checked-in chunks
         run: node cloudflare-live/reconstruct.mjs
       - name: Validate Worker JavaScript syntax
         run: node --check cloudflare-live/worker.js
-      - name: Validate full source and feature parity
+      - name: Validate historical snapshot internal consistency
         run: node cloudflare-live/verify-snapshot.mjs
-      - name: Validate pinned environment snapshots and database isolation
+      - name: Validate historical environment snapshot fixtures (offline)
         run: node cloudflare-live/verify-environments.mjs
       - name: Validate authentication rejection before database access
         run: node cloudflare-live/auth-check.mjs
-      - name: Validate isolated profile round trips and access controls
+      - name: Validate synthetic profile round trips and access controls
         run: node cloudflare-live/integration-check.mjs
-      - name: Build and validate staging navigation bundle
+      - name: Build and validate offline navigation fixture (no deployment)
         run: |
           node cloudflare-live/build-staging.mjs
           node --check cloudflare-live/dist/staging-worker.mjs
