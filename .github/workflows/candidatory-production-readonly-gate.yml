@@ -1,10 +1,9 @@
 name: Production main Worker read-only homepage gate
 # Non-mutating GET only. No authentication probes or writes to live Production.
+# Run on every branch push so UI/API changes cannot bypass the homepage smoke gate.
 on:
   push:
     branches: [feature/cloudflare-parity-audit-2026-10-29]
-    paths:
-      - '.github/workflows/candidatory-production-readonly-gate.yml'
   workflow_dispatch:
 permissions:
   contents: read
