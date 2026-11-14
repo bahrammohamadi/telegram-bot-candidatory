@@ -127,6 +127,15 @@ jobs:
           console.log('PASS offline guard blocks fetch, http, https and WebSocket without making network requests');
           JS
 
+      - name: Build synthetic task runtime locally (no deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare-live/phase14/build-tasks.mjs
+          node cloudflare-live/phase14/build-tasks.mjs
+          node --check cloudflare-live/phase14/dist/integration-tasks-worker.mjs
+          sha256sum cloudflare-live/phase14/dist/integration-tasks-worker.mjs
+
       - name: Runtime E2E artifact availability gate (fail closed)
         shell: bash
         run: |
