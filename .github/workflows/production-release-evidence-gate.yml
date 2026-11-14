@@ -1,0 +1,51 @@
+name: Production release evidence gate (offline only)
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'scripts/check-production-release-evidence.cjs'
+      - '.github/workflows/production-release-evidence-gate.yml'
+  pull_request:
+    paths:
+      - 'scripts/check-production-release-evidence.cjs'
+      - '.github/workflows/production-release-evidence-gate.yml'
+permissions:
+  contents: read
+jobs:
+  fail-closed-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify missing evidence is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node scripts/check-production-release-evidence.cjs; then
+            echo 'ERROR: missing evidence accepted'
+            exit 1
+          fi
+      - name: Verify fabricated incomplete evidence is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"worker":"candidatory-miniapp-api","environment":"production","secondaryEnvironmentCreated":false,"approval":{"authorized":true}}' > "$RUNNER_TEMP/incomplete-evidence.json"
+          if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/incomplete-evidence.json"; then
+            echo 'ERROR: incomplete evidence accepted'
+            exit 1
+          fi
+      - name: Verify malformed evidence is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{bad json' > "$RUNNER_TEMP/invalid-evidence.json"
+          if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/invalid-evidence.json"; then
+            echo 'ERROR: malformed evidence accepted'
+            exit 1
+          fi
+      - name: Confirm no deployment occurred
+        run: echo 'Offline contract checks only. No Worker upload, preview, staging, D1 write, or deployment.'
