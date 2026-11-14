@@ -111,6 +111,22 @@ jobs:
           console.log('PASS: migration remains isolated-only; no production D1 migration authorized');
           JS
 
+      - name: Verify offline HTTP guard blocks network calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare-live/phase14/offline-network-guard.mjs
+          node --import ./cloudflare-live/phase14/offline-network-guard.mjs --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import http from 'node:http';
+          import https from 'node:https';
+          await assert.rejects(fetch('https://example.invalid'), /OFFLINE_TEST_NETWORK_BLOCKED/);
+          assert.throws(() => http.get('http://example.invalid'), /OFFLINE_TEST_NETWORK_BLOCKED/);
+          assert.throws(() => https.request('https://example.invalid'), /OFFLINE_TEST_NETWORK_BLOCKED/);
+          assert.throws(() => new WebSocket('wss://example.invalid'), /OFFLINE_TEST_NETWORK_BLOCKED/);
+          console.log('PASS offline guard blocks fetch, http, https and WebSocket without making network requests');
+          JS
+
       - name: Runtime E2E artifact availability gate (fail closed)
         shell: bash
         run: |
