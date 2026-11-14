@@ -47,5 +47,40 @@ jobs:
             echo 'ERROR: malformed evidence accepted'
             exit 1
           fi
+      - name: Verify freshness boundary with synthetic complete evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const base = process.env.RUNNER_TEMP;
+          const hash = 'a'.repeat(64);
+          const evidence = {
+            worker: 'candidatory-miniapp-api', environment: 'production',
+            secondaryEnvironmentCreated: false, commitSha: hash,
+            ci: { commitSha: hash, conclusion: 'success', url: 'https://github.com/example/example/actions/runs/1' },
+            active: { versionId: '00000000-0000-4000-8000-000000000001', deploymentId: '00000000-0000-4000-8000-000000000002' },
+            modules: [{name:'index.js',productionSha256:hash,candidateSha256:hash},{name:'ui.js',productionSha256:hash,candidateSha256:hash}],
+            bindings: {matched:true,secretsValuesRead:false},
+            d1: {schemaReadOnly:true,compatible:true,migrationPerformed:false},
+            security: {rbacNegativeTestsPassed:true,syntheticOnly:true},
+            smoke: {method:'GET',status:200,url:'https://example.com/'},
+            rollback: {completeMultipartArtifact:true,metadataBindingsCompatible:true,verified:true},
+            approval: {productionOnly:true,authorized:true}
+          };
+          for (const [name,offset] of [['fresh',-60000],['stale',-31*60000],['future',2*60000]]) {
+            evidence.active.observedAt = new Date(Date.now()+offset).toISOString();
+            fs.writeFileSync(path.join(base,name+'-evidence.json'),JSON.stringify(evidence));
+          }
+          NODE
+          node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/fresh-evidence.json"
+          for scenario in stale future; do
+            if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/${scenario}-evidence.json"; then
+              echo "ERROR: ${scenario} evidence accepted"
+              exit 1
+            fi
+          done
+          echo 'Synthetic schema boundary tests passed; this does not verify real production evidence.'
       - name: Confirm no deployment occurred
         run: echo 'Offline contract checks only. No Worker upload, preview, staging, D1 write, or deployment.'
