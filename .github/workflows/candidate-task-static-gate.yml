@@ -136,6 +136,23 @@ jobs:
           node --check cloudflare-live/phase14/dist/integration-tasks-worker.mjs
           sha256sum cloudflare-live/phase14/dist/integration-tasks-worker.mjs
 
+      - name: Verify synthetic artifact provenance is not Production parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const builder=readFileSync('cloudflare-live/phase14/build-tasks.mjs','utf8');
+          const source=readFileSync('cloudflare-live/phase13/integration-deployed-snapshot-2026-11-02.mjs','utf8');
+          const artifact=readFileSync('cloudflare-live/phase14/dist/integration-tasks-worker.mjs','utf8');
+          assert.match(builder,/integration-deployed-snapshot-2026-11-02\.mjs/);
+          assert.ok(source.length>0 && artifact.length>source.length);
+          assert.match(artifact,/\/api\/tasks/);
+          console.log('PASS synthetic artifact provenance: legacy phase13 snapshot plus task module');
+          console.log('::warning::This offline E2E artifact is NOT verified as the active multipart Production Worker. Never deploy it without a separate live source/module/binding parity gate.');
+          JS
+
       - name: Runtime E2E artifact availability gate (fail closed)
         shell: bash
         run: |
