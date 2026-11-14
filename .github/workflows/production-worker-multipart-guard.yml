@@ -1,15 +1,20 @@
 name: Production Worker multipart completeness guard
+# Offline-only: validates the parser and artifact-manifest guards on every
+# change to the target branch. It NEVER uploads or deploys a Worker.
 on:
   push:
     branches:
       - feature/cloudflare-parity-audit-2026-10-29
-    paths:
-      - scripts/verify-worker-multipart.mjs
-      - .github/workflows/production-worker-multipart-guard.yml
+  pull_request:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   verify-multipart:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -17,5 +22,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify complete multipart export parser
-        run: node scripts/verify-worker-multipart.mjs --self-test
+      - name: Validate multipart parser and required modules (synthetic, no network)
+        run: |
+          node --check scripts/verify-worker-multipart.mjs
+          node scripts/verify-worker-multipart.mjs --self-test
+      - name: Validate offline artifact manifest integrity
+        run: |
+          node --check scripts/verify-worker-artifact.mjs
+          node scripts/verify-worker-artifact.mjs --self-test
+          node --check scripts/build-worker-manifest.mjs
+          node scripts/build-worker-manifest.mjs --self-test
+      - name: Declare production parity is not established
+        run: |
+          echo "::warning::Synthetic multipart and manifest tests do not prove parity with active candidatory-miniapp-api. No Production upload is authorized by this workflow."
