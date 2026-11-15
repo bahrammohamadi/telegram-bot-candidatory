@@ -86,6 +86,9 @@ jobs:
             'wrong-ci-origin': e => { e.ci.url = 'https://github.com/other/repo/actions/runs/1'; },
             'module-mismatch': e => { e.modules[0].candidateSha256 = 'b'.repeat(64); },
             'duplicate-module': e => { e.modules[1].name = e.modules[0].name; },
+            'case-duplicate-module': e => { e.modules[1].name = e.modules[0].name.toUpperCase(); },
+            'path-traversal-module': e => { e.modules[1].name = '../ui.js'; },
+            'null-module': e => { e.modules[1] = null; },
             'unsafe-secondary': e => { e.secondaryEnvironmentCreated = true; },
             'd1-migration': e => { e.d1.migrationPerformed = true; },
             'rbac-not-tested': e => { e.security.rbacNegativeTestsPassed = false; },
@@ -99,7 +102,7 @@ jobs:
             fs.writeFileSync(path.join(base,name+'-evidence.json'),JSON.stringify(e));
           }
           NODE
-          for scenario in wrong-commit wrong-ci-origin module-mismatch duplicate-module unsafe-secondary d1-migration rbac-not-tested secret-values-read rollback-unverified unauthorized; do
+          for scenario in wrong-commit wrong-ci-origin module-mismatch duplicate-module case-duplicate-module path-traversal-module null-module unsafe-secondary d1-migration rbac-not-tested secret-values-read rollback-unverified unauthorized; do
             if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/${scenario}-evidence.json"; then
               echo "ERROR: ${scenario} unsafe evidence accepted"
               exit 1
