@@ -37,3 +37,21 @@ test('unknown tab never clears an existing selected panel', () => {
   assert.equal(tabs.filter(t => t.attrs['aria-current'] === 'page').length, 1);
   assert.equal(panels.filter(p => p.classList.active).length, 1);
 });
+
+
+test('tab button without its panel cannot blank the current view', () => {
+  const { tabs, panels, document } = fixture();
+  tabs.push({ dataset: { tab: 'missing-panel' }, attrs: {}, setAttribute(k,v) { this.attrs[k] = v; } });
+  const before = panels.map(p => p.classList.active);
+  vm.runInNewContext(match[0] + '; switchTab("missing-panel");', { document });
+  assert.deepEqual(panels.map(p => p.classList.active), before);
+  assert.equal(tabs.filter(t => t.attrs['aria-current'] === 'page').length, 1);
+});
+
+test('panel without a navigation button cannot hijack the selected view', () => {
+  const { tabs, panels, document } = fixture();
+  panels.push({ id: 'orphan-panel', classList: { active: false, toggle(_name, active) { this.active = active; } } });
+  vm.runInNewContext(match[0] + '; switchTab("orphan-panel");', { document });
+  assert.deepEqual(tabs.map(t => t.attrs['aria-current']), ['false','page','false']);
+  assert.equal(panels.find(p => p.id === 'orphan-panel').classList.active, false);
+});
