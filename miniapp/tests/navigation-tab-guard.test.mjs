@@ -18,7 +18,7 @@ function fixture() {
     active: false,
     toggle(_name, active) { this.active = active; },
   } }));
-  const document = { querySelectorAll(selector) {
+  const document = { getElementById(id) { return panels.find(p => p.id === id) || null; }, querySelectorAll(selector) {
     return selector === '.tabs button' ? tabs : panels;
   } };
   vm.runInNewContext(match[0] + '; switchTab("tasks");', { document });
