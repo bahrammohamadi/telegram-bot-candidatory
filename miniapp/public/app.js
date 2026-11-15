@@ -1,7 +1,7 @@
 const webapp=window.Telegram?.WebApp;webapp?.ready();webapp?.expand();const initData=webapp?.initData||'';const $=id=>document.getElementById(id);let state=null;
 const message=t=>{$('message').textContent=t};
 async function api(path,options={}){if(!initData)throw Error('برای ورود، برنامه را از داخل تلگرام باز کنید.');const r=await fetch('/api/'+path,{...options,headers:{'content-type':'application/json','X-Telegram-Init-Data':initData,...options.headers}});const result=await r.json();if(!r.ok)throw Error(result.error||'ارتباط ناموفق بود');return result;}
-function switchTab(name){document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===name?'page':'false'));document.querySelectorAll('.panel').forEach(e=>e.classList.toggle('active',e.id===name));}
+function switchTab(name){if(!Array.from(document.querySelectorAll('.tabs button')).some(b=>b.dataset.tab===name)||!document.getElementById(name))return;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===name?'page':'false'));document.querySelectorAll('.panel').forEach(e=>e.classList.toggle('active',e.id===name));}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 function render(){if(!state)return;$('score').textContent=state.lastAssessment?state.lastAssessment.score+'٪':'ثبت نشده';$('openTasks').textContent=String(state.tasks.filter(t=>t.status==='open').length);
 const list=$('taskList');list.replaceChildren();const summary=$('homeTasks');summary.textContent=state.tasks.length?state.tasks.filter(t=>t.status==='open').slice(0,3).map(t=>t.title).join(' • ')||'همه وظایف انجام شده‌اند':'هنوز وظیفه‌ای ثبت نشده است';
