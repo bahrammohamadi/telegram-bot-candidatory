@@ -9,12 +9,12 @@ const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'
 const match = source.match(/^function switchTab\(name\)\{[^\n]+\}/m);
 assert.ok(match, 'switchTab must exist in the shipped client code');
 
-function fixture() {
-  const buttons = ['home', 'tasks'].map(tab => ({
+function fixture(tabNames = ['home', 'tasks']) {
+  const buttons = tabNames.map(tab => ({
     dataset: { tab }, attributes: {},
     setAttribute(key, value) { this.attributes[key] = value; }
   }));
-  const panels = ['home', 'tasks'].map(id => ({
+  const panels = tabNames.map(id => ({
     id, active: id === 'home',
     classList: {
       contains(token) { return token === 'panel'; },
@@ -64,4 +64,17 @@ test('destination must be an actual panel', () => {
   switchTab('tasks');
   assert.deepEqual(panels.map(p => p.active), [true, false]);
   assert.deepEqual(buttons.map(b => b.attributes), [{}, {}]);
+});
+
+
+test('five-tab navigation preserves exactly one active panel across transitions', () => {
+  const names = ['home', 'journey', 'tasks', 'academy', 'account'];
+  const { buttons, panels, switchTab } = fixture(names);
+  for (const name of ['journey', 'tasks', 'academy', 'account', 'home']) {
+    switchTab(name);
+    assert.deepEqual(panels.filter(p => p.active).map(p => p.id), [name]);
+    assert.deepEqual(buttons.filter(b => b.attributes['aria-current'] === 'page').map(b => b.dataset.tab), [name]);
+  }
+  switchTab('__proto__');
+  assert.deepEqual(panels.filter(p => p.active).map(p => p.id), ['home']);
 });
