@@ -54,6 +54,17 @@ class BaselineGateTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertFalse(result["ok"])
 
+    def test_empty_module_rejected_before_parity(self):
+        parts = [(name, b"" if name == "legacy.mjs" else name.encode()) for name in gate.EXPECTED]
+        with tempfile.TemporaryDirectory() as directory:
+            live = Path(directory) / "live.bin"
+            live.write_bytes(payload(parts))
+            err = io.StringIO()
+            with patch.object(sys, "argv", ["gate", "--live", str(live), "--content-type", "multipart/form-data; boundary=synthetic-baseline"]), contextlib.redirect_stderr(err):
+                status = gate.main()
+            self.assertEqual(status, 2)
+            self.assertIn("Empty multipart module", json.loads(err.getvalue())["error"])
+
     def test_changed_candidate_fails_exact_parity_even_if_valid(self):
         parts = [(name, name.encode()) for name in gate.EXPECTED]
         changed = [(name, b"new" if name == "entrypoint.mjs" else name.encode()) for name in gate.EXPECTED]
