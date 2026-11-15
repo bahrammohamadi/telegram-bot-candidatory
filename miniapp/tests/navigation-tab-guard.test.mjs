@@ -17,6 +17,7 @@ function fixture() {
   const panels = tabs.map(tab => ({ id: tab.dataset.tab, classList: {
     active: false,
     toggle(_name, active) { this.active = active; },
+    contains(name) { return name === 'panel' || (name === 'active' && this.active); },
   } }));
   const document = { getElementById(id) { return panels.find(p => p.id === id) || null; }, querySelectorAll(selector) {
     return selector === '.tabs button' ? tabs : panels;
@@ -50,7 +51,7 @@ test('tab button without its panel cannot blank the current view', () => {
 
 test('panel without a navigation button cannot hijack the selected view', () => {
   const { tabs, panels, document } = fixture();
-  panels.push({ id: 'orphan-panel', classList: { active: false, toggle(_name, active) { this.active = active; } } });
+  panels.push({ id: 'orphan-panel', classList: { active: false, toggle(_name, active) { this.active = active; }, contains(name) { return name === 'panel' || (name === 'active' && this.active); } } });
   vm.runInNewContext(match[0] + '; switchTab("orphan-panel");', { document });
   assert.deepEqual(tabs.map(t => t.attrs['aria-current']), ['false','page','false']);
   assert.equal(panels.find(p => p.id === 'orphan-panel').classList.active, false);
