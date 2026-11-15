@@ -53,7 +53,7 @@ jobs:
           const evidence = {
             worker: 'candidatory-miniapp-api', environment: 'production',
             secondaryEnvironmentCreated: false, commitSha: hash,
-            ci: { commitSha: hash, conclusion: 'success', url: 'https://github.com/example/example/actions/runs/1' },
+            ci: { commitSha: hash, conclusion: 'success', url: 'https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/1' },
             active: { versionId: '00000000-0000-4000-8000-000000000001', deploymentId: '00000000-0000-4000-8000-000000000002' },
             modules: [{name:'index.js',productionSha256:hash,candidateSha256:hash},{name:'ui.js',productionSha256:hash,candidateSha256:hash}],
             bindings: {matched:true,secretsValuesRead:false},
@@ -83,6 +83,7 @@ jobs:
           const original = JSON.parse(fs.readFileSync(path.join(base,'fresh-evidence.json'),'utf8'));
           const cases = {
             'wrong-commit': e => { e.ci.commitSha = 'b'.repeat(64); },
+            'wrong-ci-origin': e => { e.ci.url = 'https://github.com/other/repo/actions/runs/1'; },
             'module-mismatch': e => { e.modules[0].candidateSha256 = 'b'.repeat(64); },
             'duplicate-module': e => { e.modules[1].name = e.modules[0].name; },
             'unsafe-secondary': e => { e.secondaryEnvironmentCreated = true; },
@@ -98,7 +99,7 @@ jobs:
             fs.writeFileSync(path.join(base,name+'-evidence.json'),JSON.stringify(e));
           }
           NODE
-          for scenario in wrong-commit module-mismatch duplicate-module unsafe-secondary d1-migration rbac-not-tested secret-values-read rollback-unverified unauthorized; do
+          for scenario in wrong-commit wrong-ci-origin module-mismatch duplicate-module unsafe-secondary d1-migration rbac-not-tested secret-values-read rollback-unverified unauthorized; do
             if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/${scenario}-evidence.json"; then
               echo "ERROR: ${scenario} unsafe evidence accepted"
               exit 1
