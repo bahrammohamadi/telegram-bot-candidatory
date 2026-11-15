@@ -21,9 +21,10 @@ check(Number.isFinite(observedMs) && observedMs <= Date.now() + 60000 && Date.no
 const parts=e.modules;
 check(Array.isArray(parts)&&parts.length>=2,'multi-module artifact must list all parts');
 if(Array.isArray(parts)){
-  const names=parts.map(p=>p.name);
-  check(new Set(names).size===names.length,'module names must be unique');
-  for(const p of parts) check(typeof p.name==='string' && hex64(p.productionSha256)&&hex64(p.candidateSha256)&&p.productionSha256===p.candidateSha256,'module parity must be independently evidenced: '+String(p.name));
+  const names=parts.map(p=>p && typeof p.name==='string' ? p.name : '');
+  check(names.every(n=>n.length>0 && !n.startsWith('/') && !n.includes('\\\\') && !n.split('/').includes('..') && !n.split('/').includes('.')),'module names must be nonempty safe relative paths');
+  check(new Set(names.map(n=>n.toLowerCase())).size===names.length,'module names must be unique ignoring case');
+  for(const p of parts) check(p && typeof p.name==='string' && hex64(p.productionSha256)&&hex64(p.candidateSha256)&&p.productionSha256===p.candidateSha256,'module parity must be independently evidenced: '+String(p?.name));
 }
 check(e.bindings?.matched===true && e.bindings?.secretsValuesRead===false,'binding names/types and secret confidentiality must be verified');
 check(e.d1?.schemaReadOnly===true && e.d1?.compatible===true && e.d1?.migrationPerformed===false,'read-only D1 schema compatibility required');
