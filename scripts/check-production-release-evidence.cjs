@@ -2,8 +2,6 @@
 // Offline production-only release evidence gate. No network, secrets, or deployment.
 'use strict';
 const fs = require('node:fs');
-const crypto = require('node:crypto');
-const assert = require('node:assert/strict');
 const file = process.argv[2];
 if (!file) { console.error('Usage: node scripts/check-production-release-evidence.cjs evidence.json'); process.exit(2); }
 let e;
@@ -16,7 +14,7 @@ check(e.worker==='candidatory-miniapp-api','worker must be the existing producti
 check(e.environment==='production','only production environment is allowed');
 check(e.secondaryEnvironmentCreated===false,'no secondary environment may be created');
 check(hex64(e.commitSha),'exact candidate commit SHA required');
-check(e.ci?.commitSha===e.commitSha && e.ci?.conclusion==='success' && typeof e.ci?.url==='string' && e.ci.url.startsWith('https://github.com/'),'successful CI for exact candidate commit required');
+check(e.ci?.commitSha===e.commitSha && e.ci?.conclusion==='success' && typeof e.ci?.url==='string' && /^https:\/\/github\.com\/bahrammohamadi\/telegram-bot-candidatory\/actions\/runs\/[1-9][0-9]*(?:\/)?$/.test(e.ci.url),'successful CI for exact candidate commit required');
 check(uuid(e.active?.versionId)&&uuid(e.active?.deploymentId),'fresh active version and deployment required');
 const observedMs = typeof e.active?.observedAt === 'string' ? Date.parse(e.active.observedAt) : NaN;
 check(Number.isFinite(observedMs) && observedMs <= Date.now() + 60000 && Date.now() - observedMs <= 30 * 60 * 1000,'live deployment observation must be within 30 minutes and not in the future');
