@@ -38,7 +38,9 @@ def inventory(path, content_type):
         data = part.get_payload(decode=True)
         if data is None:
             raise ValueError("Unparseable multipart payload")
-        if not data:\n            raise ValueError("Empty multipart module is not deployable")\n        result[key] = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+        if not data:
+            raise ValueError("Empty multipart module is not deployable")
+        result[key] = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
     return result
 
 def main():
