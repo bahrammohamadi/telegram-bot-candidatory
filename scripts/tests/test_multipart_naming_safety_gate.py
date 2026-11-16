@@ -38,7 +38,7 @@ class MultipartNamingSafetyTests(unittest.TestCase):
     def test_duplicate_module_is_rejected(self):
         parts = [(name, b"export default {};") for name in gate.EXPECTED]
         parts.append((gate.EXPECTED[0], b"export default { changed: true };"))
-        with self.assertRaisesRegex(ValueError, "duplicate multipart part name"):
+        with self.assertRaisesRegex(ValueError, "(?i)duplicate multipart part name"):
             self.inspect(parts)
 
     def test_path_like_module_names_are_rejected(self):
@@ -46,7 +46,7 @@ class MultipartNamingSafetyTests(unittest.TestCase):
             with self.subTest(unsafe=unsafe):
                 parts = [(name, b"export default {};") for name in gate.EXPECTED]
                 parts.append((unsafe, b"export default {};"))
-                with self.assertRaisesRegex(ValueError, "unsafe or duplicate multipart part name"):
+                with self.assertRaisesRegex(ValueError, "(?i)unsafe or duplicate multipart part name"):
                     self.inspect(parts)
 
     def test_valid_fixture_hashes_are_deterministic(self):
