@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: node --test cloudflare-live/phase14/production-only-policy.test.cjs
       - run: node cloudflare-live/phase14/build-tasks.mjs
       - run: node --check cloudflare-live/phase14/dist/integration-tasks-worker.mjs
       - run: node --experimental-sqlite cloudflare-live/phase14/tasks-e2e.mjs
