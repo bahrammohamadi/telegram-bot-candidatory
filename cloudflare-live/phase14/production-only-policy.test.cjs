@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const root = path.resolve(__dirname, '../..');
+const root = path.resolve(__dirname, '../../..');
 test('tasks workflow is offline and cannot deploy', () => {
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/candidatory-tasks-validation.yml'), 'utf8');
   assert.match(workflow, /node --test cloudflare-live\/phase14\/\*synthetic\*\.test\.mjs/);
