@@ -35,7 +35,9 @@ def inventory(path, content_type):
         name = part.get_param("name", header="content-disposition")
         filename = part.get_filename()
         key = filename or name
-        if not key or "/" in key or "\\" in key or key in result:
+        if (not key or key in (".", "..") or "/" in key or "\\" in key
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in key)
+                or key in result):
             raise ValueError("Missing, unsafe or duplicate multipart part name")
         data = part.get_payload(decode=True)
         if data is None:
