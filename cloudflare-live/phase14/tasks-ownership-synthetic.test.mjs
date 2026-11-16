@@ -60,3 +60,30 @@ test('client-supplied owner does not override authenticated actor',async()=>{
   assert.equal(f.rows.find(r=>r.id===own).status,'done');
   assert.equal(f.queries[0].args.at(-1),actor.id);
 });
+
+test('summary is scoped to authenticated user and never accepts client owner',async()=>{
+ const calls=[];
+ const db={prepare(sql){return {sql,bind(...args){calls.push({sql,args});return this;},async first(){
+  if(sql.includes('candidate_subscriptions_v2'))return null;
+  return {total:1,open:1,doing:0,done:0,overdue:0};
+ }};}};
+ const res=await handleTasks(db,actor,{action:'summary',telegram_id:'2002',owner_id:'2002'});
+ assert.equal(res.status,200);
+ const body=await res.json();
+ assert.equal(body.summary.total,1);
+ assert.equal(body.remaining,9);
+ assert.equal(calls.length,2);
+ assert.ok(calls.every(q=>q.sql.includes('telegram_id=?')&&q.args[0]===actor.id));
+});
+test('invalid status is rejected before database access',async()=>{
+ const db={prepare(){throw Error('unexpected DB access')}};
+ const res=await handleTasks(db,actor,{action:'status',id:own,status:'admin'});
+ assert.equal(res.status,400);
+ assert.deepEqual(await res.json(),{error:'INVALID_TASK_STATUS'});
+});
+test('malformed task id is rejected before database access',async()=>{
+ const db={prepare(){throw Error('unexpected DB access')}};
+ const res=await handleTasks(db,actor,{action:'delete',id:'../../other-user'});
+ assert.equal(res.status,400);
+ assert.deepEqual(await res.json(),{error:'INVALID_TASK_ID'});
+});
