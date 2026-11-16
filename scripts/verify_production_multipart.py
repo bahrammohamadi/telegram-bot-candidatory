@@ -26,10 +26,12 @@ def inventory(path, content_type):
     msg = BytesParser(policy=policy.default).parsebytes(raw)
     if msg.get_content_type() != "multipart/form-data" and not msg.get_content_type().startswith("multipart/"):
         raise ValueError("Expected a multipart response; supply --content-type if headers are absent")
-    if not msg.is_multipart():
-        raise ValueError("Multipart boundary missing or invalid")
+    if not msg.is_multipart() or msg.defects:
+        raise ValueError("Multipart boundary missing, truncated or invalid")
     result = {}
     for part in msg.iter_parts():
+        if part.defects:
+            raise ValueError("Malformed multipart module")
         name = part.get_param("name", header="content-disposition")
         filename = part.get_filename()
         key = filename or name
