@@ -19,6 +19,7 @@ const names = new Set();
 const rootReal = realpathSync(process.cwd());
 const insideRoot = (path) => { try { const rel = relative(rootReal, realpathSync(path)); return rel === '' || (rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel)); } catch { return false; } };
 for (const mod of (Array.isArray(m.modules) ? m.modules : [])) {
+  if (!mod || typeof mod !== 'object' || Array.isArray(mod)) { fail.push('Invalid module entry'); continue; }
   requireTrue(typeof mod.name === 'string' && !names.has(mod.name), 'Duplicate or missing module name');
   names.add(mod.name);
   const file = typeof mod?.path === 'string' ? mod.path : '';
