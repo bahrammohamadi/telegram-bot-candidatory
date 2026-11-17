@@ -19,3 +19,12 @@ test('mobile browser test uses only intercepted synthetic host', () => {
   assert.doesNotMatch(script, /page\.goto\(['"]https:\/\/(?!tasks\.synthetic)/);
   assert.doesNotMatch(script, /workers\.dev|pages\.dev/i);
 });
+
+test('tasks workflow forbids indirect deployment and privileged tokens', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/candidatory-tasks-validation.yml'), 'utf8');
+  assert.doesNotMatch(workflow, /(?:cloudflare\/wrangler-action|wrangler-action@|deploy-pages@|actions\/deploy-pages@)/i);
+  assert.doesNotMatch(workflow, /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:deploy|publish)\b/i);
+  assert.doesNotMatch(workflow, /(?:workflow_call|environment:\s*(?:production|staging|preview)|id-token:\s*write)/i);
+  assert.doesNotMatch(workflow, /(?:CF_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|GITHUB_TOKEN:\s*\$\{\{)/i);
+  assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/);
+});
