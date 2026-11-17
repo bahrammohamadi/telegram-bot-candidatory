@@ -1,0 +1,37 @@
+name: Production release policy and symlink regressions (offline)
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'scripts/validate-production-release.mjs'
+      - 'tests/production-release-gate-policy.test.mjs'
+      - 'tests/production-release-symlink-regression.test.mjs'
+      - '.github/workflows/production-release-policy-regressions.yml'
+  pull_request:
+    paths:
+      - 'scripts/validate-production-release.mjs'
+      - 'tests/production-release-gate-policy.test.mjs'
+      - 'tests/production-release-symlink-regression.test.mjs'
+      - '.github/workflows/production-release-policy-regressions.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-policy-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static checks
+        run: |
+          node --check scripts/validate-production-release.mjs
+          node --check tests/production-release-gate-policy.test.mjs
+          node --check tests/production-release-symlink-regression.test.mjs
+      - name: Run offline synthetic regressions
+        run: node --test tests/production-release-gate-policy.test.mjs tests/production-release-symlink-regression.test.mjs
