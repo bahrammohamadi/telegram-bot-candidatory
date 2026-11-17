@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Offline, fail-closed production release manifest validator. No network, credentials or deployment.
-import { readFileSync, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, relative, isAbsolute } from 'node:path';
 
@@ -11,6 +11,7 @@ const requireTrue = (condition, message) => { if (!condition) fail.push(message)
 let m;
 try { m = JSON.parse(readFileSync(manifestPath, 'utf8')); }
 catch (e) { console.error('Manifest unavailable or invalid JSON:', e.message); process.exit(2); }
+if (!m || typeof m !== 'object' || Array.isArray(m)) { console.error('RELEASE BLOCKED: manifest must be a JSON object'); process.exit(1); }
 requireTrue(m.worker === 'candidatory-miniapp-api', 'Only the existing production worker is permitted');
 requireTrue(m.environment === 'production', 'Environment must be production');
 requireTrue(m.deployTarget === 'existing-only', 'Deployment target must be existing-only');
@@ -25,9 +26,9 @@ for (const mod of (Array.isArray(m.modules) ? m.modules : [])) {
   const file = typeof mod?.path === 'string' ? mod.path : '';
   const root = resolve(process.cwd());
   const abs = typeof file === 'string' ? resolve(root, file) : '';
-  requireTrue(!!file && !isAbsolute(file) && insideRoot(abs) && existsSync(abs), 'Missing or unsafe module path: ' + file);
+  requireTrue(!!file && !isAbsolute(file) && insideRoot(abs) && existsSync(abs) && statSync(abs).isFile(), 'Missing or unsafe module path: ' + file);
   requireTrue(/^sha256:[a-f0-9]{64}$/.test(mod.sha256 || ''), 'Invalid SHA-256: ' + mod.name);
-  if (file && existsSync(abs) && insideRoot(abs)) {
+  if (file && existsSync(abs) && insideRoot(abs) && statSync(abs).isFile()) {
     const hash = 'sha256:' + createHash('sha256').update(readFileSync(abs)).digest('hex');
     requireTrue(hash === mod.sha256, 'Hash mismatch: ' + mod.name);
   }
