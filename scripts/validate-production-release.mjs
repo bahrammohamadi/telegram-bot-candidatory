@@ -18,10 +18,10 @@ requireTrue(Array.isArray(m.modules) && m.modules.length > 1, 'Complete multipar
 const names = new Set();
 const rootReal = realpathSync(process.cwd());
 const insideRoot = (path) => { try { const rel = relative(rootReal, realpathSync(path)); return rel === '' || (rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel)); } catch { return false; } };
-for (const mod of m.modules || []) {
+for (const mod of (Array.isArray(m.modules) ? m.modules : [])) {
   requireTrue(typeof mod.name === 'string' && !names.has(mod.name), 'Duplicate or missing module name');
   names.add(mod.name);
-  const file = mod.path;
+  const file = typeof mod?.path === 'string' ? mod.path : '';
   const root = resolve(process.cwd());
   const abs = typeof file === 'string' ? resolve(root, file) : '';
   requireTrue(!!file && !isAbsolute(file) && insideRoot(abs) && existsSync(abs), 'Missing or unsafe module path: ' + file);
