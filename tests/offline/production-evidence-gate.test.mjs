@@ -42,3 +42,23 @@ test('invalid rollback artifact hash fails closed',()=>{
 test('missing production deployment identifier fails closed',()=>{
   assert.notEqual(run({...valid,productionDeploymentId:''}).status,0);
 });
+
+test('nonboolean security and handler review flags fail closed',()=>{
+  for(const key of ['rbacHandlerTestsPassed','securityChecksPassed']){
+    for(const value of ['true',1,null]){
+      const r=run({...valid,[key]:value});
+      assert.notEqual(r.status,0,key+'='+String(value));
+      assert.match(r.stderr,/BLOCKED/);
+    }
+  }
+});
+test('missing or malformed CI run number fails closed',()=>{
+  for(const url of ['', 'https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/abc', 'https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/123?token=secret']){
+    assert.notEqual(run({...valid,ciRunUrl:url}).status,0,url);
+  }
+});
+test('empty production version fails closed',()=>{
+  const r=run({...valid,productionVersionId:''});
+  assert.notEqual(r.status,0);
+  assert.match(r.stderr,/productionVersionId/);
+});
