@@ -22,3 +22,23 @@ test('wrong worker fails closed',()=>{assert.notEqual(run({...valid,workerName:'
 test('failed CI fails closed',()=>{assert.notEqual(run({...valid,ciConclusion:'failure'}).status,0);});
 test('invalid hashes fail closed',()=>{assert.notEqual(run({...valid,moduleManifestSha256:'fake'}).status,0);});
 test('untrusted CI URL fails closed',()=>{assert.notEqual(run({...valid,ciRunUrl:'https://example.com/actions/runs/123'}).status,0);});
+
+test('missing CLI evidence path fails closed',()=>{
+  const r=spawnSync(process.execPath,[gate],{encoding:'utf8'});
+  assert.notEqual(r.status,0);
+  assert.match(r.stderr,/provide exactly one local evidence JSON path/);
+});
+test('review flags must be literal booleans, not strings',()=>{
+  for(const key of ['bindingsReviewed','d1SchemaReviewed','secretsNamesReviewed','routesReviewed','rollbackProcedureReviewed','productionSmokePlanReviewed']){
+    assert.notEqual(run({...valid,[key]:'true'}).status,0,key);
+  }
+});
+test('invalid repository commit sha fails closed',()=>{
+  assert.notEqual(run({...valid,repositorySha:'a'.repeat(39)}).status,0);
+});
+test('invalid rollback artifact hash fails closed',()=>{
+  assert.notEqual(run({...valid,rollbackArtifactSha256:'c'.repeat(63)}).status,0);
+});
+test('missing production deployment identifier fails closed',()=>{
+  assert.notEqual(run({...valid,productionDeploymentId:''}).status,0);
+});
