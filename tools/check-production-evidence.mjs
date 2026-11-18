@@ -21,6 +21,7 @@ if (process.argv.length !== 3) {
     if(evidence.workerName!=='candidatory-miniapp-api') bad.push('workerName');
     if(evidence.ciConclusion!=='success') bad.push('ciConclusion');
     if(!/^https:\/\/github\.com\/bahrammohamadi\/telegram-bot-candidatory\/actions\/runs\/\d+$/.test(evidence.ciRunUrl||'')) bad.push('ciRunUrl');
+    for(const k of ['productionVersionId','productionDeploymentId']) if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(evidence[k]||'')) bad.push(k);
     for(const k of ['moduleManifestSha256','rollbackArtifactSha256']) if(!/^[a-f0-9]{64}$/.test(evidence[k]||'')) bad.push(k);
     if(!/^[a-f0-9]{40}$/.test(evidence.repositorySha||'')) {
       // Git commit SHA-1 is 40 hex characters; no SHA-256 substitution.
