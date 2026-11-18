@@ -1,0 +1,45 @@
+name: Offline module manifest verification
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'tools/build-module-manifest.mjs'
+      - '.github/workflows/offline-module-manifest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manifest-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax
+        run: node --check tools/build-module-manifest.mjs
+      - name: Verify deterministic hashes with synthetic files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mock-worker"
+          printf 'export default 1;\n' > "$RUNNER_TEMP/mock-worker/index.mjs"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" > "$RUNNER_TEMP/manifest-a.json"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" > "$RUNNER_TEMP/manifest-b.json"
+          cmp "$RUNNER_TEMP/manifest-a.json" "$RUNNER_TEMP/manifest-b.json"
+          node -e "const fs=require('node:fs'),crypto=require('node:crypto');const m=JSON.parse(fs.readFileSync(process.argv[1]));const b=fs.readFileSync(process.argv[2]);if(m.workerName!=='candidatory-miniapp-api'||m.modules.length!==1||m.modules[0].sha256!==crypto.createHash('sha256').update(b).digest('hex'))process.exit(1)" "$RUNNER_TEMP/manifest-a.json" "$RUNNER_TEMP/mock-worker/index.mjs"
+      - name: Reject symbolic links without touching production
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$RUNNER_TEMP/mock-worker/index.mjs" "$RUNNER_TEMP/mock-worker/linked.mjs"
+          if node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" >/dev/null 2>&1; then
+            echo "Expected symlink rejection" >&2
+            exit 1
+          fi
