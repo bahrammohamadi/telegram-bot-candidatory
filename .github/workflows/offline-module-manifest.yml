@@ -6,6 +6,7 @@ on:
     paths:
       - 'tools/build-module-manifest.mjs'
       - '.github/workflows/offline-module-manifest.yml'
+      - 'tests/**manifest**'
   workflow_dispatch:
 
 permissions:
@@ -41,5 +42,19 @@ jobs:
           ln -s "$RUNNER_TEMP/mock-worker/index.mjs" "$RUNNER_TEMP/mock-worker/linked.mjs"
           if node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" >/dev/null 2>&1; then
             echo "Expected symlink rejection" >&2
+            exit 1
+          fi
+      - name: Reject empty and unsupported synthetic bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/empty-worker" "$RUNNER_TEMP/invalid-worker"
+          if node tools/build-module-manifest.mjs "$RUNNER_TEMP/empty-worker" >/dev/null 2>&1; then
+            echo "Expected empty bundle rejection" >&2
+            exit 1
+          fi
+          printf 'invalid' > "$RUNNER_TEMP/invalid-worker/secret.env"
+          if node tools/build-module-manifest.mjs "$RUNNER_TEMP/invalid-worker" >/dev/null 2>&1; then
+            echo "Expected unsupported extension rejection" >&2
             exit 1
           fi
