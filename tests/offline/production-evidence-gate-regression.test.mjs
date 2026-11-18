@@ -10,7 +10,7 @@ const gate = new URL('../../tools/check-production-evidence.mjs', import.meta.ur
 const valid = {
  repositorySha:'a'.repeat(40),ciRunUrl:'https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/123',
  ciConclusion:'success',workerName:'candidatory-miniapp-api',
- productionVersionId:'version-fixture',productionDeploymentId:'deployment-fixture',
+ productionVersionId:'3c35231f-36f0-4bad-b786-9a4309d8e868',productionDeploymentId:'860f813c-baf4-4cff-bfc7-bb4120b910ed',
  moduleManifestSha256:'b'.repeat(64),bindingsReviewed:true,d1SchemaReviewed:true,
  secretsNamesReviewed:true,routesReviewed:true,rbacHandlerTestsPassed:true,
  securityChecksPassed:true,rollbackArtifactSha256:'c'.repeat(64),
@@ -26,6 +26,8 @@ function run(evidence) {
 test('complete fixture passes structural gate (not deploy authorization)',()=>assert.equal(run(valid).status,0));
 for(const [name,patch] of [
  ['wrong worker',{workerName:'candidatory-news-bot'}],
+ ['malformed production version',{productionVersionId:'version-fixture'}],
+ ['malformed deployment ID',{productionDeploymentId:'deployment-fixture'}],
  ['failed CI',{ciConclusion:'failure'}],
  ['false RBAC',{rbacHandlerTestsPassed:false}],
  ['string security boolean',{securityChecksPassed:'true'}],
