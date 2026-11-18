@@ -98,3 +98,31 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Reject source drift and malformed module metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/drift-worker"
+          printf 'alpha' > "$RUNNER_TEMP/drift-worker/a.js"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/drift-worker" > "$RUNNER_TEMP/drift-manifest.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/drift-worker" "$RUNNER_TEMP/drift-manifest.json"
+          printf 'beta' > "$RUNNER_TEMP/drift-worker/b.js"
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/drift-worker" "$RUNNER_TEMP/drift-manifest.json" >/dev/null 2>&1; then
+            echo "Verifier accepted an unexpected extra module" >&2
+            exit 1
+          fi
+          rm "$RUNNER_TEMP/drift-worker/b.js"
+          node - "$RUNNER_TEMP/drift-manifest.json" "$RUNNER_TEMP/drift-bad.json" <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const [input, output] = process.argv.slice(2);
+          const m = JSON.parse(fs.readFileSync(input, 'utf8'));
+          m.modules[0].bytes += 1;
+          m.manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(m.modules)).digest('hex');
+          fs.writeFileSync(output, JSON.stringify(m));
+          NODE
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/drift-worker" "$RUNNER_TEMP/drift-bad.json" >/dev/null 2>&1; then
+            echo "Verifier accepted mismatched byte count" >&2
+            exit 1
+          fi
