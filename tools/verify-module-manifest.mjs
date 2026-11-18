@@ -3,16 +3,18 @@
 // Does not contact Cloudflare, GitHub, or any production service.
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve, join, sep } from 'node:path';
+import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 const [rootArg, manifestArg] = process.argv.slice(2);
 if (process.argv.length !== 4 || !rootArg || !manifestArg) throw Error('Usage: node tools/verify-module-manifest.mjs <source-directory> <manifest.json>');
 const expected = JSON.parse(readFileSync(manifestArg, 'utf8'));
 if (expected.schemaVersion !== 1 || expected.workerName !== 'candidatory-miniapp-api' || !Array.isArray(expected.modules) || !expected.modules.length) throw Error('Invalid manifest metadata');
 const names = new Set();
+let previousName = null;
 for (const m of expected.modules) {
-  if (typeof m.name !== 'string' || !/^[a-zA-Z0-9_./-]+$/.test(m.name) || m.name.startsWith('/') || m.name.split('/').includes('..') || names.has(m.name) || !Number.isSafeInteger(m.bytes) || m.bytes < 0 || !/^[a-f0-9]{64}$/.test(m.sha256)) throw Error('Invalid module entry');
+  if (typeof m.name !== 'string' || !/^[a-zA-Z0-9_./-]+$/.test(m.name) || m.name.startsWith('/') || m.name.split('/').some(part => part === '..' || part === '.' || part === '') || names.has(m.name) || (previousName !== null && previousName.localeCompare(m.name, 'en') >= 0) || !Number.isSafeInteger(m.bytes) || m.bytes < 0 || !/^[a-f0-9]{64}$/.test(m.sha256)) throw Error('Invalid module entry');
   names.add(m.name);
+  previousName = m.name;
 }
 const canonical = JSON.stringify(expected.modules);
 const digest = createHash('sha256').update(canonical).digest('hex');
