@@ -68,3 +68,33 @@ jobs:
             echo "Expected unsupported extension rejection" >&2
             exit 1
           fi
+
+      - name: Reject malformed manifest entries and noncanonical ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ordered-worker"
+          printf 'one' > "$RUNNER_TEMP/ordered-worker/a.js"
+          printf 'two' > "$RUNNER_TEMP/ordered-worker/b.js"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/ordered-worker" > "$RUNNER_TEMP/ordered-manifest.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/ordered-worker" "$RUNNER_TEMP/ordered-manifest.json"
+          for mutation in traversal duplicate unsorted empty-segment dot-segment wrong-digest; do
+            node - "$RUNNER_TEMP/ordered-manifest.json" "$RUNNER_TEMP/mutated-manifest.json" "$mutation" <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const [input, output, mutation] = process.argv.slice(2);
+          const m = JSON.parse(fs.readFileSync(input, 'utf8'));
+          if (mutation === 'traversal') m.modules[0].name = '../a.js';
+          if (mutation === 'duplicate') m.modules[1].name = m.modules[0].name;
+          if (mutation === 'unsorted') m.modules.reverse();
+          if (mutation === 'empty-segment') m.modules[0].name = 'nested//a.js';
+          if (mutation === 'dot-segment') m.modules[0].name = './a.js';
+          if (mutation !== 'wrong-digest') m.manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(m.modules)).digest('hex');
+          else m.manifestSha256 = '0'.repeat(64);
+          fs.writeFileSync(output, JSON.stringify(m));
+          NODE
+            if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/ordered-worker" "$RUNNER_TEMP/mutated-manifest.json" >/dev/null 2>&1; then
+              echo "Verifier accepted invalid manifest: $mutation" >&2
+              exit 1
+            fi
+          done
