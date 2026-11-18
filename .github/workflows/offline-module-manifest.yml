@@ -3,11 +3,6 @@ on:
   push:
     branches:
       - feature/cloudflare-parity-audit-2026-10-29
-    paths:
-      - 'tools/build-module-manifest.mjs'
-      - 'tools/verify-module-manifest.mjs'
-      - '.github/workflows/offline-module-manifest.yml'
-      - 'tests/**manifest**'
   workflow_dispatch:
 
 permissions:
