@@ -56,3 +56,30 @@ test('rejects missing secondary-environment declaration', () => {
   delete e.creates_secondary_environment;
   assert.ok(validateEvidence(e).includes('creates_secondary_environment'));
 });
+
+test('rejects non-HTTPS, credential-bearing and malformed evidence URLs', () => {
+  for (const url of [
+    'http://github.com/example/run',
+    'https://user:password@github.com/example/run',
+    'javascript:alert(1)',
+    'not-a-url',
+    '',
+  ]) {
+    const e = valid();
+    e.ci_passed_for_exact_head.evidence_url = url;
+    assert.ok(validateEvidence(e).includes('ci_passed_for_exact_head'), url);
+  }
+});
+test('rejects malformed or non-UTC evidence timestamps', () => {
+  for (const timestamp of [
+    '2026-11-19T00:00:00+02:00',
+    '2026-11-19',
+    '2026-99-99T00:00:00Z',
+    'not-a-date',
+    '',
+  ]) {
+    const e = valid();
+    e.rollback_artifact_verified.verified_at = timestamp;
+    assert.ok(validateEvidence(e).includes('rollback_artifact_verified'), timestamp);
+  }
+});
