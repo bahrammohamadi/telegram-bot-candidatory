@@ -91,3 +91,9 @@ test('rejects calendar-overflow UTC timestamps that JavaScript normalizes', () =
     assert.ok(validateEvidence(e).includes('rollback_artifact_verified'), timestamp);
   }
 });
+
+test('rejects evidence timestamps in the future (synthetic)', () => {
+  const e = valid();
+  e.rollback_artifact_verified.verified_at = '2099-01-01T00:00:00Z';
+  assert.ok(validateEvidence(e).includes('rollback_artifact_verified'));
+});
