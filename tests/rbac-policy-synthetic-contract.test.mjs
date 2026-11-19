@@ -31,3 +31,17 @@ const cases = [
  ['admin cannot change roles implicitly', {role:'admin',action:'roles:write'},false],
 ];
 for (const [name,input,expected] of cases) test(name,()=>assert.equal(authorize(input),expected));
+
+// Deny-by-default edge cases: these remain synthetic policy tests, not handler tests.
+const denyCases = [
+ ['empty role', {role:'',action:'public:read'}],
+ ['missing action', {role:'admin'}],
+ ['candidate with empty owner id', {role:'candidate',action:'case:read:self',actorId:'u1',ownerId:''}],
+ ['candidate with empty actor id', {role:'candidate',action:'task:update:self',actorId:'',ownerId:'u1'}],
+ ['reviewer with missing assignment', {role:'reviewer',action:'case:read:assigned',actorId:'r1'}],
+ ['reviewer cannot write assigned case', {role:'reviewer',action:'case:update:assigned',actorId:'r1',assignedReviewerId:'r1'}],
+ ['admin cannot invoke AI by default', {role:'admin',action:'ai:invoke'}],
+ ['candidate cannot read all cases', {role:'candidate',action:'case:read:all'}],
+ ['guest cannot update task', {role:'guest',action:'task:update:self',actorId:'u1',ownerId:'u1'}],
+];
+for (const [name,input] of denyCases) test(name,()=>assert.equal(authorize(input),false));
