@@ -83,3 +83,11 @@ test('rejects malformed or non-UTC evidence timestamps', () => {
     assert.ok(validateEvidence(e).includes('rollback_artifact_verified'), timestamp);
   }
 });
+
+test('rejects calendar-overflow UTC timestamps that JavaScript normalizes', () => {
+  for (const timestamp of ['2026-02-30T00:00:00Z', '2026-04-31T12:30:00Z']) {
+    const e = valid();
+    e.rollback_artifact_verified.verified_at = timestamp;
+    assert.ok(validateEvidence(e).includes('rollback_artifact_verified'), timestamp);
+  }
+});
