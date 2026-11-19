@@ -14,8 +14,19 @@ const required = [
   'rollback_procedure_verified',
   'production_readonly_smoke_passed',
 ];
+function validEvidenceRecord(record) {
+  if (record?.status !== 'passed') return false;
+  try {
+    const url = new URL(record.evidence_url);
+    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return false;
+  } catch { return false; }
+  if (typeof record.verified_at !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(record.verified_at) ||
+      !Number.isFinite(Date.parse(record.verified_at))) return false;
+  return true;
+}
 export function validateEvidence(e) {
-  const missing = required.filter(k => e?.[k]?.status !== 'passed' || !e[k].evidence_url || !e[k].verified_at);
+  const missing = required.filter(k => !validEvidenceRecord(e?.[k]));
   if (e?.target_worker !== 'candidatory-miniapp-api') missing.push('target_worker');
   if (e?.target_branch !== 'feature/cloudflare-parity-audit-2026-10-29') missing.push('target_branch');
   if (e?.creates_secondary_environment !== false) missing.push('creates_secondary_environment');
