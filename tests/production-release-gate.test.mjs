@@ -97,3 +97,21 @@ test('rejects evidence timestamps in the future (synthetic)', () => {
   e.rollback_artifact_verified.verified_at = '2099-01-01T00:00:00Z';
   assert.ok(validateEvidence(e).includes('rollback_artifact_verified'));
 });
+
+
+test('rejects local and private-network evidence URLs', () => {
+  for (const url of [
+    'https://localhost/report',
+    'https://service.local/report',
+    'https://127.0.0.1/report',
+    'https://10.0.0.1/report',
+    'https://172.16.0.1/report',
+    'https://192.168.1.1/report',
+    'https://169.254.1.1/report',
+    'https://[::1]/report',
+  ]) {
+    const e = valid();
+    e.ci_passed_for_exact_head.evidence_url = url;
+    assert.ok(validateEvidence(e).includes('ci_passed_for_exact_head'), url);
+  }
+});
