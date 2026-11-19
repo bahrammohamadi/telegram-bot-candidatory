@@ -22,7 +22,7 @@ function validEvidenceRecord(record) {
     // Evidence must not point to loopback, link-local, or private-network endpoints.
     const host = url.hostname.toLowerCase().replace(/\.$/, '');
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') ||
-        host === '[::1]' || host === '[::]' || /^127\./.test(host) ||
+        host === '[::1]' || host === '[::]' || /^\[(?:fc|fd|fe[89ab]|ff)[0-9a-f:]*\]$/i.test(host) || /^\[::ffff:(?:127|10|192\.168|169\.254)\./i.test(host) || /^127\./.test(host) ||
         /^10\./.test(host) || /^192\.168\./.test(host) ||
         /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
   } catch { return false; }
