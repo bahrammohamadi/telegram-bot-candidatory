@@ -22,7 +22,8 @@ function validEvidenceRecord(record) {
   } catch { return false; }
   if (typeof record.verified_at !== 'string' ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(record.verified_at) ||
-      !Number.isFinite(Date.parse(record.verified_at))) return false;
+      !Number.isFinite(Date.parse(record.verified_at)) ||
+      new Date(record.verified_at).toISOString().slice(0, 19) !== record.verified_at.slice(0, 19)) return false;
   return true;
 }
 export function validateEvidence(e) {
