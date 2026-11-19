@@ -121,3 +121,18 @@ jobs:
             echo "Verifier accepted mismatched byte count" >&2
             exit 1
           fi
+
+      - name: Reject missing module from a previously valid synthetic manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/missing-worker"
+          printf 'first\\n' > "$RUNNER_TEMP/missing-worker/a.js"
+          printf 'second\\n' > "$RUNNER_TEMP/missing-worker/b.js"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/missing-worker" > "$RUNNER_TEMP/missing-manifest.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/missing-worker" "$RUNNER_TEMP/missing-manifest.json"
+          rm "$RUNNER_TEMP/missing-worker/b.js"
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/missing-worker" "$RUNNER_TEMP/missing-manifest.json" >/dev/null 2>&1; then
+            echo "Verifier accepted missing module" >&2
+            exit 1
+          fi
