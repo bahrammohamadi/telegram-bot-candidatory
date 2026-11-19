@@ -1,0 +1,24 @@
+name: Production binding contract (offline only)
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'tests/production-binding-contract.test.mjs'
+      - '.github/workflows/production-binding-contract-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  binding-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify synthetic binding metadata only (no network calls to production)
+        run: node --test tests/production-binding-contract.test.mjs
