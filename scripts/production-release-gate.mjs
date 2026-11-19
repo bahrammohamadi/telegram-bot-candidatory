@@ -19,6 +19,12 @@ function validEvidenceRecord(record) {
   try {
     const url = new URL(record.evidence_url);
     if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return false;
+    // Evidence must not point to loopback, link-local, or private-network endpoints.
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') ||
+        host === '[::1]' || host === '[::]' || /^127\./.test(host) ||
+        /^10\./.test(host) || /^192\.168\./.test(host) ||
+        /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
   } catch { return false; }
   if (typeof record.verified_at !== 'string' ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(record.verified_at) ||
