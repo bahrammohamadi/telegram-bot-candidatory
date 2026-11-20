@@ -30,7 +30,8 @@ test('production binding takes precedence over legacy BOT_TOKEN for valid signed
     headers: { 'X-Telegram-Init-Data': initData }
   }), { DB: db.db, TELEGRAM_BOT_TOKEN: token, BOT_TOKEN: 'different-legacy-token' });
   assert.equal(response.status, 200);
-  assert.equal(db.writes(), 1);
+  // Authenticated GET must be read-only; account upsert belongs to write paths.
+  assert.equal(db.writes(), 0);
   assert.equal((await response.json()).version, 'v2');
 });
 test('legacy-only signature is rejected when production binding exists', async () => {
