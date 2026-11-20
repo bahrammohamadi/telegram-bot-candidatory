@@ -35,3 +35,21 @@ Scope: existing candidatory-miniapp-api; **offline only**, no new Worker or depl
 
 ## Release decision
 BLOCKED: live multipart parity, complete 18-chapter original, exact-SHA CI, immutable rollback archive, routes, and read-only public URL smoke are unverified. Historical deployment identifiers are not proof of rollback.
+
+## Additional adversarial assertions (2026-11-20)
+These are **requirements, not passing tests**. Execute only with imported real handlers, synthetic principals, mocked D1 and network calls; never invoke production endpoints.
+
+| Attack | Synthetic fixture | Required assertion |
+|---|---|---|
+| IDOR by changing path ID | User A requests case B by UUID | deny before any case B payload is serialized |
+| IDOR by changing JSON owner/workspace | User A PATCHes case A with workspace B/owner B | immutable ownership; reject or ignore forged fields |
+| Mass assignment of role | User A submits role=admin and permissions array | no privilege change, no privileged downstream call |
+| Cross-tenant list enumeration | User A requests list with workspace=B filter | results scoped server-side to A; no B rows |
+| Nested task under foreign case | User A creates task with case_id=B | reject; no write mock invoked |
+| Expired Telegram initData replay | fixed synthetic auth_date outside tolerance | deny; no DB read of private records |
+| Forged Telegram initData hash | single-byte tampering in signed payload | deny regardless of client-provided user id |
+| Missing role / unknown role | valid identity with undefined role | deny by default |
+| AI prompt requesting foreign context | User A requests summary of case B | tool authorization denies before AI invocation |
+| Subscription spoofing | User A sets plan=premium in request | server entitlement authoritative; deny upgrade |
+
+Acceptance evidence: record exact GitHub SHA, CI run URL, handler import paths, number of executed tests, and assertion results. A markdown matrix alone is **not** proof of security. No production release until multipart parity and immutable rollback are independently verified.
