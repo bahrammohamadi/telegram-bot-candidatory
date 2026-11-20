@@ -10,9 +10,10 @@ export default {async fetch(req,env){
  if(req.method==='GET'&&url.pathname==='/')return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors https://web.telegram.org;",'x-content-type-options':'nosniff'}});
  if(url.pathname==='/health'&&req.method==='GET')return json({status:'ok',database:!!env.DB});
  if(!url.pathname.startsWith('/api/'))return fail('Not found',404);
- if(!env.BOT_TOKEN||!env.DB)return fail('Service not configured',503);
+ const telegramToken=env.TELEGRAM_BOT_TOKEN||env.BOT_TOKEN;
+ if(!telegramToken||!env.DB)return fail('Service not configured',503);
  const initData=req.headers.get('X-Telegram-Init-Data');
- const user=await validateInitData(initData,env.BOT_TOKEN);
+ const user=await validateInitData(initData,telegramToken);
  if(!user)return fail('Telegram authentication required',401);
  const id=String(user.id);
  try{
