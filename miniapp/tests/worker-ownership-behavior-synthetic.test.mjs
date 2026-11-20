@@ -38,7 +38,7 @@ test('task update cannot modify another owner task', async () => {
   assert.equal(res.status,404);
   const update = f.calls.find(c=>c.sql.startsWith('UPDATE tasks'));
   assert.ok(update);
-  assert.match(update.sql,/WHERE id=\\? AND telegram_id=\\?/);
+  assert.match(update.sql,/WHERE id=\? AND telegram_id=\?/);
   assert.deepEqual(update.args,['done',otherTask,String(userId)]);
 });
 test('overview selects are scoped to signed user, never caller supplied identity', async () => {
@@ -50,7 +50,7 @@ test('overview selects are scoped to signed user, never caller supplied identity
   const selects = f.calls.filter(c=>c.sql.startsWith('SELECT'));
   assert.equal(selects.length,3);
   for(const c of selects) {
-    assert.match(c.sql,/WHERE telegram_id=\\?/);
+    assert.match(c.sql,/WHERE telegram_id=\?/);
     assert.deepEqual(c.args,[String(userId)]);
   }
 });
