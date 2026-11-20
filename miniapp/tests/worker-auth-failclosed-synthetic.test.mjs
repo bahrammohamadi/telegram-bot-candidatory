@@ -26,7 +26,10 @@ function fixture() {
 for (const [label, headers] of [
   ['missing Telegram initData', {}],
   ['malformed Telegram initData', { 'X-Telegram-Init-Data': 'user=%7B%22id%22%3A1%7D&auth_date=1794180000&hash=bad' }],
-  ['client-supplied identity without signature', { 'X-Telegram-Init-Data': 'user=%7B%22id%22%3A999%7D&auth_date=1794180000' }]
+  ['client-supplied identity without signature', { 'X-Telegram-Init-Data': 'user=%7B%22id%22%3A999%7D&auth_date=1794180000' }],
+  ['empty Telegram initData', { 'X-Telegram-Init-Data': '' }],
+  ['arbitrary bearer token without Telegram signature', { Authorization: 'Bearer synthetic-forged-token' }],
+  ['untrusted identity header without Telegram signature', { 'X-Telegram-User-Id': '999999' }]
 ]) {
   test(`actual miniapp worker denies ${label} before any D1 access`, async () => {
     const f = fixture();
