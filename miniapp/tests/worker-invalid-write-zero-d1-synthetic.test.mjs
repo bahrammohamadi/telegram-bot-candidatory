@@ -41,3 +41,21 @@ for(const [path,method,payload,status] of [
   assert.equal(s.statements.length,0,`unexpected D1 SQL: ${s.statements.join('; ')}`);
  });
 }
+
+for(const [path,method] of [
+ ['/api/profile','POST'],
+ ['/api/tasks','POST'],
+ ['/api/courses/complete','POST'],
+ ['/api/assessment-v2/submit','POST'],
+ ['/api/tasks/synthetic-id','PATCH']
+]){
+ test(`malformed JSON ${method} ${path} must not prepare D1 SQL`,async()=>{
+  const s=spy();
+  const response=await worker.fetch(new Request('https://synthetic.invalid'+path,{
+   method,headers:{'X-Telegram-Init-Data':await signed(),'content-type':'application/json'},
+   body:'{"broken":'
+  }),{DB:s.DB,TELEGRAM_BOT_TOKEN:token});
+  assert.ok(response.status>=400,`malformed JSON unexpectedly accepted: ${response.status}`);
+  assert.equal(s.statements.length,0,`unexpected D1 SQL: ${s.statements.join('; ')}`);
+ });
+}
