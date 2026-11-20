@@ -17,7 +17,7 @@ export default {async fetch(req,env){
  if(!user)return fail('Telegram authentication required',401);
  const id=String(user.id);
  try{
-  await env.DB.prepare('INSERT INTO accounts(telegram_id,first_name,last_name,username) VALUES(?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET first_name=excluded.first_name,last_name=excluded.last_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP').bind(id,String(user.first_name||'').slice(0,100),String(user.last_name||'').slice(0,100),String(user.username||'').slice(0,100)).run();
+  if(req.method!=='GET')await env.DB.prepare('INSERT INTO accounts(telegram_id,first_name,last_name,username) VALUES(?,?,?,?) ON CONFLICT(telegram_id) DO UPDATE SET first_name=excluded.first_name,last_name=excluded.last_name,username=excluded.username,updated_at=CURRENT_TIMESTAMP').bind(id,String(user.first_name||'').slice(0,100),String(user.last_name||'').slice(0,100),String(user.username||'').slice(0,100)).run();
   if(url.pathname==='/api/assessment-v2'&&req.method==='GET'){
     const items=assessmentBank.filter((q,i)=>i%5===0);
     return json({version:'v2',questions:items.map(({correct,explanation,weight,...q})=>q),domains:assessmentDomains});
