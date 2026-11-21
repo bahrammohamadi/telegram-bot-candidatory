@@ -1,0 +1,67 @@
+name: Production Worker multipart completeness guard
+# Offline-only: validates the parser and artifact-manifest guards on every
+# change to the target branch. It NEVER uploads or deploys a Worker.
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+  pull_request:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-multipart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate multipart parser and required modules (synthetic, no network)
+        run: |
+          node --check scripts/verify-worker-multipart.mjs
+          node scripts/verify-worker-multipart.mjs --self-test
+      - name: Validate offline artifact manifest integrity
+        run: |
+          node --check scripts/verify-worker-artifact.mjs
+          node scripts/verify-worker-artifact.mjs --self-test
+          node --check scripts/build-worker-manifest.mjs
+          node scripts/build-worker-manifest.mjs --self-test
+      - name: Validate recorded Production module baseline (offline, no network)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {strict as assert} from 'node:assert';
+          const file='docs/architecture/production-worker-module-manifest-2026-11-14.json';
+          const baseline=JSON.parse(readFileSync(file,'utf8'));
+          assert.equal(baseline.worker,'candidatory-miniapp-api');
+          assert.equal(baseline.main_module,'entrypoint.mjs');
+          assert.deepEqual(baseline.modules.map(x=>x.name).sort(),['entrypoint.mjs','legacy.mjs','preview.mjs']);
+          for (const module of baseline.modules) assert.match(module.sha256,/^[0-9a-f]{64}$/);
+          for (const module of baseline.modules) {
+            assert.ok(Number.isSafeInteger(module.bytes) && module.bytes > 0, 'Invalid recorded module size');
+          }
+          console.log('PASS recorded Production baseline manifest shape and three module hashes');
+          console.log('::warning::Recorded baseline was not freshly downloaded by CI; this does not establish live source parity.');
+          JS
+          # A baseline compared to itself always passes and cannot prove parity.
+          # Require a separately produced candidate manifest for any release decision.
+          # This workflow only validates the recorded baseline and NEVER grants deployment.
+          echo "::warning::Candidate multipart manifest is absent; production source parity remains UNVERIFIED."
+          if [[ -f docs/architecture/production-worker-candidate-manifest.json ]]; then
+            node scripts/verify-worker-artifact.mjs \
+              docs/architecture/production-worker-module-manifest-2026-11-14.json \
+              docs/architecture/production-worker-candidate-manifest.json
+          else
+            echo "No independent candidate manifest. Release remains blocked."
+          fi
+      - name: Declare production parity is not established
+        run: |
+          echo "::warning::Synthetic multipart and manifest tests do not prove parity with active candidatory-miniapp-api. No Production upload is authorized by this workflow."

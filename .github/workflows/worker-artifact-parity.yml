@@ -1,0 +1,43 @@
+name: Worker multipart artifact parity
+# Always validate artifact safety on each change to the candidate branch,
+# not only when the manifest scripts themselves change. No deployment.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  artifact-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate artifact manifest guard
+        run: node scripts/verify-worker-artifact.mjs --self-test
+      - name: Validate offline artifact manifest builder
+        run: node scripts/build-worker-manifest.mjs --self-test
+      - name: Validate recorded production multipart baseline (offline only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const file='docs/architecture/production-worker-module-manifest-2026-11-14.json';
+          const baseline=JSON.parse(readFileSync(file,'utf8'));
+          assert.equal(baseline.worker,'candidatory-miniapp-api');
+          assert.equal(baseline.main_module,'entrypoint.mjs');
+          assert.match(baseline.version_id,/^[0-9a-f-]{36}$/);
+          assert.match(baseline.deployment_id,/^[0-9a-f-]{36}$/);
+          assert.ok(Array.isArray(baseline.modules),'Missing modules');
+          const modules=[...baseline.modules].sort((a,b)=>a.name.localeCompare(b.name));
+          assert.deepEqual(modules.map(m=>m.name),['entrypoint.mjs','legacy.mjs','preview.mjs']);
+          assert.ok(modules.every(m=>Number.isSafeInteger(m.bytes)&&m.bytes>0),'Missing byte size');
+          assert.ok(modules.every(m=>typeof m.sha256==='string'&&/^[a-f0-9]{64}$/.test(m.sha256)),'Invalid digest');
+          assert.equal(new Set(modules.map(m=>m.name)).size,3,'Duplicate module');
+          console.log('PASS: recorded production manifest shape, inventory and digest format');
+          console.log('::warning::Offline manifest validation is not a fresh live source comparison, rollback proof or deploy authorization.');
+          JS

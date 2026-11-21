@@ -1,0 +1,33 @@
+<section id="tasks-panel" class="panel" hidden>
+<h3>برنامه و پیگیری وظایف</h3>
+<p>کارهای شخصی، برنامه‌های پیگیری و اقدامات جلسات را ثبت و وضعیتشان را مدیریت کنید. این بخش آزمایشی است و اعلان یا ارسال خودکار ندارد.</p>
+<div id="tasks-state" role="status" aria-live="polite"></div>
+<div id="tasks-summary" class="tasks-summary" aria-label="وضعیت وظایف"></div>
+<form id="tasks-form">
+  <input type="hidden" id="tasks-edit-id" value="">
+  <label>عنوان وظیفه<input name="title" minlength="3" maxlength="180" required placeholder="مثلاً تهیه صورت‌جلسه و فهرست اقدامات"></label>
+  <label>جزئیات<textarea name="details" maxlength="1200" placeholder="شرح کار، معیار تکمیل، منابع موردنیاز"></textarea></label>
+  <label>اولویت
+    <select name="priority">
+      <option value="normal">معمولی</option>
+      <option value="high">زیاد</option>
+      <option value="low">کم</option>
+    </select>
+  </label>
+  <label>مهلت انجام (اختیاری)<input name="due_date" type="date"></label>
+  <button id="tasks-save" type="submit">ذخیره وظیفه</button>
+  <button id="tasks-new" type="button" class="secondary">وظیفه جدید</button>
+</form>
+<label>نمایش وظایف
+<select id="tasks-filter">
+  <option value="all">همه</option>
+  <option value="open">در انتظار انجام</option>
+  <option value="doing">در حال انجام</option>
+  <option value="done">انجام‌شده</option>
+  <option value="overdue">عقب‌افتاده</option>
+</select></label>
+<button type="button" id="tasks-refresh" class="secondary">بازخوانی وظایف</button>
+<div id="tasks-list" role="list"></div>
+<small>اطلاعات در محیط آزمایشی ذخیره می‌شوند. برای کارهای واقعی یا محرمانه از این نسخه استفاده نکنید. تاریخ‌های عقب‌افتاده بر اساس ساعت ایران محاسبه می‌شوند.</small>
+<button type="button" id="tasks-close" class="secondary">بازگشت به میزکار</button>
+</section>

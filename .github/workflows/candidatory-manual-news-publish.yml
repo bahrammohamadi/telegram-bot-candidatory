@@ -1,0 +1,23 @@
+name: One-shot manual news channel publication safety
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/news/**'
+      - '.github/workflows/candidatory-manual-news-publish.yml'
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/news/build-manual-outbox.mjs
+      - run: node --check cloudflare-live/news/dist/news-worker-manual-outbox.mjs
+      - run: node --experimental-sqlite cloudflare-live/news/manual-outbox-e2e.mjs

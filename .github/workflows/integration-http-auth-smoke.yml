@@ -1,0 +1,31 @@
+# Retired 2026-11-17: original workflow probed a secondary integration Worker.
+# Production-only policy forbids using staging, preview, isolated, or second Workers.
+# Keep the workflow filename for historical continuity; no network, auth, deployment,
+# secrets, or D1 operations are permitted here.
+name: Production-only offline integration policy guard
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - '.github/workflows/integration-http-auth-smoke.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/integration-http-auth-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify production-only policy without network or deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No repository checkout or remote calls. This is a static policy marker,
+          # NOT evidence of RBAC, D1, application health, or deployment readiness.
+          test 'candidatory-miniapp-api' = 'candidatory-miniapp-api'
+          printf '%s\\n' 'PASS: legacy isolated HTTP smoke disabled; no external service contacted.'
+          printf '%s\\n' 'This check is NOT a production release gate or authorization.'

@@ -1,0 +1,52 @@
+/* Candidatory mobile visual refresh — isolated phase15 candidate only. */
+:root{font-family:Tahoma,Arial,sans-serif;color-scheme:light;--ui-accent:#174e45;--ui-accent-soft:#e6f1ec;--ui-border:#e0e8e4;--ui-text:#19342f;--ui-muted:#60766e}
+html{scroll-behavior:smooth}
+body{background:#f3f7f4!important;color:var(--ui-text)!important;padding:clamp(12px,3vw,24px) 12px calc(32px + env(safe-area-inset-bottom));line-height:1.65}
+main{max-width:680px;margin-inline:auto;background:#fff;border:1px solid var(--ui-border);border-radius:24px;padding:clamp(16px,4vw,28px);box-shadow:0 18px 55px rgba(22,72,59,.09)}
+main>h1{font-size:clamp(22px,5vw,27px);letter-spacing:-.4px;margin:2px 0 6px;color:#153d35}
+main>p{color:var(--ui-muted);font-size:13px;margin:0 0 18px}
+.panel h2{font-size:20px;letter-spacing:-.25px;color:#173e36;margin:10px 0 2px}
+.panel>p{color:var(--ui-muted);font-size:13px}
+button,input,select,textarea{font:inherit;border-radius:13px;min-height:48px}
+input,select,textarea{background:#fbfcfb!important;color:var(--ui-text)!important;border:1px solid #cbd9d3!important;padding:12px 14px}
+input:focus,select:focus,textarea:focus{border-color:var(--ui-accent)!important;box-shadow:0 0 0 3px rgba(23,78,69,.1);outline:none}
+label{color:#2a4941;font-weight:600;gap:7px}
+button{background:var(--ui-accent);color:white;transition:background .15s,transform .15s,box-shadow .15s;cursor:pointer}
+button:hover:not(:disabled){background:#23675a;box-shadow:0 4px 12px rgba(23,78,69,.14)}
+button:active:not(:disabled){transform:scale(.985)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #c7a45f;outline-offset:3px}
+.secondary{background:#fff!important;color:var(--ui-accent)!important;border:1px solid #a5bdb4!important}
+.secondary:hover:not(:disabled){background:var(--ui-accent-soft)!important}
+#msg{border:1px solid #d7e9e1;background:#eef6f2!important;color:#285447;border-radius:14px;padding:13px 15px;font-size:13px;line-height:1.8}
+.steps{gap:6px;margin:16px 0 20px}
+.steps span{flex:1;min-width:0;text-align:center;padding:9px 5px;background:#f1f4f2!important;color:#65766f;border:1px solid #e5eae7;border-radius:12px;font-size:12px}
+.steps span.active{background:var(--ui-accent)!important;color:#fff;border-color:var(--ui-accent);font-weight:700}
+#form{gap:14px}#form label{font-size:13px}
+#summary{background:#f6f9f7!important;border:1px solid var(--ui-border);border-radius:16px;line-height:2.1;color:#25483e}
+.modules{gap:10px;margin:16px 0}
+.modules button{min-height:84px;border:1px solid #dceae3;background:#f4f8f5;color:#1b4c41;border-radius:16px;padding:12px 10px;line-height:1.7;font-size:13px;font-weight:700}
+.modules button:hover{background:#e3f0e9;color:#174e45}
+.modules button:focus-visible{outline-offset:2px}
+#dashboard>p{background:#f6f9f7;padding:14px;border-radius:14px;border:1px solid var(--ui-border)}
+.quiz-card,.progress-card,.progress-bar-card{border:1px solid var(--ui-border);border-radius:16px;background:#fff;box-shadow:0 3px 12px rgba(30,65,50,.035)}
+.progress-number{color:var(--ui-accent)}
+@media(max-width:420px){main{padding:17px 13px;border-radius:20px}.modules{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.modules button{min-height:78px;font-size:12px}.steps span{font-size:11px}.progress-cards{gap:8px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}button{transition:none}}
+@media print{main{box-shadow:none;border:0;padding:0}body{background:#fff!important}}
+
+/* Phase 15 accessibility: keyboard, text zoom, narrow screens and motion preferences. */
+:where(button,input,select,textarea,a,[tabindex]):focus-visible{outline:3px solid #8b5e00!important;outline-offset:3px}
+button:disabled,[aria-disabled="true"]{cursor:not-allowed;opacity:.65}
+:where(main,.panel,.progress-card,.quiz-card){min-width:0;overflow-wrap:anywhere}
+:where(input,select,textarea){max-width:100%;box-sizing:border-box}
+@media(max-width:320px){body{padding-inline:6px}main{padding-inline:10px}.modules{grid-template-columns:minmax(0,1fr)}.steps{flex-wrap:wrap}.steps span{flex-basis:45%}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(forced-colors:active){button,.modules button,.secondary{border:1px solid ButtonText}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid Highlight!important}#msg,.progress-card,.quiz-card{border:1px solid CanvasText}}
+
+/* 200% text zoom and mobile keyboard: keep form controls and status readable. */
+:where(.modules,.progress-cards,.steps){max-width:100%;min-width:0}
+:where(.modules button,.steps span,.progress-card,.quiz-card){overflow-wrap:anywhere;word-break:normal}
+:where(button,input,select,textarea){font-size:max(1rem,16px)}
+:where(button,a,input,select,textarea){touch-action:manipulation}
+@media(max-width:400px){.progress-cards{grid-template-columns:minmax(0,1fr)}.steps span{min-width:0}}
+@media(prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}

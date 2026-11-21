@@ -1,0 +1,28 @@
+name: Production main Worker read-only homepage gate
+# Non-mutating GET only. No authentication probes or writes to live Production.
+# Run on every branch push so UI/API changes cannot bypass the homepage smoke gate.
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Check existing Production homepage using anonymous GET only
+        env:
+          BASE_URL: https://candidatory-miniapp-api.lasvaram-candidatory.workers.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No POST, auth, Telegram initData, cookies, user-scoped API, or D1 access.
+          code=$(curl --silent --show-error --location --max-redirs 0 --max-time 20 \
+            -H 'Accept: text/html' -o home.html -w '%{http_code}' "$BASE_URL/")
+          test "$code" = 200
+          grep -Eiq '<html|<!doctype html' home.html
+          grep -Eiq 'lang=["\x27]fa|dir=["\x27]rtl' home.html
+          echo "PASS: existing Production homepage returned HTML with Persian/RTL marker via anonymous GET"
+          echo "::warning::This is a read-only homepage smoke check, not proof of auth, D1, multipart parity or rollback."

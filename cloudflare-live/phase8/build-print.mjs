@@ -1,0 +1,25 @@
+// Build the isolated print/PDF enhancement from the complete deployed phase-7 snapshot.
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
+let source=read('../phase7/integration-deployed-snapshot-2026-11-02.mjs');
+if(!source.endsWith('}};\n')||source.includes('--- TRUNCATED ---')||!source.includes('url.pathname==="/api/progress"'))throw Error('Unexpected or truncated phase-7 snapshot');
+const m=source.match(/^const TEST_PAGE=("(?:\\.|[^"\\])*");\n/);
+if(!m)throw Error('Embedded HTML missing');
+let html=JSON.parse(m[1]);
+const markup=read('./report-print-panel.html'),css=read('./report-print.css');
+let printJs=read('./report-print.js');
+const needle='const reportPrintCss="@PRINT_CSS@";';
+if(!printJs.includes(needle))throw Error('Printable stylesheet placeholder missing');
+printJs=printJs.replace(needle,'const reportPrintCss='+JSON.stringify(css)+';');
+const beforeButton='<button id="progress-copy"';
+const beforeJS="const progressPanel=document.getElementById('progress-panel')";
+if(!html.includes(beforeButton)||!html.includes(beforeJS)||!html.includes('</style>'))throw Error('Progress UI markers changed');
+if(html.includes('id="progress-print-button"'))throw Error('Print already enabled');
+html=html.replace(beforeButton,markup+beforeButton);
+html=html.replace(beforeJS,printJs+'\n'+beforeJS);
+html=html.replace('</style>',css+'</style>');
+source=source.replace(m[0],'const TEST_PAGE='+JSON.stringify(html)+';\n');
+if(!source.includes('id=\\"progress-print-button\\"')||!source.includes('id=\\"progress-download-html\\"')||!source.includes('id=\\"quiz-panel\\"'))throw Error('Missing printable controls or existing modules');
+mkdirSync(new URL('./dist/',import.meta.url),{recursive:true});
+writeFileSync(new URL('./dist/integration-print-worker.mjs',import.meta.url),source);
+console.log('PASS: print/PDF Worker built; profile, goals, calendar, practice, quiz and progress API intact');

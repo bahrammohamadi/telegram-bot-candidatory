@@ -1,0 +1,27 @@
+name: Phase 15 release evidence regression
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/release-evidence-gate.mjs'
+      - 'cloudflare-live/phase15/release-evidence-gate.test.mjs'
+      - '.github/workflows/phase15-release-evidence-regression.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-live/phase15/release-evidence-gate.mjs'
+      - 'cloudflare-live/phase15/release-evidence-gate.test.mjs'
+      - '.github/workflows/phase15-release-evidence-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase15/release-evidence-gate.test.mjs

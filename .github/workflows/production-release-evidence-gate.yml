@@ -1,0 +1,113 @@
+name: Production release evidence gate (offline only)
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  fail-closed-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify missing evidence is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node scripts/check-production-release-evidence.cjs; then
+            echo 'ERROR: missing evidence accepted'
+            exit 1
+          fi
+      - name: Verify fabricated incomplete evidence is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"worker":"candidatory-miniapp-api","environment":"production","secondaryEnvironmentCreated":false,"approval":{"authorized":true}}' > "$RUNNER_TEMP/incomplete-evidence.json"
+          if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/incomplete-evidence.json"; then
+            echo 'ERROR: incomplete evidence accepted'
+            exit 1
+          fi
+      - name: Verify malformed evidence is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{bad json' > "$RUNNER_TEMP/invalid-evidence.json"
+          if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/invalid-evidence.json"; then
+            echo 'ERROR: malformed evidence accepted'
+            exit 1
+          fi
+      - name: Verify freshness boundary with synthetic complete evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const base = process.env.RUNNER_TEMP;
+          const hash = 'a'.repeat(64);
+          const evidence = {
+            worker: 'candidatory-miniapp-api', environment: 'production',
+            secondaryEnvironmentCreated: false, commitSha: hash,
+            ci: { commitSha: hash, conclusion: 'success', url: 'https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/1' },
+            active: { versionId: '00000000-0000-4000-8000-000000000001', deploymentId: '00000000-0000-4000-8000-000000000002' },
+            modules: [{name:'index.js',productionSha256:hash,candidateSha256:hash},{name:'ui.js',productionSha256:hash,candidateSha256:hash}],
+            bindings: {matched:true,secretsValuesRead:false},
+            d1: {schemaReadOnly:true,compatible:true,migrationPerformed:false},
+            security: {rbacNegativeTestsPassed:true,syntheticOnly:true},
+            smoke: {method:'GET',status:200,url:'https://example.com/'},
+            rollback: {completeMultipartArtifact:true,metadataBindingsCompatible:true,verified:true},
+            approval: {productionOnly:true,authorized:true}
+          };
+          for (const [name,offset] of [['fresh',-60000],['stale',-31*60000],['future',2*60000]]) {
+            evidence.active.observedAt = new Date(Date.now()+offset).toISOString();
+            fs.writeFileSync(path.join(base,name+'-evidence.json'),JSON.stringify(evidence));
+          }
+          NODE
+          node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/fresh-evidence.json"
+          for scenario in stale future; do
+            if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/${scenario}-evidence.json"; then
+              echo "ERROR: ${scenario} evidence accepted"
+              exit 1
+            fi
+          done
+          # Each mutation must fail closed. No real Worker, token, or database is accessed.
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const base = process.env.RUNNER_TEMP;
+          const original = JSON.parse(fs.readFileSync(path.join(base,'fresh-evidence.json'),'utf8'));
+          const cases = {
+            'wrong-commit': e => { e.ci.commitSha = 'b'.repeat(64); },
+            'wrong-ci-origin': e => { e.ci.url = 'https://github.com/other/repo/actions/runs/1'; },
+            'module-mismatch': e => { e.modules[0].candidateSha256 = 'b'.repeat(64); },
+            'duplicate-module': e => { e.modules[1].name = e.modules[0].name; },
+            'case-duplicate-module': e => { e.modules[1].name = e.modules[0].name.toUpperCase(); },
+            'path-traversal-module': e => { e.modules[1].name = '../ui.js'; },
+            'null-module': e => { e.modules[1] = null; },
+            'unsafe-secondary': e => { e.secondaryEnvironmentCreated = true; },
+            'd1-migration': e => { e.d1.migrationPerformed = true; },
+            'rbac-not-tested': e => { e.security.rbacNegativeTestsPassed = false; },
+            'secret-values-read': e => { e.bindings.secretsValuesRead = true; },
+            'rollback-unverified': e => { e.rollback.verified = false; },
+            'unauthorized': e => { e.approval.authorized = false; }
+          };
+          for (const [name,mutate] of Object.entries(cases)) {
+            const e = structuredClone(original);
+            mutate(e);
+            fs.writeFileSync(path.join(base,name+'-evidence.json'),JSON.stringify(e));
+          }
+          NODE
+          for scenario in wrong-commit wrong-ci-origin module-mismatch duplicate-module case-duplicate-module path-traversal-module null-module unsafe-secondary d1-migration rbac-not-tested secret-values-read rollback-unverified unauthorized; do
+            if node scripts/check-production-release-evidence.cjs "$RUNNER_TEMP/${scenario}-evidence.json"; then
+              echo "ERROR: ${scenario} unsafe evidence accepted"
+              exit 1
+            fi
+          done
+          echo 'Synthetic schema and security negative tests passed; real production evidence remains unverified.'
+      - name: Confirm no deployment occurred
+        run: echo 'Offline contract checks only. No Worker upload, preview, staging, D1 write, or deployment.'
