@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {canAccessTask} from './task-access-policy.mjs';
+const principal={id:'a'};
+const membership={userId:'a',workspaceId:'x',active:true,role:'member'};
+const task={id:'t',workspaceId:'x',ownerId:'a'};
+const allowed=(changes={})=>canAccessTask({principal,membership,task,action:'read',...changes});
+test('owner reads and edits own workspace task',()=>{assert.equal(allowed(),true);assert.equal(allowed({action:'write'}),true)});
+test('cross-workspace task is invisible and immutable',()=>{for(const action of ['read','write']) assert.equal(allowed({task:{...task,workspaceId:'y'},action}),false)});
+test('another owner cannot be edited by member',()=>assert.equal(allowed({task:{...task,ownerId:'b'},action:'write'}),false));
+test('revoked membership is denied',()=>assert.equal(allowed({membership:{...membership,active:false}}),false));
+test('client role cannot override server membership',()=>assert.equal(allowed({membership:{...membership,role:'viewer'},action:'write',clientRole:'admin'}),false));
+test('principal mismatch denied',()=>assert.equal(allowed({principal:{id:'b'}}),false));
+test('missing context fails closed',()=>assert.equal(allowed({membership:null}),false));
+test('unknown action fails closed',()=>assert.equal(allowed({action:'delete'}),false));
+test('viewer reads but never writes',()=>{assert.equal(allowed({membership:{...membership,role:'viewer'}}),true);assert.equal(allowed({membership:{...membership,role:'viewer'},action:'write'}),false)});
