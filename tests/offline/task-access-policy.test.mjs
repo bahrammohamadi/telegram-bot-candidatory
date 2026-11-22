@@ -14,3 +14,35 @@ test('principal mismatch denied',()=>assert.equal(allowed({principal:{id:'b'}}),
 test('missing context fails closed',()=>assert.equal(allowed({membership:null}),false));
 test('unknown action fails closed',()=>assert.equal(allowed({action:'delete'}),false));
 test('viewer reads but never writes',()=>{assert.equal(allowed({membership:{...membership,role:'viewer'}}),true);assert.equal(allowed({membership:{...membership,role:'viewer'},action:'write'}),false)});
+
+test('missing task or principal fails closed for both actions',()=>{
+  for(const action of ['read','write']){
+    assert.equal(allowed({principal:null,action}),false);
+    assert.equal(allowed({task:null,action}),false);
+    assert.equal(allowed({membership:null,action}),false);
+  }
+});
+test('missing or mismatched workspace identifiers deny access',()=>{
+  for(const action of ['read','write']){
+    assert.equal(allowed({task:{...task,workspaceId:null},action}),false);
+    assert.equal(allowed({membership:{...membership,workspaceId:null},action}),false);
+    assert.equal(allowed({membership:{...membership,workspaceId:'y'},action}),false);
+  }
+});
+test('unknown and absent membership roles deny read and write',()=>{
+  for(const role of [undefined,null,'','owner','ADMIN','superadmin']){
+    for(const action of ['read','write']){
+      assert.equal(allowed({membership:{...membership,role},action}),false);
+    }
+  }
+});
+test('member cannot edit unowned task, manager may edit only within workspace',()=>{
+  assert.equal(allowed({task:{...task,ownerId:null},action:'write'}),false);
+  assert.equal(allowed({membership:{...membership,role:'manager'},task:{...task,ownerId:'b'},action:'write'}),true);
+  assert.equal(allowed({membership:{...membership,role:'manager'},task:{...task,workspaceId:'y'},action:'write'}),false);
+});
+test('inactive admin membership never bypasses workspace boundary',()=>{
+  const admin={...membership,role:'admin'};
+  assert.equal(allowed({membership:{...admin,active:false},action:'write'}),false);
+  assert.equal(allowed({membership:admin,task:{...task,workspaceId:'y'},action:'write'}),false);
+});
