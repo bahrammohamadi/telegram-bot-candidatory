@@ -18,7 +18,7 @@ EXPECTED = {
     "REVIEW_DB": "d1",
     "TELEGRAM_BOT_TOKEN": "secret_text",
 }
-REQUIRED = ("worker", "bindings", "modules", "main_module", "compatibility_date",
+REQUIRED = ("worker", "deploy_target", "bindings", "modules", "main_module", "compatibility_date",
             "ci_sha", "ci_success", "rollback_version", "production_parity_verified",
             "handler_auth_verified", "d1_schema_verified", "routes_verified",
             "homepage_readonly_verified")
@@ -31,7 +31,7 @@ def validate(m):
     if m.get("worker") != TARGET:
         errors.append("only existing candidatory-miniapp-api is allowed")
     b = m.get("bindings")
-    if not isinstance(b, list) or any(not isinstance(x, dict) for x in b):
+    if not isinstance(b, list) or any(not isinstance(x, dict) or not isinstance(x.get("name"), str) or not isinstance(x.get("type"), str) for x in b):
         errors.append("bindings must be an array of name/type objects")
     else:
         names = [x.get("name") for x in b]
@@ -59,7 +59,7 @@ def validate(m):
                 "d1_schema_verified", "routes_verified", "homepage_readonly_verified"):
         if m.get(key) is not True:
             errors.append(f"{key} must be explicitly true with external evidence")
-    if m.get("deploy_target") not in (None, TARGET):
+    if m.get("deploy_target") != TARGET:
         errors.append("second environment prohibited")
     return errors
 
