@@ -38,3 +38,13 @@ Status vocabulary: **verified**, **partial**, **needs-review**, **new**, **block
 1. Read production `entrypoint.mjs`, `legacy.mjs`, `preview.mjs` and metadata without revealing secrets; compare to GitHub.
 2. Read current CI results for exact HEAD; resolve failures.
 3. Choose one small accessible RTL UI fix, build a complete artifact, prove rollback and only then publish to existing Worker.
+
+## Evidence update — 2026-11-22 (read-only)
+
+- Retrieved this traceability document and the structured 18-chapter architecture from the specified branch. The architecture file explicitly states that it is a **compressed structural rewrite**, not the original verbatim user document. **Original full text remains missing**; do not present the summary as a recovered transcription.
+- Queried Cloudflare's actual deployment API for the **existing** `candidatory-miniapp-api` Worker. Latest returned deployment: `860f813c-baf4-4cff-bfc7-bb4120b910ed` (2026-11-11T20:05:53.015284Z), active version `3c35231f-36f0-4bad-b786-9a4309d8e868` at 100%. This is fresh read evidence, **not** a new deployment.
+- Previous deployment in API response: `3d172eb9-eca1-45e5-9070-760970d1f8c1`; prior version `32d33109-8e48-4c9e-a38a-4dd91012967b`. Prior presence is **not** a proven rollback procedure or artifact.
+- Status mapping for requested vocabulary: **سالم** = verified with reproducible evidence; **ناقص** = partial or missing evidence; **نیازمند اصلاح** = observed defect requiring correction (not merely unverified); **جدید** = confirmed absent and required. Do not mark missing evidence as a confirmed defect or absent feature.
+- Chapter 13 remains **ناقص**: live deployment identity verified, but active multipart code, metadata, bindings, routes, D1 schema, secrets names, artifact parity and executable rollback not verified in this update. Chapters 3, 8, 9, 12, 14 remain **ناقص** until source/CI/contract checks; no unsupported **سالم** classification.
+- Release gate: **NO DEPLOY** until exact candidate SHA and CI, all modules and bindings, authorization tests, public URL read-only smoke check and rollback proof pass. No second runtime, production write-test, D1 migration, payment, paid AI or mass messaging authorized.
+- Next safe code slice: static tests with synthetic fixtures for task ownership/workspace isolation and mobile RTL states; preserve existing code and data. This entry is documentation-only.
