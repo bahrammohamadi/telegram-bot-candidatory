@@ -46,3 +46,15 @@ test('inactive admin membership never bypasses workspace boundary',()=>{
   assert.equal(allowed({membership:{...admin,active:false},action:'write'}),false);
   assert.equal(allowed({membership:admin,task:{...task,workspaceId:'y'},action:'write'}),false);
 });
+
+test('blank, object, and non-finite identity fields never authorize',()=>{
+  for(const bad of ['', '   ', {}, [], NaN, Infinity, -Infinity]){
+    assert.equal(allowed({principal:{id:bad},membership:{...membership,userId:bad}}),false);
+    assert.equal(allowed({membership:{...membership,workspaceId:bad},task:{...task,workspaceId:bad}}),false);
+    assert.equal(allowed({task:{...task,ownerId:bad},action:'write'}),false);
+  }
+});
+test('valid numeric IDs retain intended scalar equivalence',()=>{
+  assert.equal(allowed({principal:{id:12},membership:{...membership,userId:'12'}}),true);
+  assert.equal(allowed({membership:{...membership,workspaceId:7},task:{...task,workspaceId:'7'}}),true);
+});
