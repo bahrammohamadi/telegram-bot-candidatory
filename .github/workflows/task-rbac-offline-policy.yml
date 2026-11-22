@@ -7,11 +7,13 @@ on:
     paths:
       - 'tests/offline/task-access-policy.mjs'
       - 'tests/offline/task-access-policy.test.mjs'
+      - 'tests/offline/task-access-policy.role-matrix.test.mjs'
       - '.github/workflows/task-rbac-offline-policy.yml'
   pull_request:
     paths:
       - 'tests/offline/task-access-policy.mjs'
       - 'tests/offline/task-access-policy.test.mjs'
+      - 'tests/offline/task-access-policy.role-matrix.test.mjs'
       - '.github/workflows/task-rbac-offline-policy.yml'
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Execute synthetic RBAC ownership and workspace tests
-        run: node --test tests/offline/task-access-policy.test.mjs
+        run: node --test tests/offline/task-access-policy.test.mjs tests/offline/task-access-policy.role-matrix.test.mjs
 
 # No deployment, secrets, Cloudflare calls, live D1, Telegram, or production writes.
 # Offline policy is not connected to production handlers. Passing CI is not a release approval.
