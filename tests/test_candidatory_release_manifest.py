@@ -81,6 +81,26 @@ class ReleaseGateTests(unittest.TestCase):
                 m[field] = False
                 self.assertTrue(gate.validate(m))
 
+    def test_missing_deploy_target_rejected(self):
+        m = candidate()
+        del m["deploy_target"]
+        self.assertTrue(gate.validate(m))
+
+    def test_null_deploy_target_rejected(self):
+        m = candidate()
+        m["deploy_target"] = None
+        self.assertTrue(gate.validate(m))
+
+    def test_malformed_binding_entries_fail_closed_without_exception(self):
+        for bad in ({"name": [], "type": "d1"},
+                    {"name": "DB", "type": []},
+                    {"name": None, "type": "d1"},
+                    {"name": {"nested": "DB"}, "type": "d1"}):
+            with self.subTest(bad=str(bad)):
+                m = candidate()
+                m["bindings"][0] = bad
+                self.assertTrue(gate.validate(m))
+
     def test_non_object_rejected(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate(None))
