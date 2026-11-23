@@ -3,10 +3,6 @@ on:
   push:
     branches:
       - feature/cloudflare-parity-audit-2026-10-29
-    paths:
-      - 'scripts/operations/check_candidatory_release_manifest.py'
-      - 'tests/test_candidatory_release_manifest.py'
-      - '.github/workflows/candidatory-release-manifest-offline.yml'
   workflow_dispatch:
 permissions:
   contents: read
