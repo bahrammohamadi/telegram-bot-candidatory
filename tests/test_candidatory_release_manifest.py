@@ -101,6 +101,20 @@ class ReleaseGateTests(unittest.TestCase):
                 m["bindings"][0] = bad
                 self.assertTrue(gate.validate(m))
 
+    def test_unsafe_module_paths_rejected(self):
+        for path in ("../secrets.js", "/absolute.js", "lib/../index.js",
+                     "https://example.org/evil.js", "lib\\\\evil.js",
+                     "lib//index.js", "index.txt"):
+            with self.subTest(path=path):
+                m = candidate()
+                m["modules"] = ["index.js", path]
+                self.assertTrue(gate.validate(m))
+
+    def test_nested_local_js_module_allowed(self):
+        m = candidate()
+        m["modules"] = ["index.js", "src/tasks/handler.mjs"]
+        self.assertEqual(gate.validate(m), [])
+
     def test_non_object_rejected(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate(None))
