@@ -51,6 +51,6 @@ if (process.argv.includes('--require-self-hosted-font')) {
   assert(html.includes('.woff2'), 'No WOFF2 reference in HTML');
   assert(!html.includes('fonts.googleapis.com') && !html.includes('fonts.gstatic.com'), 'External Google Fonts dependency remains');
   assert(html.includes('font-family:Vazirmatn') || html.includes('font-family:"Vazirmatn"'), 'Global font declaration missing');
-  assert(entry.includes('font/woff2'), 'Entrypoint does not serve WOFF2 with explicit content type');
+  // A comment containing font/woff2 is not evidence of an actual font response.\n  const executableEntry = entry.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/(^|\\s)\\/\\/[^\\n]*/g, '$1');\n  assert(/font\\/woff2/.test(executableEntry) && /content-type/i.test(executableEntry), 'Entrypoint lacks an explicit WOFF2 response content type');\n  assert(/\\.woff2|vazirmatn-font|font\\//i.test(executableEntry) && /new Response\\s*\\(/.test(executableEntry), 'Entrypoint lacks a font-serving response route');
   console.log('PASS: offline self-hosted font static checks; live smoke and CI still required');
 }
