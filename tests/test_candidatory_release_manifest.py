@@ -146,6 +146,13 @@ class ReleaseGateTests(unittest.TestCase):
                 m[field] = "synthetic-placeholder"
                 self.assertTrue(gate.validate(m))
 
+    def test_blank_rollback_version_rejected(self):
+        for value in ("", " ", "\\t", "\\n", "  \\t  "):
+            with self.subTest(value=repr(value)):
+                m = candidate()
+                m["rollback_version"] = value
+                self.assertTrue(gate.validate(m))
+
     def test_non_object_rejected(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate(None))
