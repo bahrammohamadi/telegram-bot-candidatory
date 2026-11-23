@@ -147,7 +147,7 @@ class ReleaseGateTests(unittest.TestCase):
                 self.assertTrue(gate.validate(m))
 
     def test_blank_rollback_version_rejected(self):
-        for value in ("", " ", "\\t", "\\n", "  \\t  "):
+        for value in ("", " ", "\t", "\n", "  \t  ", "\r\n", "\u00a0", "\u2003"):
             with self.subTest(value=repr(value)):
                 m = candidate()
                 m["rollback_version"] = value
