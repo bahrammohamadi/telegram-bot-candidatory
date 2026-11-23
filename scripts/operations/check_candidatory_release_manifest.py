@@ -47,7 +47,7 @@ def validate(m):
     if not isinstance(modules, list) or not modules or any(not isinstance(x, str) or not x for x in modules):
         errors.append("modules must be a nonempty array of paths")
     elif any(
-        path.startswith("/") or "\\\\" in path or
+        path.startswith("/") or chr(92) in path or
         "://" in path or
         any(part in ("", ".", "..") for part in path.split("/")) or
         PurePosixPath(path).suffix not in (".js", ".mjs")
