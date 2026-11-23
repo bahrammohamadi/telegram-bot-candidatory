@@ -29,6 +29,10 @@ def validate(m):
     if not isinstance(m, dict):
         return ["manifest must be a JSON object"]
     errors += [f"missing {k}" for k in REQUIRED if k not in m]
+    # Do not allow accidental credentials, tokens or unreviewed release metadata.
+    unexpected = set(m) - set(REQUIRED)
+    if unexpected:
+        errors.append("unexpected top-level fields prohibited: " + ", ".join(sorted(unexpected)))
     if m.get("worker") != TARGET:
         errors.append("only existing candidatory-miniapp-api is allowed")
     b = m.get("bindings")
