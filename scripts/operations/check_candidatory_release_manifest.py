@@ -66,7 +66,7 @@ def validate(m):
         errors.append("compatibility date differs; manual parity review required")
     if not isinstance(m.get("ci_sha"), str) or len(m.get("ci_sha", "")) != 40 or any(c not in "0123456789abcdef" for c in m.get("ci_sha", "")):
         errors.append("CI must be pinned to a full lowercase SHA")
-    if not isinstance(m.get("rollback_version"), str) or not m.get("rollback_version"):
+    if not isinstance(m.get("rollback_version"), str) or not m.get("rollback_version").strip():
         errors.append("validated rollback version required")
     for key in ("ci_success", "production_parity_verified", "handler_auth_verified",
                 "d1_schema_verified", "routes_verified", "homepage_readonly_verified"):
