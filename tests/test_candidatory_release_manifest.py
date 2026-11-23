@@ -115,6 +115,30 @@ class ReleaseGateTests(unittest.TestCase):
         m["modules"] = ["index.js", "src/tasks/handler.mjs"]
         self.assertEqual(gate.validate(m), [])
 
+    def test_duplicate_module_paths_rejected(self):
+        m = candidate()
+        m["modules"] = ["index.js", "tasks.js", "tasks.js"]
+        self.assertTrue(gate.validate(m))
+
+    def test_compatibility_date_drift_rejected(self):
+        m = candidate()
+        m["compatibility_date"] = "2026-11-23"
+        self.assertTrue(gate.validate(m))
+
+    def test_non_boolean_security_attestations_rejected(self):
+        for field in ("ci_success", "production_parity_verified", "handler_auth_verified",
+                      "d1_schema_verified", "routes_verified", "homepage_readonly_verified"):
+            for invalid in (1, "true", None, [], {}):
+                with self.subTest(field=field, invalid=repr(invalid)):
+                    m = candidate()
+                    m[field] = invalid
+                    self.assertTrue(gate.validate(m))
+
+    def test_main_module_not_in_bundle_rejected(self):
+        m = candidate()
+        m["main_module"] = "src/other.js"
+        self.assertTrue(gate.validate(m))
+
     def test_non_object_rejected(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate(None))
