@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Parse-check offline bundle validator and regression suite
+        run: |
+          node --check scripts/check-production-bundle.mjs
+          node --check scripts/tests/check-production-bundle.test.mjs
       - name: Synthetic multipart regression (no production access)
         run: node --test scripts/tests/check-production-bundle.test.mjs
 # No Cloudflare credentials, no deploy, no Telegram, no D1 and no real user data.
