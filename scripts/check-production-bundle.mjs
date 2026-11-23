@@ -51,6 +51,10 @@ if (process.argv.includes('--require-self-hosted-font')) {
   assert(html.includes('.woff2'), 'No WOFF2 reference in HTML');
   assert(!html.includes('fonts.googleapis.com') && !html.includes('fonts.gstatic.com'), 'External Google Fonts dependency remains');
   assert(html.includes('font-family:Vazirmatn') || html.includes('font-family:"Vazirmatn"'), 'Global font declaration missing');
+  // Reject remote CSS imports and remote font files even when they are not hosted by Google.
+  // This is a static fail-closed signal, not proof that the WOFF2 bytes are bundled.
+  assert(!/@import\s+(?:url\s*\()?\s*['"]?https?:\/\//i.test(html), 'Remote CSS import remains');
+  assert(!/src\s*:\s*[^;}]*url\s*\(\s*['"]?https?:\/\//i.test(html), 'Remote font URL remains');
   // A comment containing font/woff2 is not evidence of an actual font response.
   const executableEntry = entry.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
   assert(/font\/woff2/.test(executableEntry) && /content-type/i.test(executableEntry), 'Entrypoint lacks an explicit WOFF2 response content type');
