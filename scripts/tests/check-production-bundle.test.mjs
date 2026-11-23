@@ -55,3 +55,16 @@ test('comment-only WOFF2 MIME claim fails strict gate', () => {
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /Entrypoint lacks an explicit WOFF2 response content type/);
 });
+
+test('duplicate multipart module fails closed', () => {
+  const bundle = fixture();
+  const boundary = 'synthetic-test-boundary';
+  const duplicate = '--' + boundary + '\r\nContent-Disposition: form-data; name="legacy.mjs"; filename="legacy.mjs"\r\nContent-Type: application/javascript+module\r\n\r\nexport default {}\r\n';
+  const r = run(bundle.replace('--' + boundary + '--\r\n', duplicate + '--' + boundary + '--\r\n'));
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Duplicate module: legacy.mjs/);
+});
+test('truncated multipart module header fails closed', () => {
+  const r = run(fixture().replace('Content-Type: application/javascript+module\r\n\r\n', 'Content-Type: application/javascript+module\r\n'));
+  assert.notEqual(r.status, 0);
+});
