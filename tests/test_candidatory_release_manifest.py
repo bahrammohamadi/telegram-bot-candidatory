@@ -139,6 +139,13 @@ class ReleaseGateTests(unittest.TestCase):
         m["main_module"] = "src/other.js"
         self.assertTrue(gate.validate(m))
 
+    def test_unexpected_top_level_fields_rejected(self):
+        for field in ("TELEGRAM_BOT_TOKEN", "api_key", "secrets", "deployment_environment"):
+            with self.subTest(field=field):
+                m = candidate()
+                m[field] = "synthetic-placeholder"
+                self.assertTrue(gate.validate(m))
+
     def test_non_object_rejected(self):
         self.assertTrue(gate.validate([]))
         self.assertTrue(gate.validate(None))
