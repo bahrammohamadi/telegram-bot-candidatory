@@ -7,6 +7,7 @@ assembled candidate manifest, NOT a live Production introspection substitute.
 """
 import json
 import sys
+from pathlib import PurePosixPath
 
 TARGET = "candidatory-miniapp-api"
 EXPECTED = {
@@ -45,6 +46,14 @@ def validate(m):
     modules = m.get("modules")
     if not isinstance(modules, list) or not modules or any(not isinstance(x, str) or not x for x in modules):
         errors.append("modules must be a nonempty array of paths")
+    elif any(
+        path.startswith("/") or "\\\\" in path or
+        "://" in path or
+        any(part in ("", ".", "..") for part in path.split("/")) or
+        PurePosixPath(path).suffix not in (".js", ".mjs")
+        for path in modules
+    ):
+        errors.append("module paths must be relative local JS files without traversal")
     elif len(modules) != len(set(modules)):
         errors.append("duplicate modules")
     elif m.get("main_module") not in modules:
