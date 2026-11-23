@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const gate = new URL('../check-production-bundle.mjs', import.meta.url).pathname;
-const entry = "import legacy from './legacy.mjs'; import preview from './preview.mjs'; export default {fetch(){return new Response('ok')}}; // font/woff2";
+const entry = "import legacy from './legacy.mjs'; import preview from './preview.mjs'; export default {fetch(request){if(new URL(request.url).pathname==='/assets/vazirmatn.woff2')return new Response('synthetic font',{headers:{'content-type':'font/woff2'}});return new Response('ok')}};";
 function fixture({ font = true, external = false, omit = '' } = {}) {
   const css = font ? '@font-face{font-family:Vazirmatn;src:url(/assets/vazirmatn.woff2)}html,body{font-family:Vazirmatn,sans-serif}' : 'body{font-family:Tahoma}';
   const link = external ? '<link href="https://fonts.googleapis.com/css2?family=Vazirmatn">' : '';
@@ -47,4 +47,11 @@ test('external font dependency fails strict gate', () => {
 test('missing font face fails strict gate', () => {
   const r = run(fixture({ font: false }), true);
   assert.notEqual(r.status, 0);
+});
+
+test('comment-only WOFF2 MIME claim fails strict gate', () => {
+  const fake = fixture().replace(entry, "import legacy from './legacy.mjs'; import preview from './preview.mjs'; export default {fetch(){return new Response('ok')}}; // font/woff2");
+  const r = run(fake, true);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Entrypoint lacks an explicit WOFF2 response content type/);
 });
