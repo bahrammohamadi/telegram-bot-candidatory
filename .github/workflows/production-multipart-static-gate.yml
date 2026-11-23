@@ -1,0 +1,26 @@
+name: Production multipart static gate (offline only)
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'scripts/check-production-bundle.mjs'
+      - 'scripts/tests/check-production-bundle.test.mjs'
+      - '.github/workflows/production-multipart-static-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-static-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Synthetic multipart regression (no production access)
+        run: node --test scripts/tests/check-production-bundle.test.mjs
+# No Cloudflare credentials, no deploy, no Telegram, no D1 and no real user data.
