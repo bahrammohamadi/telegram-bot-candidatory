@@ -29,3 +29,21 @@ for (const name of ['legacy.mjs', 'preview.mjs']) {
   assert(entry.includes("'./" + name + "'") || entry.includes('"./' + name + '"'), 'Entrypoint missing import: ' + name);
 }
 console.log(JSON.stringify({ valid: true, moduleNames: [...modules.keys()], byteLengths: Object.fromEntries([...modules].map(([k,v]) => [k, Buffer.byteLength(v)])) }, null, 2));
+
+/* Strict opt-in font readiness gate; no network, no production mutations.
+   Usage: node scripts/check-production-bundle.mjs worker.multipart --require-self-hosted-font
+   This deliberately fails the current Google Fonts-only release. */
+if (process.argv.includes('--require-self-hosted-font')) {
+  const preview = modules.get('preview.mjs');
+  const htmlMatch = preview.match(/const TEST_PAGE=("(?:\\\\.|[^"\\\\])*");/);
+  assert(htmlMatch, 'Embedded HTML constant missing');
+  let html;
+  try { html = JSON.parse(htmlMatch[1]); } catch { throw new Error('Embedded HTML cannot be parsed'); }
+  assert(/Vazirmatn/.test(html), 'Vazirmatn family missing');
+  assert(/@font-face/.test(html), 'No @font-face declaration for local font');
+  assert(/\\.woff2/.test(html), 'No WOFF2 reference in HTML');
+  assert(!/fonts\\.(googleapis|gstatic)\\.com/.test(html), 'External Google Fonts dependency still present');
+  assert(/font-family:\\s*(?:["']?Vazirmatn)/.test(html), 'Global Vazirmatn font declaration missing');
+  assert(/font\\/woff2|application\\/font-woff/.test(entry), 'Entrypoint does not serve font with an explicit font content type');
+  console.log('PASS: offline self-hosted font static assertions (not a live smoke test)');
+}
