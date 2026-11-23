@@ -1,0 +1,19 @@
+/* Candidatory UI v1 — light, mobile-first RTL. Add to the existing HTML head only after DOM/CI checks.
+   Scoped to .candidatory-ui to avoid affecting legacy screens or print exports. */
+.candidatory-ui{--ui-bg:#f5f8fc;--ui-card:#fff;--ui-ink:#142c49;--ui-muted:#61758b;--ui-accent:#087e93;--ui-line:#dce7f0;direction:rtl;color:var(--ui-ink);background:var(--ui-bg);font-family:Vazirmatn,system-ui,Tahoma,sans-serif;min-height:100dvh;padding:20px 16px calc(100px + env(safe-area-inset-bottom))}
+.candidatory-ui *{box-sizing:border-box}
+.candidatory-ui .home-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 20px}
+.candidatory-ui .home-title{font-size:clamp(21px,5vw,27px);font-weight:800;line-height:1.6;margin:0}
+.candidatory-ui .home-subtitle{color:var(--ui-muted);font-size:13px;line-height:1.9;margin:4px 0 0}
+.candidatory-ui .home-card{background:var(--ui-card);border:1px solid var(--ui-line);border-radius:20px;padding:18px;box-shadow:0 8px 28px rgba(20,44,73,.045);margin-block:12px}
+.candidatory-ui .home-card h2{font-size:16px;margin:0 0 12px}
+.candidatory-ui .home-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.candidatory-ui .home-action{min-height:76px;border-radius:16px;border:1px solid var(--ui-line);background:#f8fbfd;color:var(--ui-ink);font-weight:700;padding:12px;text-align:right}
+.candidatory-ui .home-action:focus-visible,.candidatory-ui .bottom-tab:focus-visible{outline:3px solid #0a7e95;outline-offset:3px}
+.candidatory-ui .bottom-nav{position:fixed;bottom:0;inset-inline:0;z-index:40;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:var(--ui-card);border-top:1px solid var(--ui-line);padding:9px max(8px,env(safe-area-inset-right)) calc(9px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));box-shadow:0 -8px 24px rgba(20,44,73,.06)}
+.candidatory-ui .bottom-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:52px;padding:6px 2px;border:0;border-radius:12px;background:transparent;color:var(--ui-muted);font:600 11px/1.4 inherit;white-space:nowrap}
+.candidatory-ui .bottom-tab[aria-current="page"]{background:#e8f5f7;color:#075b70}
+.candidatory-ui .bottom-tab svg{width:21px;height:21px;flex:none}
+@media(max-width:350px){.candidatory-ui .bottom-tab{font-size:10px}.candidatory-ui .home-actions{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:no-preference){.candidatory-ui .home-card{transition:box-shadow .2s ease}}
+@media print{.candidatory-ui .bottom-nav{display:none!important}}
