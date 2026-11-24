@@ -68,3 +68,14 @@ test('truncated multipart module header fails closed', () => {
   const r = run(fixture().replace('Content-Type: application/javascript+module\r\n\r\n', 'Content-Type: application/javascript+module\r\n'));
   assert.notEqual(r.status, 0);
 });
+
+test('non-Google remote font URL fails strict gate', () => {
+  const r = run(fixture().replace('/assets/vazirmatn.woff2)}', 'https://cdn.example.invalid/font.woff2)}'), true);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Remote font URL remains/);
+});
+test('remote CSS import fails strict gate', () => {
+  const r = run(fixture().replace('<style>', '<style>@import url(https://cdn.example.invalid/fonts.css);'), true);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Remote CSS import remains/);
+});
