@@ -24,5 +24,16 @@ export async function applyTypography(response) {
     .replace(/<\/head\s*>/i, '<style id="candidatory-self-hosted-font">'+FONT_CSS+'</style></head>');
   const headers = new Headers(response.headers);
   for (const name of ['content-length','etag','content-md5','content-encoding']) headers.delete(name);
+  // Permit only same-origin fonts; retain every other CSP directive.
+  const csp = headers.get('content-security-policy');
+  if (csp) {
+    const directives = csp.split(';').map(s => s.trim()).filter(Boolean);
+    const index = directives.findIndex(s => /^font-src(?:\s|$)/i.test(s));
+    if (index < 0) directives.push("font-src 'self'");
+    else if (!directives[index].split(/\s+/).includes("'self'")) {
+      directives[index] = directives[index].replace(/\s+'none'(?=\s|$)/g, '') + " 'self'";
+    }
+    headers.set('content-security-policy', directives.join('; '));
+  }
   return new Response(updated,{status:response.status,statusText:response.statusText,headers});
 }
