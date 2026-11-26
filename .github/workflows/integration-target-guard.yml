@@ -1,0 +1,43 @@
+name: Integration-only deployment target guard
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase15/**'
+      - '.github/workflows/integration-target-guard.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-integration-target:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TARGET_WORKER: candidatory-miniapp-integration
+      TARGET_D1_NAME: candidatory-integration-test-20261101
+      TARGET_D1_ID: 2b5f5ef4-d2fa-4234-a62c-e568cb45e4b0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test allowlist and denylist
+        run: node --test cloudflare-live/phase15/assert-integration-target.test.mjs
+      - name: Verify exact isolated deployment target
+        run: node cloudflare-live/phase15/assert-integration-target.mjs
+      - name: Reject production worker as a negative control
+        shell: bash
+        run: |
+          if TARGET_WORKER=candidatory-news-bot node cloudflare-live/phase15/assert-integration-target.mjs; then
+            echo '::error::Production Worker unexpectedly accepted'
+            exit 1
+          fi
+          echo 'PASS: production Worker rejected'
+      - name: Reject missing D1 target as a negative control
+        shell: bash
+        run: |
+          if TARGET_D1_ID='' node cloudflare-live/phase15/assert-integration-target.mjs; then
+            echo '::error::Missing D1 ID unexpectedly accepted'
+            exit 1
+          fi
+          echo 'PASS: missing D1 target rejected'
+# This workflow deliberately has no Cloudflare credentials or deployment step.
+# A passing check is not proof of safe deployment until every deploy entrypoint invokes the guard.

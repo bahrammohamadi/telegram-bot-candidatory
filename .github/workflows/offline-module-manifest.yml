@@ -1,0 +1,138 @@
+name: Offline module manifest verification
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manifest-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax
+        run: |
+          node --check tools/build-module-manifest.mjs
+          node --check tools/verify-module-manifest.mjs
+      - name: Verify deterministic hashes with synthetic files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mock-worker"
+          printf 'export default 1;\n' > "$RUNNER_TEMP/mock-worker/index.mjs"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" > "$RUNNER_TEMP/manifest-a.json"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" > "$RUNNER_TEMP/manifest-b.json"
+          cmp "$RUNNER_TEMP/manifest-a.json" "$RUNNER_TEMP/manifest-b.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/mock-worker" "$RUNNER_TEMP/manifest-a.json"
+          printf "tampered\\n" >> "$RUNNER_TEMP/mock-worker/index.mjs"
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/mock-worker" "$RUNNER_TEMP/manifest-a.json" >/dev/null 2>&1; then
+            echo "Expected tampering rejection" >&2
+            exit 1
+          fi
+          printf "export default 1;\\n" > "$RUNNER_TEMP/mock-worker/index.mjs"
+          node -e "const fs=require('node:fs'),crypto=require('node:crypto');const m=JSON.parse(fs.readFileSync(process.argv[1]));const b=fs.readFileSync(process.argv[2]);if(m.workerName!=='candidatory-miniapp-api'||m.modules.length!==1||m.modules[0].sha256!==crypto.createHash('sha256').update(b).digest('hex'))process.exit(1)" "$RUNNER_TEMP/manifest-a.json" "$RUNNER_TEMP/mock-worker/index.mjs"
+      - name: Reject symbolic links without touching production
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$RUNNER_TEMP/mock-worker/index.mjs" "$RUNNER_TEMP/mock-worker/linked.mjs"
+          if node tools/build-module-manifest.mjs "$RUNNER_TEMP/mock-worker" >/dev/null 2>&1; then
+            echo "Expected symlink rejection" >&2
+            exit 1
+          fi
+      - name: Reject empty and unsupported synthetic bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/empty-worker" "$RUNNER_TEMP/invalid-worker"
+          if node tools/build-module-manifest.mjs "$RUNNER_TEMP/empty-worker" >/dev/null 2>&1; then
+            echo "Expected empty bundle rejection" >&2
+            exit 1
+          fi
+          printf 'invalid' > "$RUNNER_TEMP/invalid-worker/secret.env"
+          if node tools/build-module-manifest.mjs "$RUNNER_TEMP/invalid-worker" >/dev/null 2>&1; then
+            echo "Expected unsupported extension rejection" >&2
+            exit 1
+          fi
+
+      - name: Reject malformed manifest entries and noncanonical ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ordered-worker"
+          printf 'one' > "$RUNNER_TEMP/ordered-worker/a.js"
+          printf 'two' > "$RUNNER_TEMP/ordered-worker/b.js"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/ordered-worker" > "$RUNNER_TEMP/ordered-manifest.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/ordered-worker" "$RUNNER_TEMP/ordered-manifest.json"
+          for mutation in traversal duplicate unsorted empty-segment dot-segment wrong-digest; do
+            node - "$RUNNER_TEMP/ordered-manifest.json" "$RUNNER_TEMP/mutated-manifest.json" "$mutation" <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const [input, output, mutation] = process.argv.slice(2);
+          const m = JSON.parse(fs.readFileSync(input, 'utf8'));
+          if (mutation === 'traversal') m.modules[0].name = '../a.js';
+          if (mutation === 'duplicate') m.modules[1].name = m.modules[0].name;
+          if (mutation === 'unsorted') m.modules.reverse();
+          if (mutation === 'empty-segment') m.modules[0].name = 'nested//a.js';
+          if (mutation === 'dot-segment') m.modules[0].name = './a.js';
+          if (mutation !== 'wrong-digest') m.manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(m.modules)).digest('hex');
+          else m.manifestSha256 = '0'.repeat(64);
+          fs.writeFileSync(output, JSON.stringify(m));
+          NODE
+            if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/ordered-worker" "$RUNNER_TEMP/mutated-manifest.json" >/dev/null 2>&1; then
+              echo "Verifier accepted invalid manifest: $mutation" >&2
+              exit 1
+            fi
+          done
+
+      - name: Reject source drift and malformed module metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/drift-worker"
+          printf 'alpha' > "$RUNNER_TEMP/drift-worker/a.js"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/drift-worker" > "$RUNNER_TEMP/drift-manifest.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/drift-worker" "$RUNNER_TEMP/drift-manifest.json"
+          printf 'beta' > "$RUNNER_TEMP/drift-worker/b.js"
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/drift-worker" "$RUNNER_TEMP/drift-manifest.json" >/dev/null 2>&1; then
+            echo "Verifier accepted an unexpected extra module" >&2
+            exit 1
+          fi
+          rm "$RUNNER_TEMP/drift-worker/b.js"
+          node - "$RUNNER_TEMP/drift-manifest.json" "$RUNNER_TEMP/drift-bad.json" <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const [input, output] = process.argv.slice(2);
+          const m = JSON.parse(fs.readFileSync(input, 'utf8'));
+          m.modules[0].bytes += 1;
+          m.manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(m.modules)).digest('hex');
+          fs.writeFileSync(output, JSON.stringify(m));
+          NODE
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/drift-worker" "$RUNNER_TEMP/drift-bad.json" >/dev/null 2>&1; then
+            echo "Verifier accepted mismatched byte count" >&2
+            exit 1
+          fi
+
+      - name: Reject missing module from a previously valid synthetic manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/missing-worker"
+          printf 'first\\n' > "$RUNNER_TEMP/missing-worker/a.js"
+          printf 'second\\n' > "$RUNNER_TEMP/missing-worker/b.js"
+          node tools/build-module-manifest.mjs "$RUNNER_TEMP/missing-worker" > "$RUNNER_TEMP/missing-manifest.json"
+          node tools/verify-module-manifest.mjs "$RUNNER_TEMP/missing-worker" "$RUNNER_TEMP/missing-manifest.json"
+          rm "$RUNNER_TEMP/missing-worker/b.js"
+          if node tools/verify-module-manifest.mjs "$RUNNER_TEMP/missing-worker" "$RUNNER_TEMP/missing-manifest.json" >/dev/null 2>&1; then
+            echo "Verifier accepted missing module" >&2
+            exit 1
+          fi

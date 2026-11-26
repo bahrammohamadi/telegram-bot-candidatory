@@ -1,0 +1,32 @@
+name: Production release validator offline regression
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'scripts/validate-production-release.mjs'
+      - 'tests/production-release-validator.test.mjs'
+      - '.github/workflows/production-release-validator-offline.yml'
+  pull_request:
+    paths:
+      - 'scripts/validate-production-release.mjs'
+      - 'tests/production-release-validator.test.mjs'
+      - '.github/workflows/production-release-validator-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static syntax checks
+        run: |
+          node --check scripts/validate-production-release.mjs
+          node --check tests/production-release-validator.test.mjs
+      - name: Synthetic fail-closed regression (no deployment, no secrets)
+        run: node --test tests/production-release-validator.test.mjs

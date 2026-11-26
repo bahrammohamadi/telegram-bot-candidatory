@@ -1,0 +1,50 @@
+name: Candidate main-only offline auth regression
+# Replaces obsolete isolated Worker HTTP checks. Never call a live integration
+# Worker, production auth endpoint, or create a deployment from this workflow.
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - '.github/workflows/candidatory-main-canary-http.yml'
+      - 'cloudflare-live/phase14/**'
+  pull_request:
+    paths:
+      - '.github/workflows/candidatory-main-canary-http.yml'
+      - 'cloudflare-live/phase14/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-auth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and network isolation guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare-live/phase14/tasks-e2e.mjs
+          node --check cloudflare-live/phase14/offline-network-guard.mjs
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const src=readFileSync('cloudflare-live/phase14/tasks-e2e.mjs','utf8');
+          const guard=readFileSync('cloudflare-live/phase14/offline-network-guard.mjs','utf8');
+          for(const marker of ["call('invalid','list')","call(other,'list')","assert.equal(r.status,401,'forged Telegram identity rejected')"]) {
+            assert.ok(src.includes(marker),'Missing synthetic authorization case: '+marker);
+          }
+          assert.ok(src.includes("new DatabaseSync(':memory:')"),'Tests must use synthetic in-memory database');
+          assert.ok(guard.includes('OFFLINE_TEST_NETWORK_BLOCKED'),'Network isolation guard missing');
+          assert.ok(!/workers\.dev|api\.telegram\.org|cloudflare\.com/.test(src),'Synthetic tests must not call live services');
+          console.log('PASS offline authorization source and network-isolation guards');
+          JS
+      - name: Run synthetic auth and ownership tests without deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          node cloudflare-live/phase14/build-tasks.mjs
+          node --disable-warning=ExperimentalWarning --import ./cloudflare-live/phase14/offline-network-guard.mjs cloudflare-live/phase14/tasks-e2e.mjs

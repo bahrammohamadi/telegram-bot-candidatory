@@ -1,0 +1,10 @@
+{
+  "environment": "staging",
+  "verifiedOn": "2026-10-31",
+  "build": "node cloudflare-live/build-staging.mjs",
+  "sha256": "0f971de606c9469af65ed8ef92638a40cf74371689103595da88b1142ce07617",
+  "versionId": "15bb7d1f-9bd3-4a9a-ae7e-79c7f1835ef5",
+  "deploymentId": "fc864258-d91e-44a3-8b8c-9c6d78c5be18",
+  "rollbackVersionId": "26ae4e9b-495b-4446-8cb4-aff2e719fce5",
+  "mode": "synthetic-preview"
+}

@@ -1,0 +1,54 @@
+name: Main-bot optional preview production HTTP smoke
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+    paths:
+      - '.github/workflows/candidatory-main-review-live.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-main-bot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify existing main UI, legacy JS byte parity and review accessibility
+        env:
+          URL: https://candidatory-miniapp-api.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          node cloudflare-live/reconstruct.mjs
+          node --input-type=module -e "import{readFileSync,writeFileSync}from'node:fs';const s=readFileSync('cloudflare-live/worker.js','utf8');const m=s.match(/const SITE_APP=(\"(?:\\\\.|[^\"\\\\])*\");/);if(!m)throw Error('SITE_APP_MISSING');writeFileSync('original-main-app.js',JSON.parse(m[1]));"
+          curl --fail --show-error --silent --max-time 15 "$URL/" -o main.html
+          grep -q '<title>کاندیداتوری هوشمند</title>' main.html
+          grep -q 'href="/review"' main.html
+          grep -q 'candidatory-review-entry' main.html
+          curl --fail --show-error --silent --max-time 15 "$URL/app.js" -o public-main-app.js
+          cmp original-main-app.js public-main-app.js
+          curl --fail --show-error --silent --max-time 15 "$URL/style.css" -o style.css
+          grep -q 'candidatory-review-entry' style.css
+          curl --fail --show-error --silent --max-time 15 "$URL/review" -o review.html
+          grep -q 'main-review-notice' review.html
+          grep -q 'id="tasks-panel"' review.html
+          grep -q 'id="assistant-panel"' review.html
+          grep -q 'id="studio-panel"' review.html
+          grep -q 'id="membership-panel"' review.html
+          grep -q 'id="progress-panel"' review.html
+          grep -q "fetch('/review/api/tasks'" review.html
+          grep -q "fetch('/review/api/profile'" review.html
+          status=$(curl --show-error --silent --max-time 15 -o bad.json -w '%{http_code}' -X POST "$URL/review/api/tasks" -H 'Content-Type: application/json' --data '{"action":"list","initData":"invalid"}')
+          test "$status" = "401"
+          node -e 'if(require("./bad.json").error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          status=$(curl --show-error --silent --max-time 15 -o forged.json -w '%{http_code}' -X POST "$URL/review/api/assistant" -H 'Content-Type: application/json' --data '{"action":"status","initData":"auth_date=123&user=%7B%22id%22%3A1%7D&hash=0000000000000000000000000000000000000000000000000000000000000000"}')
+          test "$status" = "401"
+          echo "PASS real production main app + complete isolated review with legacy JS byte-identical and signed user enforcement"
+      - name: Display main-bot signing token's public bot name
+        env:
+          URL: https://candidatory-miniapp-api.lasvaram-candidatory.workers.dev
+        run: |
+          curl --fail --show-error --silent --max-time 12 "$URL/review/api/bot-info" -o bot-info.json
+          node -e 'const x=require("./bot-info.json");if(!x.telegramTokenValid||!x.botUsername)throw Error("Main bot token identity check failed");console.log("VERIFIED_MAIN_BOT_USERNAME",x.botUsername)'

@@ -1,0 +1,21 @@
+name: Candidatory release manifest offline regression
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline synthetic release manifest regression
+        run: python -m unittest discover -s tests -p 'test_candidatory_release_manifest.py' -v

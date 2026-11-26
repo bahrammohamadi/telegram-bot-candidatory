@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "as_of_utc": "2026-11-21T15:57:00Z",
+  "reference": {
+    "title": "سند جامع معماری نهایی کاندیداتوری",
+    "version": "1.0",
+    "date_jalali": "1405-08-21",
+    "verbatim_recovered": false,
+    "condensed_file": "docs/architecture/CANDIDATORY_MASTER_ARCHITECTURE_V1_2026-11-12.md",
+    "rule": "Do not label condensed rewrite as verbatim original."
+  },
+  "source": {
+    "branch": "feature/cloudflare-parity-audit-2026-10-29",
+    "head_sha": "b445c27b35acdde721ca0b5540fa3bc199ece075",
+    "ci": {
+      "checked_runs": 26,
+      "successful": 26,
+      "failed": 0,
+      "example": "https://github.com/bahrammohamadi/telegram-bot-candidatory/actions/runs/44916578118"
+    }
+  },
+  "production": {
+    "worker": "candidatory-miniapp-api",
+    "deployment_id": "860f813c-baf4-4cff-bfc7-bb4120b910ed",
+    "version_id": "3c35231f-36f0-4bad-b786-9a4309d8e868",
+    "traffic_percent": 100,
+    "deploy_time_utc": "2026-11-11T20:05:53Z",
+    "compatibility_date": "2026-10-27",
+    "binding_names": [
+      "ADMIN_TELEGRAM_IDS",
+      "ADMIN_TELEGRAM_IDS_MAHDI",
+      "AI",
+      "AVALAI_API_KEY",
+      "DB",
+      "REVIEW_DB",
+      "TELEGRAM_BOT_TOKEN"
+    ],
+    "binding_types": {
+      "secret_text": 4,
+      "d1": 2,
+      "ai": 1
+    },
+    "preview_enabled": false,
+    "homepage_smoke_test": "not_run",
+    "multipart_code_parity": "not_verified",
+    "rollback": "not_validated"
+  },
+  "gap_matrix": [
+    {
+      "area": "GitHub SHA and offline CI",
+      "status": "سالم",
+      "next": "Confirm new commit CI after push"
+    },
+    {
+      "area": "Worker deployment and binding metadata",
+      "status": "سالم",
+      "next": "Recheck before any release"
+    },
+    {
+      "area": "18 chapter original verbatim document",
+      "status": "ناقص",
+      "next": "Recover original message in full; preserve existing condensed copy"
+    },
+    {
+      "area": "RBAC cross-workspace runtime enforcement",
+      "status": "نیازمند اصلاح",
+      "next": "Run synthetic authorization tests and review route handlers"
+    },
+    {
+      "area": "Production multipart source parity",
+      "status": "ناقص",
+      "next": "Retrieve deployed modules and compare exact bytes and metadata"
+    },
+    {
+      "area": "Rollback and read-only homepage smoke",
+      "status": "ناقص",
+      "next": "Validate recovery procedure and canonical URL without writing production"
+    },
+    {
+      "area": "Machine-readable evidence and gap matrix",
+      "status": "جدید",
+      "next": "Update after each verified release decision"
+    }
+  ],
+  "release_decision": "BLOCKED",
+  "constraints": [
+    "No secondary environment or deployment",
+    "No production write tests or unsafe migrations",
+    "No paid AI, payments, mass notifications, or admin permission changes",
+    "Do not touch candidatory-news-bot or @candidatoryiran"
+  ]
+}

@@ -1,0 +1,71 @@
+name: Isolated factual content studio validation
+on:
+  push:
+    branches:
+      - feature/cloudflare-parity-audit-2026-10-29
+    paths:
+      - 'cloudflare-live/phase9/**'
+      - '.github/workflows/candidatory-studio-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  studio-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build studio module from exact deployed source
+        run: |
+          node cloudflare-live/phase9/build-studio.mjs
+          node --check cloudflare-live/phase9/dist/integration-studio-worker.mjs
+      - name: Run actual studio API handler with signed synthetic Telegram users
+        run: node --experimental-sqlite cloudflare-live/phase9/studio-worker-e2e.mjs
+  studio-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node cloudflare-live/phase9/build-studio.mjs
+      - run: npm install --no-save playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise studio on mobile with synthetic drafts
+        run: node cloudflare-live/phase9/studio-mobile-check.cjs
+      - name: Fetch actual deployed test miniapp
+        run: curl -fsS https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev/ -o studio-live.html
+      - name: Exercise deployed HTML with mock synthetic API
+        env:
+          STUDIO_HTML_FILE: studio-live.html
+        run: node cloudflare-live/phase9/studio-mobile-check.cjs
+
+  studio-live-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate existing modules and deny anonymous Studio API requests
+        env:
+          URL: https://candidatory-miniapp-integration.lasvaram-candidatory.workers.dev
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/health" -o health.json
+          node -e 'const d=require("./health.json");if(d.production!==false||d.schemaReady!==true||d.telegramSecretConfigured!==true)process.exit(1)'
+          curl -fsS "$URL/" -o studio-live.html
+          grep -q 'id="studio-panel"' studio-live.html
+          grep -q 'id="studio-form"' studio-live.html
+          grep -q 'id="progress-panel"' studio-live.html
+          grep -q 'id="quiz-panel"' studio-live.html
+          grep -q 'id="practice-panel"' studio-live.html
+          grep -q 'id="goals-panel"' studio-live.html
+          grep -q 'id="calendar-panel"' studio-live.html
+          status=$(curl -sS -o studio-invalid.json -w "%{http_code}" -X POST "$URL/api/studio" -H 'Content-Type: application/json' --data '{"action":"list","initData":"invalid"}')
+          test "$status" = "401"
+          node -e 'const d=require("./studio-invalid.json");if(d.error!=="TELEGRAM_AUTH_REQUIRED")process.exit(1)'
+          status=$(curl -sS -o studio-forged.json -w "%{http_code}" -X POST "$URL/api/studio" -H 'Content-Type: application/json' --data '{"action":"create","initData":"auth_date=123&user=%7B%22id%22%3A1%7D&hash=0000000000000000000000000000000000000000000000000000000000000000","kind":"service_update","title":"Forged sample","body":"Forged sample draft content","source_url":"","status":"draft"}')
+          test "$status" = "401"
+          echo 'PASS: studio HTTP auth guards and prior features'

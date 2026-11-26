@@ -1,0 +1,22 @@
+<section id="admin-console-dashboard" class="panel" aria-label="داشبورد دو مدیر آزمایشی">
+<h4>نمای کلی مدیریت آزمایشی</h4>
+<p>این بخش تنها برای دو مدیر تأییدشده از طریق تنظیمات محرمانه سرور قابل مشاهده است؛ داده‌ها صرفاً آزمایشی هستند.</p>
+<div id="admin-console-status" role="status" aria-live="polite"></div>
+<div id="admin-console-summary" class="admin-console-summary"></div>
+<button id="admin-console-refresh" class="secondary" type="button">نوسازی آمار و صف بررسی</button>
+<h4>همه درخواست‌های نمایشی</h4>
+<label>فیلتر وضعیت
+<select id="admin-console-filter">
+<option value="pending">در انتظار بررسی</option>
+<option value="approved">تأیید نمایشی</option>
+<option value="rejected">ردشده</option>
+<option value="all">همه درخواست‌ها</option>
+</select></label>
+<div id="admin-console-requests" role="list"></div>
+<button type="button" id="admin-console-next" class="secondary">نمایش صفحه بعد</button>
+<h4>سوابق تصمیم‌های مدیریتی</h4>
+<div id="admin-console-audit" role="list"></div>
+<button type="button" id="admin-console-audit-refresh" class="secondary">بازخوانی سوابق و بررسی یکپارچگی</button>
+<div id="admin-console-diagnostic"></div>
+<small>ردیف‌های این بخش صرفاً درخواست‌های با شناسه «SIMULATED_NO_FILE» هستند؛ هیچ پرداخت واقعی یا رسیدی در این پنل وجود ندارد.</small>
+</section>
