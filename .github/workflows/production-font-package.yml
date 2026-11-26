@@ -1,0 +1,35 @@
+name: Production font package (offline only)
+on:
+  push:
+    branches: [feature/cloudflare-parity-audit-2026-10-29]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test production typography offline
+        run: node --test cloudflare-live/production/typography.contract.test.mjs
+      - name: Assemble five-module upload bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/production-font
+          cp cloudflare-live/production/{entrypoint,legacy,preview}.mjs dist/production-font/
+          cp assets/fonts/{self-hosted-typography,vazirmatn-regular}.mjs dist/production-font/
+          sed -i "s|../../assets/fonts/self-hosted-typography.mjs|./self-hosted-typography.mjs|" dist/production-font/entrypoint.mjs
+          cd dist/production-font
+          for f in *.mjs; do node --check "$f"; done
+          node --input-type=module -e 'import worker from "./entrypoint.mjs"; const r=await worker.fetch(new Request("https://offline.invalid/assets/fonts/vazirmatn-regular.woff2"),{},{}); if(r.status!==200 || r.headers.get("content-type")!=="font/woff2" || new TextDecoder().decode((await r.arrayBuffer()).slice(0,4))!=="wOF2") process.exit(1);'
+          printf '%s\n' "$GITHUB_SHA" > SOURCE_SHA
+          sha256sum *.mjs SOURCE_SHA > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-font-five-modules
+          path: dist/production-font/
+          if-no-files-found: error
